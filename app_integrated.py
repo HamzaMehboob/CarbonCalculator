@@ -41,6 +41,7 @@ def inject_css_and_js(html_content):
         "js/app.js",
         "js/calculations.js",
         "js/dashboard.js",
+        "js/invoices.js",
         "js/export.js"
     ]
     
@@ -57,11 +58,15 @@ def inject_css_and_js(html_content):
         js_file = Path(__file__).parent / "frontend" / js_file_path
         if js_file.exists():
             js_content = js_file.read_text(encoding='utf-8')
+            # Replace script tag in HTML with inline script
             script_tag = f'<script src="{js_file_path}"></script>'
             html_content = html_content.replace(
                 script_tag,
                 f'<script>{js_content}</script>'
             )
+        else:
+            # Log warning if file not found (useful for debugging)
+            st.warning(f"⚠️ JavaScript file not found: {js_file_path}")
     
     return html_content
 
@@ -69,6 +74,8 @@ def inject_css_and_js(html_content):
 # CONVERSION FACTORS API
 # ============================================
 
+# Load conversion factors - use hardcoded version for API compatibility
+# (Frontend uses its own conversion factors from calculations.js)
 CONVERSION_FACTORS = {
     "UK_2025": {
         "version": "2025.1",
