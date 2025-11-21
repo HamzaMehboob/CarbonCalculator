@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Calculator - Phase 1</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <i class="fas fa-leaf"></i>
+                <h1 data-en="Carbon Calculator" data-pt="Calculadora de Carbono">Carbon Calculator</h1>
+                <p data-en="GHG Protocol Compliant" data-pt="Conforme com Protocolo GEE">GHG Protocol Compliant</p>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label data-en="Email" data-pt="E-mail">Email</label>
+                    <input type="email" id="loginEmail" required placeholder="admin@company.com">
+                </div>
+                <div class="form-group">
+                    <label data-en="Password" data-pt="Senha">Password</label>
+                    <input type="password" id="loginPassword" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn-primary" data-en="Login" data-pt="Entrar">Login</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
+            <div class="login-footer">
+                <button id="langToggleLogin" class="btn-link">
+                    <i class="fas fa-globe"></i> <span id="langTextLogin">PT</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="app-container" style="display: none;">
+        <!-- Top Header -->
+        <header class="top-header">
+            <div class="header-left">
+                <div class="company-logo">
+                    <i class="fas fa-leaf"></i>
+                    <span id="companyName">My Company</span>
+                </div>
+            </div>
+            <div class="header-center">
+                <h1 data-en="Carbon Emissions Calculator" data-pt="Calculadora de Emissões de Carbono">Carbon Emissions Calculator</h1>
+            </div>
+            <div class="header-right">
+                <button id="langToggle" class="btn-icon" title="Language / Idioma">
+                    <i class="fas fa-globe"></i> <span id="langText">EN</span>
+                </button>
+                <button id="darkModeToggle" class="btn-icon" title="Dark Mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button id="logoutBtn" class="btn-icon" title="Logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3 data-en="Buildings / Events" data-pt="Edifícios / Eventos">Buildings / Events</h3>
+                </div>
+                <ul id="sitesList" class="sites-list">
+                    <li class="site-item active" data-site-id="site-1">
+                        <i class="fas fa-building"></i>
+                        <span>Headquarters</span>
+                        <button class="btn-delete"><i class="fas fa-times"></i></button>
+                    </li>
+                </ul>
+                <button id="addSiteBtn" class="btn-add-site">
+                    <i class="fas fa-plus"></i> <span data-en="Add Building/Event" data-pt="Adicionar Edifício">Add Building/Event</span>
+                </button>
+            </aside>
+
+            <!-- Center Content -->
+            <main class="center-content">
+                <!-- Company Info Section -->
+                <section class="company-info-section">
+                    <div class="company-logo-upload">
+                        <img id="companyLogoImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Crect fill='%2313B5EA' width='80' height='80' rx='12'/%3E%3Ctext x='40' y='50' font-size='40' fill='white' text-anchor='middle' font-family='Arial'%3E🌱%3C/text%3E%3C/svg%3E" alt="Company Logo">
+                        <input type="file" id="logoUpload" accept="image/*" style="display: none;">
+                        <button class="btn-upload" onclick="document.getElementById('logoUpload').click()">
+                            <i class="fas fa-upload"></i>
+                        </button>
+                    </div>
+                    <div class="info-card-inline">
+                        <div class="form-inline-group">
+                            <label data-en="Company Name" data-pt="Nome da Empresa">Company Name</label>
+                            <input type="text" id="companyNameInput" placeholder="Enter company name" value="My Company">
+                        </div>
+                        <div class="form-inline-group">
+                            <label data-en="Notes" data-pt="Notas">Notes</label>
+                            <input type="text" id="companyNotes" placeholder="Add any relevant notes here...">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tabs Navigation -->
+                <nav class="tabs-nav">
+                    <button class="tab-btn active" data-tab="water">
+                        <i class="fas fa-tint"></i> <span data-en="Water" data-pt="Água">Water</span>
+                    </button>
+                    <button class="tab-btn" data-tab="energy">
+                        <i class="fas fa-bolt"></i> <span data-en="Energy" data-pt="Energia">Energy</span>
+                    </button>
+                    <button class="tab-btn" data-tab="waste">
+                        <i class="fas fa-trash"></i> <span data-en="Waste" data-pt="Resíduos">Waste</span>
+                    </button>
+                    <button class="tab-btn" data-tab="transport">
+                        <i class="fas fa-car"></i> <span data-en="Transport" data-pt="Transporte">Transport</span>
+                    </button>
+                    <button class="tab-btn" data-tab="refrigerants">
+                        <i class="fas fa-snowflake"></i> <span data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</span>
+                    </button>
+                    <button class="tab-btn" data-tab="dashboard">
+                        <i class="fas fa-chart-pie"></i> <span data-en="Dashboard" data-pt="Painel">Dashboard</span>
+                    </button>
+                    <button class="tab-btn" data-tab="accounts">
+                        <i class="fas fa-wallet"></i> <span data-en="Accounts" data-pt="Contas">Accounts</span>
+                    </button>
+                </nav>
+
+                <!-- Tab Content -->
+                <div id="tabsContent" class="tabs-content">
+                    <!-- Water Tab -->
+                    <div class="tab-content active" data-content="water">
+                        <div class="tab-header">
+                            <h2 data-en="Water Consumption" data-pt="Consumo de Água">Water Consumption</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" onclick="addDataRow('water')">
+                                    <i class="fas fa-plus"></i> <span data-en="Add new line" data-pt="Adicionar linha">Add new line</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="waterTable">
+                                <thead>
+                                    <tr>
+                                        <th data-en="Description" data-pt="Descrição">Description</th>
+                                        <th data-en="Year" data-pt="Ano">Year</th>
+                                        <th>Jan</th>
+                                        <th>Feb</th>
+                                        <th>Mar</th>
+                                        <th>Apr</th>
+                                        <th>May</th>
+                                        <th>Jun</th>
+                                        <th>Jul</th>
+                                        <th>Aug</th>
+                                        <th>Sep</th>
+                                        <th>Oct</th>
+                                        <th>Nov</th>
+                                        <th>Dec</th>
+                                        <th data-en="Total (m³)" data-pt="Total (m³)">Total (m³)</th>
+                                        <th>tCO₂e</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="data-row">
+                                        <td><input type="text" placeholder="Water supply" value="Water supply"></td>
+                                        <td><input type="number" value="2025" min="2020" max="2030"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="1"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="2"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="3"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="4"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="5"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="6"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="7"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="8"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="9"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="10"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="11"></td>
+                                        <td class="total-cell">0.00</td>
+                                        <td class="co2-cell">0.000</td>
+                                        <td><button class="btn-delete" onclick="deleteRow(this)"><i class="fas fa-trash"></i></button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="category-summary">
+                            <span data-en="Total Water Emissions:" data-pt="Total de Emissões de Água:">Total Water Emissions:</span>
+                            <strong id="waterTotal">0.000 tCO₂e</strong>
+                        </div>
+                    </div>
+
+                    <!-- Energy Tab -->
+                    <div class="tab-content" data-content="energy">
+                        <div class="tab-header">
+                            <h2 data-en="Energy Consumption" data-pt="Consumo de Energia">Energy Consumption</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" onclick="addDataRow('energy')">
+                                    <i class="fas fa-plus"></i> <span data-en="Add new line" data-pt="Adicionar linha">Add new line</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="energyTable">
+                                <thead>
+                                    <tr>
+                                        <th data-en="Description" data-pt="Descrição">Description</th>
+                                        <th data-en="Year" data-pt="Ano">Year</th>
+                                        <th>Jan</th>
+                                        <th>Feb</th>
+                                        <th>Mar</th>
+                                        <th>Apr</th>
+                                        <th>May</th>
+                                        <th>Jun</th>
+                                        <th>Jul</th>
+                                        <th>Aug</th>
+                                        <th>Sep</th>
+                                        <th>Oct</th>
+                                        <th>Nov</th>
+                                        <th>Dec</th>
+                                        <th data-en="Total (kWh)" data-pt="Total (kWh)">Total (kWh)</th>
+                                        <th>tCO₂e</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="data-row">
+                                        <td><input type="text" placeholder="Electricity" value="Electricity"></td>
+                                        <td><input type="number" value="2025" min="2020" max="2030"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="1"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="2"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="3"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="4"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="5"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="6"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="7"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="8"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="9"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="10"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="11"></td>
+                                        <td class="total-cell">0.00</td>
+                                        <td class="co2-cell">0.000</td>
+                                        <td><button class="btn-delete" onclick="deleteRow(this)"><i class="fas fa-trash"></i></button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="category-summary">
+                            <span data-en="Total Energy Emissions:" data-pt="Total de Emissões de Energia:">Total Energy Emissions:</span>
+                            <strong id="energyTotal">0.000 tCO₂e</strong>
+                        </div>
+                    </div>
+
+                    <!-- Waste Tab -->
+                    <div class="tab-content" data-content="waste">
+                        <div class="tab-header">
+                            <h2 data-en="Waste Management" data-pt="Gestão de Resíduos">Waste Management</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" onclick="addDataRow('waste')">
+                                    <i class="fas fa-plus"></i> <span data-en="Add new line" data-pt="Adicionar linha">Add new line</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="wasteTable">
+                                <thead>
+                                    <tr>
+                                        <th data-en="Description" data-pt="Descrição">Description</th>
+                                        <th data-en="Year" data-pt="Ano">Year</th>
+                                        <th>Jan</th>
+                                        <th>Feb</th>
+                                        <th>Mar</th>
+                                        <th>Apr</th>
+                                        <th>May</th>
+                                        <th>Jun</th>
+                                        <th>Jul</th>
+                                        <th>Aug</th>
+                                        <th>Sep</th>
+                                        <th>Oct</th>
+                                        <th>Nov</th>
+                                        <th>Dec</th>
+                                        <th data-en="Total (tonnes)" data-pt="Total (ton)">Total (tonnes)</th>
+                                        <th>tCO₂e</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="data-row">
+                                        <td><input type="text" placeholder="Waste disposal" value="Waste disposal"></td>
+                                        <td><input type="number" value="2025" min="2020" max="2030"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="1"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="2"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="3"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="4"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="5"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="6"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="7"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="8"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="9"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="10"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="11"></td>
+                                        <td class="total-cell">0.00</td>
+                                        <td class="co2-cell">0.000</td>
+                                        <td><button class="btn-delete" onclick="deleteRow(this)"><i class="fas fa-trash"></i></button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="category-summary">
+                            <span data-en="Total Waste Emissions:" data-pt="Total de Emissões de Resíduos:">Total Waste Emissions:</span>
+                            <strong id="wasteTotal">0.000 tCO₂e</strong>
+                        </div>
+                    </div>
+
+                    <!-- Transport Tab -->
+                    <div class="tab-content" data-content="transport">
+                        <div class="tab-header">
+                            <h2 data-en="Transport" data-pt="Transporte">Transport</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" onclick="addDataRow('transport')">
+                                    <i class="fas fa-plus"></i> <span data-en="Add new line" data-pt="Adicionar linha">Add new line</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="transportTable">
+                                <thead>
+                                    <tr>
+                                        <th data-en="Description" data-pt="Descrição">Description</th>
+                                        <th data-en="Year" data-pt="Ano">Year</th>
+                                        <th>Jan</th>
+                                        <th>Feb</th>
+                                        <th>Mar</th>
+                                        <th>Apr</th>
+                                        <th>May</th>
+                                        <th>Jun</th>
+                                        <th>Jul</th>
+                                        <th>Aug</th>
+                                        <th>Sep</th>
+                                        <th>Oct</th>
+                                        <th>Nov</th>
+                                        <th>Dec</th>
+                                        <th data-en="Total (km)" data-pt="Total (km)">Total (km)</th>
+                                        <th>tCO₂e</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="data-row">
+                                        <td><input type="text" placeholder="Company vehicles" value="Company vehicles"></td>
+                                        <td><input type="number" value="2025" min="2020" max="2030"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="1"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="2"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="3"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="4"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="5"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="6"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="7"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="8"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="9"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="10"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="11"></td>
+                                        <td class="total-cell">0.00</td>
+                                        <td class="co2-cell">0.000</td>
+                                        <td><button class="btn-delete" onclick="deleteRow(this)"><i class="fas fa-trash"></i></button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="category-summary">
+                            <span data-en="Total Transport Emissions:" data-pt="Total de Emissões de Transporte:">Total Transport Emissions:</span>
+                            <strong id="transportTotal">0.000 tCO₂e</strong>
+                        </div>
+                    </div>
+
+                    <!-- Refrigerants Tab -->
+                    <div class="tab-content" data-content="refrigerants">
+                        <div class="tab-header">
+                            <h2 data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" onclick="addDataRow('refrigerants')">
+                                    <i class="fas fa-plus"></i> <span data-en="Add new line" data-pt="Adicionar linha">Add new line</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="refrigerantsTable">
+                                <thead>
+                                    <tr>
+                                        <th data-en="Description" data-pt="Descrição">Description</th>
+                                        <th data-en="Year" data-pt="Ano">Year</th>
+                                        <th>Jan</th>
+                                        <th>Feb</th>
+                                        <th>Mar</th>
+                                        <th>Apr</th>
+                                        <th>May</th>
+                                        <th>Jun</th>
+                                        <th>Jul</th>
+                                        <th>Aug</th>
+                                        <th>Sep</th>
+                                        <th>Oct</th>
+                                        <th>Nov</th>
+                                        <th>Dec</th>
+                                        <th data-en="Total (kg)" data-pt="Total (kg)">Total (kg)</th>
+                                        <th>tCO₂e</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="data-row">
+                                        <td><input type="text" placeholder="R-410A" value="R-410A"></td>
+                                        <td><input type="number" value="2025" min="2020" max="2030"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="1"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="2"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="3"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="4"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="5"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="6"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="7"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="8"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="9"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="10"></td>
+                                        <td><input type="number" step="0.01" min="0" class="month-input" data-month="11"></td>
+                                        <td class="total-cell">0.00</td>
+                                        <td class="co2-cell">0.000</td>
+                                        <td><button class="btn-delete" onclick="deleteRow(this)"><i class="fas fa-trash"></i></button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="category-summary">
+                            <span data-en="Total Refrigerant Emissions:" data-pt="Total de Emissões de Refrigerantes:">Total Refrigerant Emissions:</span>
+                            <strong id="refrigerantsTotal">0.000 tCO₂e</strong>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Tab -->
+                    <div class="tab-content" data-content="dashboard">
+                        <div class="dashboard-header">
+                            <h2 data-en="Emissions Dashboard" data-pt="Painel de Emissões">Emissions Dashboard</h2>
+                            <div class="export-actions">
+                                <button class="btn-secondary" onclick="toggleDashboardWidgets()">
+                                    <i class="fas fa-cog"></i> <span data-en="Customize" data-pt="Personalizar">Customize</span>
+                                </button>
+                                <button class="btn-export-pdf" onclick="exportToPDF()" title="Export to PDF">
+                                    <i class="fas fa-file-pdf"></i>
+                                </button>
+                                <button class="btn-export-excel" onclick="exportToExcel()" title="Export to Excel">
+                                    <i class="fas fa-file-excel"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- KPI Cards -->
+                        <div class="kpi-cards">
+                            <div class="kpi-card widget-card" data-widget="emissions">
+                                <div class="kpi-icon"><i class="fas fa-cloud"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Total Emissions" data-pt="Emissões Totais">Total Emissions</h3>
+                                    <div class="kpi-value" id="totalEmissions">0.000 tCO₂e</div>
+                                    <div class="kpi-change" id="emissionsChange">+0%</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card" data-widget="thisyear">
+                                <div class="kpi-icon"><i class="fas fa-calendar"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="This Year" data-pt="Este Ano">This Year (2025)</h3>
+                                    <div class="kpi-value" id="currentYearEmissions">0.000 tCO₂e</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card" data-widget="lastyear">
+                                <div class="kpi-icon"><i class="fas fa-history"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Last Year" data-pt="Ano Passado">Last Year (2024)</h3>
+                                    <div class="kpi-value" id="lastYearEmissions">0.000 tCO₂e</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card" data-widget="average">
+                                <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Average/Month" data-pt="Média/Mês">Average/Month</h3>
+                                    <div class="kpi-value" id="avgMonthEmissions">0.000 tCO₂e</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- Charts -->
+                        <div class="charts-grid">
+                            <div class="chart-card widget-card" data-widget="pie-chart">
+                                <h3 data-en="Emissions by Category" data-pt="Emissões por Categoria">Emissions by Category</h3>
+                                <canvas id="pieChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="chart-card widget-card" data-widget="bar-chart">
+                                <h3 data-en="Year-over-Year Comparison" data-pt="Comparação Ano a Ano">Year-over-Year Comparison</h3>
+                                <canvas id="barChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="chart-card full-width widget-card" data-widget="line-chart">
+                                <h3 data-en="Monthly Emissions Trend" data-pt="Tendência Mensal de Emissões">Monthly Emissions Trend</h3>
+                                <canvas id="lineChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="chart-card widget-card" data-widget="watchlist" style="display: none;">
+                                <h3 data-en="Account Watchlist" data-pt="Contas Monitoradas">Account Watchlist</h3>
+                                <div class="watchlist-content">
+                                    <div class="watchlist-item">
+                                        <span data-en="No accounts added" data-pt="Nenhuma conta adicionada">No accounts added</span>
+                                        <button class="btn-link" onclick="alert('Feature coming in Phase 2')">+ <span data-en="Add account" data-pt="Adicionar conta">Add account</span></button>
+                                    </div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounts Dashboard Tab -->
+                    <div class="tab-content" data-content="accounts">
+                        <div class="dashboard-header">
+                            <h2 data-en="Accounts Dashboard" data-pt="Painel de Contas">Accounts Dashboard</h2>
+                            <div class="export-actions">
+                                <button class="btn-secondary" onclick="toggleDashboardWidgets()">
+                                    <i class="fas fa-cog"></i> <span data-en="Customize" data-pt="Personalizar">Customize</span>
+                                </button>
+                                <button class="btn-export-pdf" onclick="exportToPDF()" title="Export to PDF">
+                                    <i class="fas fa-file-pdf"></i>
+                                </button>
+                                <button class="btn-export-excel" onclick="exportToExcel()" title="Export to Excel">
+                                    <i class="fas fa-file-excel"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Financial KPI Cards -->
+                        <div class="kpi-cards">
+                            <div class="kpi-card widget-card kpi-financial" data-widget="bank-account">
+                                <div class="kpi-icon"><i class="fas fa-university"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Business Bank Account" data-pt="Conta Bancária">Business Bank Account</h3>
+                                    <div class="kpi-value" id="bankBalanceAccounts">$0.00</div>
+                                    <input type="number" step="0.01" class="kpi-edit" placeholder="Enter amount" 
+                                           onchange="updateFinancialWidget('bankBalance', this.value)"
+                                           onkeypress="if(event.key==='Enter') { updateFinancialWidget('bankBalance', this.value); this.blur(); }"
+                                           onblur="updateFinancialWidget('bankBalance', this.value)">
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card kpi-financial" data-widget="savings">
+                                <div class="kpi-icon"><i class="fas fa-piggy-bank"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Business Savings" data-pt="Poupança">Business Savings</h3>
+                                    <div class="kpi-value" id="savingsBalanceAccounts">$0.00</div>
+                                    <input type="number" step="0.01" class="kpi-edit" placeholder="Enter amount" 
+                                           onchange="updateFinancialWidget('savingsBalance', this.value)"
+                                           onkeypress="if(event.key==='Enter') { updateFinancialWidget('savingsBalance', this.value); this.blur(); }"
+                                           onblur="updateFinancialWidget('savingsBalance', this.value)">
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card kpi-financial" data-widget="cashin">
+                                <div class="kpi-icon" style="background: #28A745;"><i class="fas fa-arrow-down"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Total Cash In" data-pt="Total de Entrada">Total Cash In</h3>
+                                    <div class="kpi-value" id="cashInAccounts">$0.00</div>
+                                    <button class="btn-primary btn-sm" onclick="openCashTransactionModal('cashIn')" style="margin-top: 8px; width: 100%;">
+                                        <i class="fas fa-plus"></i> <span data-en="Add Cash In" data-pt="Adicionar Entrada">Add Cash In</span>
+                                    </button>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card kpi-financial" data-widget="cashout">
+                                <div class="kpi-icon" style="background: #DC3545;"><i class="fas fa-arrow-up"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Total Cash Out" data-pt="Total de Saída">Total Cash Out</h3>
+                                    <div class="kpi-value" id="cashOutAccounts">$0.00</div>
+                                    <button class="btn-primary btn-sm" onclick="openCashTransactionModal('cashOut')" style="margin-top: 8px; width: 100%;">
+                                        <i class="fas fa-plus"></i> <span data-en="Add Cash Out" data-pt="Adicionar Saída">Add Cash Out</span>
+                                    </button>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card kpi-financial" data-widget="invoices">
+                                <div class="kpi-icon" style="background: #FFC107;"><i class="fas fa-file-invoice-dollar"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Invoices Owed to You" data-pt="Faturas a Receber">Invoices Owed to You</h3>
+                                    <div class="kpi-value" id="invoicesOwedAccounts">$0.00</div>
+                                    <div class="kpi-readonly" data-en="Updated from Invoices graph" data-pt="Atualizado do gráfico de Faturas">Updated from Invoices graph</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card kpi-financial" data-widget="bills">
+                                <div class="kpi-icon" style="background: #6C757D;"><i class="fas fa-file-invoice"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Bills to Pay" data-pt="Contas a Pagar">Bills to Pay</h3>
+                                    <div class="kpi-value" id="billsToPayAccounts">$0.00</div>
+                                    <div class="kpi-readonly" data-en="Updated from Bills graph" data-pt="Atualizado do gráfico de Contas">Updated from Bills graph</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- Account Charts -->
+                        <div class="charts-grid">
+                            <div class="chart-card widget-card" data-widget="bank-recon">
+                                <h3 data-en="Bank Account Reconciliation (Last 29 Days)" data-pt="Reconciliação da Conta Bancária (Últimos 29 Dias)">Bank Account Reconciliation (Last 29 Days)</h3>
+                                <canvas id="bankReconChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            
+                            <!-- Monthly Cash In/Out Chart -->
+                            <div class="chart-card widget-card" data-widget="monthly-cash-flow">
+                                <div class="chart-header">
+                                    <h3 data-en="Total Cash In and Out (Monthly)" data-pt="Total de Entrada e Saída (Mensal)">Total Cash In and Out (Monthly)</h3>
+                                </div>
+                                <canvas id="monthlyCashFlowChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            
+                            <!-- Invoices Owed Chart -->
+                            <div class="chart-card widget-card" data-widget="invoices-chart">
+                                <div class="chart-header">
+                                    <h3 data-en="Invoices Owed to You" data-pt="Faturas a Receber">Invoices Owed to You</h3>
+                                    <button class="btn-primary btn-sm" onclick="openInvoiceModal()">
+                                        <i class="fas fa-plus"></i> <span data-en="New Sales Invoice" data-pt="Nova Fatura de Venda">New Sales Invoice</span>
+                                    </button>
+                                </div>
+                                <div id="invoicesSummary" class="invoices-summary"></div>
+                                <canvas id="invoicesChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            
+                            <!-- Bills to Pay Chart -->
+                            <div class="chart-card widget-card" data-widget="bills-chart">
+                                <div class="chart-header">
+                                    <h3 data-en="Bills to Pay" data-pt="Contas a Pagar">Bills to Pay</h3>
+                                    <button class="btn-primary btn-sm" onclick="openBillModal()">
+                                        <i class="fas fa-plus"></i> <span data-en="New Bill" data-pt="Nova Conta">New Bill</span>
+                                    </button>
+                                </div>
+                                <div id="billsSummary" class="invoices-summary"></div>
+                                <canvas id="billsChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            
+                            <div class="chart-card widget-card" data-widget="cash-flow">
+                                <h3 data-en="Cash Flow" data-pt="Fluxo de Caixa">Cash Flow</h3>
+                                <canvas id="cashFlowChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="chart-card widget-card" data-widget="account-summary">
+                                <h3 data-en="Account Summary" data-pt="Resumo da Conta">Account Summary</h3>
+                                <canvas id="accountSummaryChart"></canvas>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Invoice Modal -->
+    <div id="invoiceModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-en="New Sales Invoice" data-pt="Nova Fatura de Venda">New Sales Invoice</h3>
+                <button class="modal-close" onclick="closeInvoiceModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label data-en="Invoice Amount ($)" data-pt="Valor da Fatura ($)">Invoice Amount ($)</label>
+                    <input type="number" step="0.01" id="invoiceAmount" placeholder="0.00" required>
+                </div>
+                <div class="form-group">
+                    <label data-en="Month" data-pt="Mês">Month</label>
+                    <select id="invoiceMonth" required>
+                        <option value="0">January</option>
+                        <option value="1">February</option>
+                        <option value="2">March</option>
+                        <option value="3">April</option>
+                        <option value="4">May</option>
+                        <option value="5">June</option>
+                        <option value="6">July</option>
+                        <option value="7">August</option>
+                        <option value="8">September</option>
+                        <option value="9">October</option>
+                        <option value="10">November</option>
+                        <option value="11">December</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label data-en="Year" data-pt="Ano">Year</label>
+                    <input type="number" id="invoiceYear" min="2020" max="2030" value="2025" required>
+                </div>
+                <div class="form-group">
+                    <label data-en="Status" data-pt="Status">Status</label>
+                    <select id="invoiceStatus" required>
+                        <option value="draft" data-en="Draft" data-pt="Rascunho">Draft</option>
+                        <option value="awaiting" data-en="Awaiting Payment" data-pt="Aguardando Pagamento">Awaiting Payment</option>
+                        <option value="overdue" data-en="Overdue" data-pt="Vencido">Overdue</option>
+                        <option value="paid" data-en="Paid" data-pt="Pago">Paid</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeInvoiceModal()">
+                    <span data-en="Cancel" data-pt="Cancelar">Cancel</span>
+                </button>
+                <button class="btn-primary" onclick="saveInvoice()">
+                    <span data-en="Save Invoice" data-pt="Salvar Fatura">Save Invoice</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bill Modal -->
+    <div id="billModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-en="New Bill" data-pt="Nova Conta">New Bill</h3>
+                <button class="modal-close" onclick="closeBillModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label data-en="Bill Name" data-pt="Nome da Conta">Bill Name</label>
+                    <input type="text" id="billName" placeholder="Enter bill name" required>
+                </div>
+                <div class="form-group">
+                    <label data-en="Category" data-pt="Categoria">Category</label>
+                    <input type="text" id="billCategory" placeholder="Enter category">
+                </div>
+                <div class="form-group">
+                    <label data-en="Amount ($)" data-pt="Valor ($)">Amount ($)</label>
+                    <input type="number" step="0.01" id="billAmount" placeholder="0.00" required>
+                </div>
+                <div class="form-group">
+                    <label data-en="Due Date" data-pt="Data de Vencimento">Due Date</label>
+                    <input type="date" id="billDueDate" required>
+                </div>
+                <div class="form-group">
+                    <label data-en="Status" data-pt="Status">Status</label>
+                    <select id="billStatus" required>
+                        <option value="draft" data-en="Draft" data-pt="Rascunho">Draft</option>
+                        <option value="awaiting" data-en="Awaiting Payment" data-pt="Aguardando Pagamento">Awaiting Payment</option>
+                        <option value="overdue" data-en="Overdue" data-pt="Vencido">Overdue</option>
+                        <option value="paid" data-en="Paid" data-pt="Pago">Paid</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeBillModal()">
+                    <span data-en="Cancel" data-pt="Cancelar">Cancel</span>
+                </button>
+                <button class="btn-primary" onclick="saveBill()">
+                    <span data-en="Save Bill" data-pt="Salvar Conta">Save Bill</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cash Transaction Modal -->
+    <div id="cashTransactionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-en="Add Cash Transaction" data-pt="Adicionar Transação">Add Cash Transaction</h3>
+                <button class="modal-close" onclick="closeCashTransactionModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label data-en="Amount ($)" data-pt="Valor ($)">Amount ($)</label>
+                    <input type="number" step="0.01" id="cashTransactionAmount" placeholder="0.00" required>
+                </div>
+                <div class="form-group">
+                    <label data-en="Date" data-pt="Data">Date</label>
+                    <input type="date" id="cashTransactionDate" required>
+                </div>
+                <div class="form-group">
+                    <label data-en="Description (Optional)" data-pt="Descrição (Opcional)">Description (Optional)</label>
+                    <input type="text" id="cashTransactionDescription" placeholder="Enter description">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeCashTransactionModal()">
+                    <span data-en="Cancel" data-pt="Cancelar">Cancel</span>
+                </button>
+                <button class="btn-primary" onclick="saveCashTransaction()">
+                    <span data-en="Save Transaction" data-pt="Salvar Transação">Save Transaction</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/calculations.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/invoices.js"></script>
+    <script src="js/export.js"></script>
+</body>
+</html>
+
+

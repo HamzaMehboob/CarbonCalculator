@@ -1,0 +1,356 @@
+{
+  "metadata": {
+    "version": "2025.1",
+    "last_updated": "2025-11-19",
+    "phase": "Phase 1",
+    "sources": {
+      "UK": "UK Government DEFRA - GHG Conversion Factors 2025",
+      "Brazil": "SEEG - Sistema de Estimativas de Emissões de Gases de Efeito Estufa"
+    }
+  },
+  "countries": {
+    "UK": {
+      "name": "United Kingdom",
+      "currency": "GBP",
+      "year": 2025,
+      "factors": {
+        "water": {
+          "supply": {
+            "value": 0.344,
+            "unit": "kg CO2e per m³",
+            "scope": 3,
+            "description": "Water supply and distribution"
+          },
+          "treatment": {
+            "value": 0.708,
+            "unit": "kg CO2e per m³",
+            "scope": 3,
+            "description": "Wastewater treatment"
+          }
+        },
+        "energy": {
+          "electricity_grid": {
+            "value": 0.177,
+            "unit": "kg CO2e per kWh",
+            "scope": 2,
+            "description": "UK grid electricity average"
+          },
+          "natural_gas": {
+            "value": 0.183,
+            "unit": "kg CO2e per kWh",
+            "scope": 1,
+            "description": "Natural gas combustion"
+          },
+          "heating_oil": {
+            "value": 0.246,
+            "unit": "kg CO2e per kWh",
+            "scope": 1,
+            "description": "Heating oil combustion"
+          },
+          "lpg": {
+            "value": 0.214,
+            "unit": "kg CO2e per kWh",
+            "scope": 1,
+            "description": "Liquefied petroleum gas"
+          },
+          "coal": {
+            "value": 0.317,
+            "unit": "kg CO2e per kWh",
+            "scope": 1,
+            "description": "Coal combustion"
+          }
+        },
+        "waste": {
+          "landfill": {
+            "value": 467.0,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Waste sent to landfill"
+          },
+          "incineration": {
+            "value": 21.28,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Waste incineration"
+          },
+          "recycled": {
+            "value": 21.3,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Mixed recycling"
+          },
+          "composted": {
+            "value": 8.8,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Organic waste composting"
+          }
+        },
+        "transport": {
+          "car_petrol_small": {
+            "value": 0.149,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Small petrol car (<1.4L)"
+          },
+          "car_petrol_medium": {
+            "value": 0.188,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Medium petrol car (1.4-2.0L)"
+          },
+          "car_petrol_large": {
+            "value": 0.280,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Large petrol car (>2.0L)"
+          },
+          "car_diesel_medium": {
+            "value": 0.166,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Medium diesel car"
+          },
+          "car_electric": {
+            "value": 0.053,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Battery electric vehicle"
+          },
+          "car_hybrid": {
+            "value": 0.113,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Hybrid electric vehicle"
+          },
+          "van_diesel": {
+            "value": 0.788,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Diesel delivery van"
+          },
+          "flight_domestic": {
+            "value": 0.246,
+            "unit": "kg CO2e per passenger-km",
+            "scope": 3,
+            "description": "Domestic flight"
+          },
+          "flight_short_international": {
+            "value": 0.156,
+            "unit": "kg CO2e per passenger-km",
+            "scope": 3,
+            "description": "Short international flight (<500km)"
+          },
+          "flight_long_international": {
+            "value": 0.195,
+            "unit": "kg CO2e per passenger-km",
+            "scope": 3,
+            "description": "Long international flight (>500km)"
+          }
+        },
+        "refrigerants": {
+          "R410A": {
+            "value": 2088,
+            "unit": "kg CO2e per kg",
+            "scope": 1,
+            "description": "HFC refrigerant R-410A",
+            "gwp": 2088
+          },
+          "R134a": {
+            "value": 1430,
+            "unit": "kg CO2e per kg",
+            "scope": 1,
+            "description": "HFC refrigerant R-134a",
+            "gwp": 1430
+          },
+          "R32": {
+            "value": 675,
+            "unit": "kg CO2e per kg",
+            "scope": 1,
+            "description": "HFC refrigerant R-32",
+            "gwp": 675
+          },
+          "R404A": {
+            "value": 3922,
+            "unit": "kg CO2e per kg",
+            "scope": 1,
+            "description": "HFC refrigerant R-404A",
+            "gwp": 3922
+          }
+        }
+      }
+    },
+    "Brazil": {
+      "name": "Brazil",
+      "currency": "BRL",
+      "year": 2025,
+      "factors": {
+        "water": {
+          "supply": {
+            "value": 0.421,
+            "unit": "kg CO2e per m³",
+            "scope": 3,
+            "description": "Water supply and distribution"
+          },
+          "treatment": {
+            "value": 0.856,
+            "unit": "kg CO2e per m³",
+            "scope": 3,
+            "description": "Wastewater treatment"
+          }
+        },
+        "energy": {
+          "electricity_grid": {
+            "value": 0.233,
+            "unit": "kg CO2e per kWh",
+            "scope": 2,
+            "description": "Brazil grid electricity (2025 factor)"
+          },
+          "natural_gas": {
+            "value": 0.202,
+            "unit": "kg CO2e per kWh",
+            "scope": 1,
+            "description": "Natural gas combustion"
+          },
+          "heating_oil": {
+            "value": 0.264,
+            "unit": "kg CO2e per kWh",
+            "scope": 1,
+            "description": "Heating oil combustion"
+          },
+          "lpg": {
+            "value": 0.226,
+            "unit": "kg CO2e per kWh",
+            "scope": 1,
+            "description": "Liquefied petroleum gas"
+          }
+        },
+        "waste": {
+          "landfill": {
+            "value": 521.0,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Waste sent to landfill"
+          },
+          "incineration": {
+            "value": 25.84,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Waste incineration"
+          },
+          "recycled": {
+            "value": 24.6,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Mixed recycling"
+          },
+          "composted": {
+            "value": 10.2,
+            "unit": "kg CO2e per tonne",
+            "scope": 3,
+            "description": "Organic waste composting"
+          }
+        },
+        "transport": {
+          "car_petrol_medium": {
+            "value": 0.197,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Medium petrol car"
+          },
+          "car_diesel_medium": {
+            "value": 0.176,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Medium diesel car"
+          },
+          "car_electric": {
+            "value": 0.062,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Battery electric vehicle"
+          },
+          "car_flex": {
+            "value": 0.182,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Flex fuel vehicle (ethanol/petrol)"
+          },
+          "van_diesel": {
+            "value": 0.831,
+            "unit": "kg CO2e per km",
+            "scope": 3,
+            "description": "Diesel delivery van"
+          },
+          "flight_domestic": {
+            "value": 0.264,
+            "unit": "kg CO2e per passenger-km",
+            "scope": 3,
+            "description": "Domestic flight"
+          },
+          "flight_international": {
+            "value": 0.208,
+            "unit": "kg CO2e per passenger-km",
+            "scope": 3,
+            "description": "International flight"
+          }
+        },
+        "refrigerants": {
+          "R410A": {
+            "value": 2088,
+            "unit": "kg CO2e per kg",
+            "scope": 1,
+            "description": "HFC refrigerant R-410A",
+            "gwp": 2088
+          },
+          "R134a": {
+            "value": 1430,
+            "unit": "kg CO2e per kg",
+            "scope": 1,
+            "description": "HFC refrigerant R-134a",
+            "gwp": 1430
+          },
+          "R32": {
+            "value": 675,
+            "unit": "kg CO2e per kg",
+            "scope": 1,
+            "description": "HFC refrigerant R-32",
+            "gwp": 675
+          }
+        }
+      }
+    }
+  },
+  "ghg_protocol_scopes": {
+    "scope_1": {
+      "name": "Direct Emissions",
+      "description": "Emissions from sources owned or controlled by the organization",
+      "examples": [
+        "Company vehicles",
+        "On-site fuel combustion",
+        "Refrigerant leaks"
+      ]
+    },
+    "scope_2": {
+      "name": "Indirect Emissions - Energy",
+      "description": "Emissions from purchased electricity, heat, or steam",
+      "examples": [
+        "Purchased electricity",
+        "Purchased heating",
+        "Purchased cooling"
+      ]
+    },
+    "scope_3": {
+      "name": "Other Indirect Emissions",
+      "description": "All other indirect emissions in the value chain",
+      "examples": [
+        "Business travel",
+        "Employee commuting",
+        "Water supply",
+        "Waste disposal",
+        "Purchased goods"
+      ]
+    }
+  }
+}
+
