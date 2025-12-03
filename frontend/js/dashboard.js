@@ -831,5 +831,6 @@ window.updateDashboard = updateDashboard;
 window.updateBankReconciliationChart = updateBankReconciliationChart;
 window.updateCashFlowChart = updateCashFlowChart;
 window.updateAccountSummaryChart = updateAccountSummaryChart;
+window.updateAccountsCharts = updateAccountsCharts;
 
 

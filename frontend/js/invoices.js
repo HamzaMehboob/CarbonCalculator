@@ -89,6 +89,9 @@ function saveInvoice() {
     updateInvoicesChart();
     updateInvoicesSummary();
     updateInvoicesOwedWidget();
+    if (window.renderInvoicesTable) {
+        window.renderInvoicesTable();
+    }
 }
 
 // Update invoices owed widget from invoices data
@@ -136,6 +139,9 @@ function deleteInvoice(invoiceId) {
     saveSitesToLocalStorage();
     updateInvoicesChart();
     updateInvoicesSummary();
+    if (window.renderInvoicesTable) {
+        window.renderInvoicesTable();
+    }
 }
 
 // Edit invoice
@@ -467,7 +473,7 @@ function openBillModal() {
     document.getElementById('billCategory').value = '';
     document.getElementById('billAmount').value = '';
     document.getElementById('billDueDate').value = new Date().toISOString().split('T')[0];
-    document.getElementById('billStatus').value = 'awaiting';
+    document.getElementById('billStatus').value = 'due';
     
     // Remove edit mode
     modal.dataset.editId = '';
@@ -504,6 +510,7 @@ function saveBill() {
         return;
     }
     
+    // Ensure bills structure exists
     initBillsData();
     
     const billData = {
@@ -530,6 +537,9 @@ function saveBill() {
         site.bills.push(billData);
     }
     
+    // Debug logging to help trace issues
+    console.log('Bills after saveBill:', site.bills);
+    
     // Save immediately
     saveSitesToLocalStorage();
     if (window.saveCurrentSiteData) {
@@ -538,7 +548,7 @@ function saveBill() {
     
     closeBillModal();
     
-    // Force update immediately - no delay
+    // Force update immediately - no delay (similar pattern to invoices)
     if (window.updateBillsChart) {
         window.updateBillsChart();
     }
@@ -548,15 +558,12 @@ function saveBill() {
     if (window.updateBillsToPayWidget) {
         window.updateBillsToPayWidget();
     }
-    
-    // Also update Accounts Dashboard if active
-    const accountsTab = document.querySelector('[data-content="accounts"]');
-    if (accountsTab && accountsTab.classList.contains('active')) {
-        if (window.updateAccountsCharts) {
-            setTimeout(() => {
-                window.updateAccountsCharts();
-            }, 100);
-        }
+    if (window.renderBillsTable) {
+        window.renderBillsTable();
+    }
+    // Also refresh full accounts dashboard (charts + KPIs) when available
+    if (window.updateAccountsCharts) {
+        window.updateAccountsCharts();
     }
     
     // Debug logging
@@ -578,6 +585,12 @@ function deleteBill(billId) {
     updateBillsChart();
     updateBillsSummary();
     updateBillsToPayWidget();
+    if (window.renderBillsTable) {
+        window.renderBillsTable();
+    }
+    if (window.updateAccountsCharts) {
+        window.updateAccountsCharts();
+    }
 }
 
 // Edit bill
@@ -592,7 +605,12 @@ function editBill(billId) {
     document.getElementById('billCategory').value = bill.category || '';
     document.getElementById('billAmount').value = bill.amount || '';
     document.getElementById('billDueDate').value = bill.dueDate || new Date().toISOString().split('T')[0];
-    document.getElementById('billStatus').value = bill.status || 'awaiting';
+    // Default to 'due' if status is missing or legacy values ('awaiting' / 'overdue')
+    let status = bill.status || 'due';
+    if (status === 'awaiting' || status === 'overdue') {
+        status = 'due';
+    }
+    document.getElementById('billStatus').value = status;
     document.getElementById('billModal').dataset.editId = billId;
     
     document.getElementById('billModal').style.display = 'flex';
@@ -608,12 +626,12 @@ function updateBillsSummary() {
     if (!summaryDiv) return;
     
     const draft = site.bills.filter(bill => bill.status === 'draft');
-    const awaiting = site.bills.filter(bill => bill.status === 'awaiting');
-    const overdue = site.bills.filter(bill => bill.status === 'overdue');
+    const due = site.bills.filter(bill => bill.status === 'due');
+    const paid = site.bills.filter(bill => bill.status === 'paid');
     
     const draftTotal = draft.reduce((sum, bill) => sum + bill.amount, 0);
-    const awaitingTotal = awaiting.reduce((sum, bill) => sum + bill.amount, 0);
-    const overdueTotal = overdue.reduce((sum, bill) => sum + bill.amount, 0);
+    const dueTotal = due.reduce((sum, bill) => sum + bill.amount, 0);
+    const paidTotal = paid.reduce((sum, bill) => sum + bill.amount, 0);
     
     summaryDiv.innerHTML = `
         <div class="invoices-stats">
@@ -622,12 +640,12 @@ function updateBillsSummary() {
                 <strong>$${draftTotal.toFixed(2)}</strong>
             </div>
             <div class="invoice-stat">
-                <span>${awaiting.length} <span data-en="Awaiting payment" data-pt="Aguardando pagamento">Awaiting payment</span></span>
-                <strong>$${awaitingTotal.toFixed(2)}</strong>
+                <span>${due.length} <span data-en="Due bills" data-pt="Contas vencendo">Due bills</span></span>
+                <strong>$${dueTotal.toFixed(2)}</strong>
             </div>
-            <div class="invoice-stat overdue">
-                <span>${overdue.length} <span data-en="Overdue" data-pt="Vencido">Overdue</span></span>
-                <strong>$${overdueTotal.toFixed(2)}</strong>
+            <div class="invoice-stat">
+                <span>${paid.length} <span data-en="Paid bills" data-pt="Contas pagas">Paid bills</span></span>
+                <strong>$${paidTotal.toFixed(2)}</strong>
             </div>
         </div>
     `;
@@ -635,55 +653,82 @@ function updateBillsSummary() {
     updateLanguage();
 }
 
-// Update bills chart
+// Update bills chart - simple Due Date vs Amount ($) for unpaid bills
 function updateBillsChart() {
     const site = appState.sites[appState.currentSite];
-    if (!site || !site.bills) return;
-    
+    if (!site) return;
+
+    // Ensure bills array exists
+    if (!site.bills) {
+        site.bills = [];
+    }
+
     const ctx = document.getElementById('billsChart');
-    if (!ctx) return;
-    
-    const now = new Date();
-    const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    // Group bills by time period
-    const periods = {
-        'Older': { amount: 0, bills: [] },
-        '31 Mar-6 Apr': { amount: 0, bills: [] },
-        'This week': { amount: 0, bills: [] },
-        '14-20 Apr': { amount: 0, bills: [] },
-        '21-27 Apr': { amount: 0, bills: [] },
-        'Future': { amount: 0, bills: [] }
-    };
-    
-    site.bills.filter(bill => bill.status !== 'paid').forEach(bill => {
-        const dueDate = new Date(bill.dueDate);
-        const daysDiff = Math.floor((dueDate - currentDate) / (1000 * 60 * 60 * 24));
-        
-        let period = 'Future';
-        if (daysDiff < -30) {
-            period = 'Older';
-        } else if (daysDiff < -14) {
-            period = '31 Mar-6 Apr';
-        } else if (daysDiff < -7) {
-            period = 'This week';
-        } else if (daysDiff < 0) {
-            period = '14-20 Apr';
-        } else if (daysDiff < 7) {
-            period = '21-27 Apr';
+    if (!ctx) {
+        console.warn('billsChart canvas not found in DOM');
+        return;
+    }
+
+    // Build simple date → total amount map for unpaid bills
+    const dateMap = {}; // { '2025-04-10': totalAmount, ... }
+
+    site.bills
+        .filter(bill => bill.status !== 'paid')
+        .forEach(bill => {
+            const due = bill.dueDate ? new Date(bill.dueDate) : null;
+            const key = due && !isNaN(due)
+                ? `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`
+                : 'No date';
+
+            const amount = parseFloat(bill.amount) || 0;
+            if (!dateMap[key]) {
+                dateMap[key] = 0;
+            }
+            dateMap[key] += amount;
+        });
+
+    const rawKeys = Object.keys(dateMap);
+
+    // If there are no unpaid bills, clear chart and exit gracefully
+    if (rawKeys.length === 0) {
+        if (window.billsChart && typeof window.billsChart.destroy === 'function') {
+            window.billsChart.destroy();
         }
-        
-        periods[period].amount += bill.amount;
-        periods[period].bills.push(bill);
+        window.billsChart = null;
+        return;
+    }
+
+    // Sort real dates chronologically, keep "No date" (if any) at the end
+    const dateKeys = rawKeys.filter(k => k !== 'No date').sort();
+    if (rawKeys.includes('No date')) {
+        dateKeys.push('No date');
+    }
+
+    const labels = dateKeys.map(k => {
+        if (k === 'No date') return 'No date';
+        const [year, month, day] = k.split('-').map(Number);
+        const d = new Date(year, month - 1, day);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     });
-    
-    const labels = Object.keys(periods);
-    const data = labels.map(label => periods[label].amount);
-    
-    if (window.billsChart) {
+    const data = dateKeys.map(k => dateMap[k]);
+
+    if (window.billsChart && typeof window.billsChart.destroy === 'function') {
         window.billsChart.destroy();
     }
-    
+
+    // Color palette for bars
+    const colorPalette = [
+        '#6C757D', // Gray
+        '#13B5EA', // Blue
+        '#28A745', // Green
+        '#FFC107', // Yellow
+        '#DC3545', // Red
+        '#6610F2', // Purple
+        '#FD7E14', // Orange
+        '#20C997', // Teal
+        '#E83E8C'  // Pink
+    ];
+
     window.billsChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -691,11 +736,7 @@ function updateBillsChart() {
             datasets: [{
                 label: appState.currentLanguage === 'en' ? 'Bill Amount ($)' : 'Valor da Conta ($)',
                 data: data,
-                backgroundColor: labels.map((label, index) => {
-                    if (label === 'This week') return '#DC3545';
-                    if (label === 'Older') return '#6C757D';
-                    return '#6C757D';
-                }),
+                backgroundColor: labels.map((_, index) => colorPalette[index % colorPalette.length]),
                 borderRadius: 8
             }]
         },
@@ -706,7 +747,7 @@ function updateBillsChart() {
             layout: {
                 padding: {
                     top: 20,
-                    bottom: 20,
+                    bottom: 40, // extra space below the x-axis
                     left: 10,
                     right: 10
                 }
@@ -754,8 +795,93 @@ function updateBillsChart() {
             }
         }
     });
-    
+
+    // Keep summary in sync with chart
     updateBillsSummary();
+}
+
+// Render bills table (for edit/delete)
+function renderBillsTable() {
+    const site = appState.sites[appState.currentSite];
+    if (!site || !site.bills) return;
+
+    const tbody = document.getElementById('billsTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    site.bills.forEach(bill => {
+        const tr = document.createElement('tr');
+
+        const amount = (parseFloat(bill.amount) || 0).toFixed(2);
+        const due = bill.dueDate ? new Date(bill.dueDate).toLocaleDateString(appState.currentLanguage === 'en' ? 'en-US' : 'pt-BR') : '-';
+        const status = bill.status || 'draft';
+
+        tr.innerHTML = `
+            <td>${bill.name || '-'}</td>
+            <td>${bill.category || '-'}</td>
+            <td>$${amount}</td>
+            <td>${due}</td>
+            <td>${status}</td>
+            <td>
+                <button class="btn-link" onclick="editBill('${bill.id}')">
+                    <span data-en="Edit" data-pt="Editar">Edit</span>
+                </button>
+                <span class="action-separator"> | </span>
+                <button class="btn-link btn-danger" onclick="deleteBill('${bill.id}')">
+                    <span data-en="Delete" data-pt="Excluir">Delete</span>
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+    updateLanguage();
+}
+
+// Render invoices table (for edit/delete)
+function renderInvoicesTable() {
+    const site = appState.sites[appState.currentSite];
+    if (!site || !site.invoices) return;
+
+    const tbody = document.getElementById('invoicesTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    const monthNames = appState.currentLanguage === 'en'
+        ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        : ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    site.invoices.forEach(inv => {
+        const tr = document.createElement('tr');
+
+        const amount = (parseFloat(inv.amount) || 0).toFixed(2);
+        const monthLabel = typeof inv.month === 'number' ? monthNames[inv.month] || '-' : '-';
+        const year = inv.year || '-';
+        const status = inv.status || 'draft';
+
+        tr.innerHTML = `
+            <td>$${amount}</td>
+            <td>${monthLabel}</td>
+            <td>${year}</td>
+            <td>${status}</td>
+            <td>
+                <button class="btn-link" onclick="editInvoice('${inv.id}')">
+                    <span data-en="Edit" data-pt="Editar">Edit</span>
+                </button>
+                <span class="action-separator"> | </span>
+                <button class="btn-link btn-danger" onclick="deleteInvoice('${inv.id}')">
+                    <span data-en="Delete" data-pt="Excluir">Delete</span>
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+    updateLanguage();
 }
 
 // Update bills to pay widget from bills data
@@ -781,10 +907,14 @@ function updateBillsToPayWidget() {
     }
     site.financials.billsToPay = totalToPay;
     
-    // Update display widgets
-    const widget = document.getElementById('billsToPayAccounts');
-    if (widget) {
-        widget.textContent = `$${totalToPay.toFixed(2)}`;
+    // Update display widgets (main + accounts dashboard)
+    const widgetMain = document.getElementById('billsToPay');
+    if (widgetMain) {
+        widgetMain.textContent = `$${totalToPay.toFixed(2)}`;
+    }
+    const widgetAccounts = document.getElementById('billsToPayAccounts');
+    if (widgetAccounts) {
+        widgetAccounts.textContent = `$${totalToPay.toFixed(2)}`;
     }
     
     saveSitesToLocalStorage();

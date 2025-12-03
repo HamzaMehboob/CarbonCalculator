@@ -8,6 +8,7 @@ import pandas as pd
 import json
 from datetime import datetime
 import os
+from io import BytesIO
 
 # ============================================
 # PAGE CONFIG
@@ -174,7 +175,9 @@ with tab1:
 with tab2:
     st.subheader("Official Conversion Factors Database")
     
-    country_select = st.selectbox("Select Country", ["UK_2025", "BRAZIL_2025"])
+    # Allow dynamic list of databases (including imported ones)
+    available_dbs = list(CONVERSION_FACTORS.keys())
+    country_select = st.selectbox("Select Database", available_dbs)
     
     factors_data = CONVERSION_FACTORS[country_select]
     
@@ -205,6 +208,115 @@ with tab2:
                 unit = "kg CO₂e/kg" if 'refrigerant' in key else "kg CO₂e/unit"
                 factor_list.append({"Factor": key, "Value": value, "Unit": unit})
             st.dataframe(pd.DataFrame(factor_list), use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("Import / Export Factors as Excel")
+
+    # ---------- Export current database to Excel ----------
+    export_name_default = country_select
+    export_db_name = st.text_input("Database name for export (used in file name)", value=export_name_default, key="export_db_name")
+
+    # Infer a year from the database key if present (e.g. UK_2025 -> 2025)
+    inferred_year = None
+    if "_" in country_select:
+        suffix = country_select.split("_")[-1]
+        if suffix.isdigit():
+            inferred_year = suffix
+
+    if st.button("⬇️ Export this database to Excel"):
+        factors_df = pd.DataFrame(
+            [
+                {
+                    "Factor": k,
+                    "Value": v,
+                    "Unit": "kg CO₂e/kg" if "refrigerant" in k else "kg CO₂e/unit",
+                }
+                for k, v in factors_data["factors"].items()
+            ]
+        )
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            sheet_name = str(inferred_year or "Factors")
+            factors_df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        output.seek(0)
+        file_label = export_db_name or country_select
+        file_name = f"{file_label.replace(' ', '_')}_factors_{datetime.now().strftime('%Y%m%d')}.xlsx"
+
+        st.download_button(
+            label="Download Excel",
+            data=output.getvalue(),
+            file_name=file_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    st.markdown("—")
+
+    # ---------- Import factors from Excel ----------
+    st.markdown("#### Import factors from Excel")
+    import_base_name = st.text_input(
+        "Base name for imported database(s) (required)",
+        value="CUSTOM_DB",
+        key="import_db_name",
+    )
+    import_file = st.file_uploader(
+        "Upload Excel file (.xlsx) with one or more sheets (each sheet = one year/set of factors). "
+        "Columns required: Factor, Value (optional: Unit).",
+        type=["xlsx"],
+        key="import_db_file",
+    )
+
+    if import_file is not None and st.button("⬆️ Import database(s) from Excel"):
+        if not import_base_name.strip():
+            st.error("Please provide a base name for the imported database.")
+        else:
+            try:
+                xls = pd.ExcelFile(import_file)
+                created_keys = []
+
+                for sheet_name in xls.sheet_names:
+                    df = pd.read_excel(xls, sheet_name=sheet_name)
+                    if "Factor" not in df.columns or "Value" not in df.columns:
+                        st.warning(f"Sheet '{sheet_name}' skipped (missing 'Factor' or 'Value' columns).")
+                        continue
+
+                    factors_dict = {}
+                    for _, row in df.iterrows():
+                        key = str(row["Factor"]).strip()
+                        if not key:
+                            continue
+                        try:
+                            value = float(row["Value"])
+                        except Exception:
+                            continue
+                        factors_dict[key] = value
+
+                    if not factors_dict:
+                        st.warning(f"Sheet '{sheet_name}' contained no valid factors.")
+                        continue
+
+                    db_key = f"{import_base_name.strip()}_{sheet_name}".upper()
+                    CONVERSION_FACTORS[db_key] = {
+                        "version": str(sheet_name),
+                        "source": f"Imported from Excel ({import_base_name.strip()})",
+                        "url": "",
+                        "last_updated": datetime.now().strftime("%Y-%m-%d"),
+                        "factors": factors_dict,
+                    }
+                    created_keys.append(db_key)
+
+                if created_keys:
+                    st.success(
+                        f"Imported {len(created_keys)} database(s): "
+                        + ", ".join(created_keys)
+                    )
+                    st.info("Refresh this page to see the new databases in the selector above.")
+                else:
+                    st.warning("No valid factors were imported from the uploaded Excel file.")
+
+            except Exception as e:
+                st.error(f"Error importing factors: {e}")
 
 # ============================================
 # TAB 3: CALCULATOR

@@ -22,6 +22,27 @@ function exportToPDF() {
     const companyName = document.getElementById('companyNameInput').value || 'My Company';
     const companyNotes = document.getElementById('companyNotes').value || '';
     const currentDate = new Date().toLocaleDateString();
+
+    // Get financial KPIs from DOM (try main widget id, then Accounts dashboard id)
+    const getNumericFromElement = (id) => {
+        let el = document.getElementById(id);
+        if (!el) {
+            el = document.getElementById(id + 'Accounts');
+        }
+        if (!el || !el.textContent) return 0;
+        const text = el.textContent.replace(/[^0-9.\-]/g, '');
+        const val = parseFloat(text);
+        return isNaN(val) ? 0 : val;
+    };
+
+    const financials = {
+        bankBalance: getNumericFromElement('bankBalance'),
+        savingsBalance: getNumericFromElement('savingsBalance'),
+        cashIn: getNumericFromElement('cashIn'),
+        cashOut: getNumericFromElement('cashOut'),
+        invoicesOwed: getNumericFromElement('invoicesOwed'),
+        billsToPay: getNumericFromElement('billsToPay')
+    };
     
     // Get totals
     const totals = window.carbonCalc.getCategoryTotals();
@@ -98,13 +119,15 @@ function exportToPDF() {
     ];
     
     categories.forEach(cat => {
-        const value = totals[cat.key];
+        const value = totals[cat.key] || 0;
         const percentage = grandTotal > 0 ? ((value / grandTotal) * 100).toFixed(1) : 0;
         
-        // Category bar
-        doc.setFillColor(...cat.color);
-        const barWidth = (value / grandTotal) * 150;
-        doc.rect(20, yPos, barWidth, 6, 'F');
+        // Category bar (only draw if we have a valid total to avoid NaN/Infinity issues)
+        if (grandTotal > 0 && value > 0) {
+            doc.setFillColor(...cat.color);
+            const barWidth = Math.max(0, (value / grandTotal) * 150);
+            doc.rect(20, yPos, barWidth, 6, 'F');
+        }
         
         // Category label
         doc.setFontSize(10);
@@ -169,7 +192,38 @@ function exportToPDF() {
     
     yPos += 6;
     doc.text(`Scope 3 (Other Indirect): ${scopes.scope3.toFixed(3)} tCO₂e`, 20, yPos);
-    
+
+    // Financial Summary (Accounts)
+    yPos += 12;
+    if (yPos > 260) {
+        doc.addPage();
+        yPos = 20;
+    }
+
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Financial Summary (Accounts)', 20, yPos);
+
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Business Bank Account: $${financials.bankBalance.toFixed(2)}`, 20, yPos);
+
+    yPos += 6;
+    doc.text(`Business Savings: $${financials.savingsBalance.toFixed(2)}`, 20, yPos);
+
+    yPos += 6;
+    doc.text(`Total Cash In: $${financials.cashIn.toFixed(2)}`, 20, yPos);
+
+    yPos += 6;
+    doc.text(`Total Cash Out: $${financials.cashOut.toFixed(2)}`, 20, yPos);
+
+    yPos += 6;
+    doc.text(`Invoices Owed to You: $${financials.invoicesOwed.toFixed(2)}`, 20, yPos);
+
+    yPos += 6;
+    doc.text(`Bills to Pay: $${financials.billsToPay.toFixed(2)}`, 20, yPos);
+
     // Footer
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
@@ -202,11 +256,39 @@ function exportToPDF() {
 // ============================================
 
 function exportToExcel() {
-    const wb = XLSX.utils.book_new();
+    // Check if XLSX library is loaded
+    if (typeof XLSX === 'undefined' || !XLSX.utils) {
+        alert('Excel export library is loading. Please wait a moment and try again.');
+        return;
+    }
+
+    try {
+        const wb = XLSX.utils.book_new();
     
     // Get company info
     const companyName = document.getElementById('companyNameInput').value || 'My Company';
     const companyNotes = document.getElementById('companyNotes').value || '';
+
+    // Get financial KPIs (same helper as PDF, local copy)
+    const getNumericFromElement = (id) => {
+        let el = document.getElementById(id);
+        if (!el) {
+            el = document.getElementById(id + 'Accounts');
+        }
+        if (!el || !el.textContent) return 0;
+        const text = el.textContent.replace(/[^0-9.\-]/g, '');
+        const val = parseFloat(text);
+        return isNaN(val) ? 0 : val;
+    };
+
+    const financials = {
+        bankBalance: getNumericFromElement('bankBalance'),
+        savingsBalance: getNumericFromElement('savingsBalance'),
+        cashIn: getNumericFromElement('cashIn'),
+        cashOut: getNumericFromElement('cashOut'),
+        invoicesOwed: getNumericFromElement('invoicesOwed'),
+        billsToPay: getNumericFromElement('billsToPay')
+    };
     
     // Summary Sheet
     const summaryData = [
@@ -233,6 +315,17 @@ function exportToExcel() {
     
     summaryData.push([]);
     summaryData.push(['TOTAL', grandTotal.toFixed(3), '100%']);
+
+    // Financial Summary section in Summary sheet
+    summaryData.push([]);
+    summaryData.push(['Financial Summary (Accounts)']);
+    summaryData.push(['Metric', 'Value (USD)']);
+    summaryData.push(['Business Bank Account', financials.bankBalance.toFixed(2)]);
+    summaryData.push(['Business Savings', financials.savingsBalance.toFixed(2)]);
+    summaryData.push(['Total Cash In', financials.cashIn.toFixed(2)]);
+    summaryData.push(['Total Cash Out', financials.cashOut.toFixed(2)]);
+    summaryData.push(['Invoices Owed to You', financials.invoicesOwed.toFixed(2)]);
+    summaryData.push(['Bills to Pay', financials.billsToPay.toFixed(2)]);
     
     const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
@@ -293,6 +386,10 @@ function exportToExcel() {
             : '✅ Excel exportado com sucesso!',
         'success'
     );
+    } catch (error) {
+        console.error('Excel Export Error:', error);
+        alert('Error exporting Excel: ' + error.message);
+    }
 }
 
 // ============================================

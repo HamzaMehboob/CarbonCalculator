@@ -586,6 +586,10 @@
                         <div class="dashboard-header">
                             <h2 data-en="Accounts Dashboard" data-pt="Painel de Contas">Accounts Dashboard</h2>
                             <div class="export-actions">
+                                <button class="btn-secondary" onclick="resetAccountsData()">
+                                    <i class="fas fa-undo-alt"></i>
+                                    <span data-en="Reset Accounts" data-pt="Redefinir Contas">Reset Accounts</span>
+                                </button>
                                 <button class="btn-secondary" onclick="toggleDashboardWidgets()">
                                     <i class="fas fa-cog"></i> <span data-en="Customize" data-pt="Personalizar">Customize</span>
                                 </button>
@@ -720,6 +724,54 @@
                                 <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
                             </div>
                         </div>
+
+                        <!-- Bills & Invoices List -->
+                        <div class="cards-grid" style="margin-top: 24px;">
+                            <div class="chart-card widget-card">
+                                <div class="chart-header">
+                                    <h3 data-en="All Bills" data-pt="Todas as Contas">All Bills</h3>
+                                </div>
+                                <div class="table-wrapper" style="max-height: 260px; overflow-y: auto;">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th data-en="Name" data-pt="Nome">Name</th>
+                                                <th data-en="Category" data-pt="Categoria">Category</th>
+                                                <th data-en="Amount ($)" data-pt="Valor ($)">Amount ($)</th>
+                                                <th data-en="Due Date" data-pt="Vencimento">Due Date</th>
+                                                <th data-en="Status" data-pt="Status">Status</th>
+                                                <th data-en="Actions" data-pt="Ações">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="billsTableBody">
+                                            <!-- Filled by JS (renderBillsTable) -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="chart-card widget-card">
+                                <div class="chart-header">
+                                    <h3 data-en="All Invoices" data-pt="Todas as Faturas">All Invoices</h3>
+                                </div>
+                                <div class="table-wrapper" style="max-height: 260px; overflow-y: auto;">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th data-en="Amount ($)" data-pt="Valor ($)">Amount ($)</th>
+                                                <th data-en="Month" data-pt="Mês">Month</th>
+                                                <th data-en="Year" data-pt="Ano">Year</th>
+                                                <th data-en="Status" data-pt="Status">Status</th>
+                                                <th data-en="Actions" data-pt="Ações">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="invoicesTableBody">
+                                            <!-- Filled by JS (renderInvoicesTable) -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>
@@ -805,11 +857,10 @@
                     <input type="date" id="billDueDate" required>
                 </div>
                 <div class="form-group">
-                    <label data-en="Status" data-pt="Status">Status</label>
+                    <label data-en="Type / Status" data-pt="Tipo / Status">Type / Status</label>
                     <select id="billStatus" required>
                         <option value="draft" data-en="Draft" data-pt="Rascunho">Draft</option>
-                        <option value="awaiting" data-en="Awaiting Payment" data-pt="Aguardando Pagamento">Awaiting Payment</option>
-                        <option value="overdue" data-en="Overdue" data-pt="Vencido">Overdue</option>
+                        <option value="due" data-en="Due" data-pt="Vencendo">Due</option>
                         <option value="paid" data-en="Paid" data-pt="Pago">Paid</option>
                     </select>
                 </div>

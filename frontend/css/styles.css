@@ -908,6 +908,19 @@ body {
     height: auto !important;
 }
 
+/* Make the Invoices and Bills graphs slightly shorter so they don't feel too tall */
+.chart-card[data-widget="invoices-chart"],
+.chart-card[data-widget="bills-chart"] {
+    /* Extra height because these cards include a summary section above the chart */
+    min-height: 420px;
+    max-height: 480px;
+}
+
+.chart-card[data-widget="invoices-chart"] canvas,
+.chart-card[data-widget="bills-chart"] canvas {
+    max-height: 280px;
+}
+
 .chart-card > h3 {
     flex-shrink: 0;
     margin-bottom: 15px;

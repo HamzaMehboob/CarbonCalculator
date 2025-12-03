@@ -123,12 +123,6 @@ function calculateCategoryTotal(table) {
         summaryElement.textContent = `${categoryTotal.toFixed(3)} tCO₂e`;
     }
     
-    // Update dashboard if it's active
-    const dashboardTab = document.querySelector('[data-content="dashboard"]');
-    if (dashboardTab && dashboardTab.classList.contains('active')) {
-        updateDashboard();
-    }
-    
     return categoryTotal;
 }
 
@@ -258,26 +252,29 @@ function getYearComparison() {
         }
     });
     
-    const yearKeys = Object.keys(years).map(y => parseInt(y, 10));
+    const yearKeys = Object.keys(years).map(y => parseInt(y, 10)).filter(y => !isNaN(y));
 
-    // If no years found, return default structure with current year and previous year (both zero)
-    if (yearKeys.length === 0 || yearKeys.every(isNaN)) {
+    // If no years found, return default structure with current year and previous years (both zero)
+    if (yearKeys.length === 0) {
         const currentYear = new Date().getFullYear();
         const sortedData = {};
+        sortedData[currentYear - 2] = 0;
         sortedData[currentYear - 1] = 0;
         sortedData[currentYear] = 0;
         return sortedData;
     }
 
-    // Ensure there is always a "previous year" entry with zero data:
-    // if the earliest year with data is 2024, we create 2023 with value 0.
+    // Ensure there are always "previous year" entries with zero data:
+    // if the earliest year with data is 2024, we create 2023 and 2022 with value 0.
     const minYear = Math.min(...yearKeys);
-    const prevYear = minYear - 1;
-    if (prevYear >= 2020 && !years[prevYear]) {
-        years[prevYear] = 0;
-    }
+    const prevYears = [minYear - 1, minYear - 2];
+    prevYears.forEach(py => {
+        if (py >= 2020 && !years[py]) {
+            years[py] = 0;
+        }
+    });
 
-    // Now sort and return all known years (including the synthetic previous year)
+    // Now sort and return all known years (including the synthetic previous years)
     const sortedData = {};
     Object.keys(years)
         .map(y => parseInt(y, 10))

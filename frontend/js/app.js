@@ -166,6 +166,13 @@ function setActiveTab(tabName) {
                 setTimeout(updateAccountSummaryChart, 100);
             }
         }
+        // Populate bills and invoices lists when opening Accounts tab
+        if (window.renderBillsTable) {
+            window.renderBillsTable();
+        }
+        if (window.renderInvoicesTable) {
+            window.renderInvoicesTable();
+        }
     }
 }
 
@@ -304,6 +311,65 @@ function deleteSite(siteId, element) {
 }
 
 // ============================================
+// RESET ACCOUNTS DATA (CURRENT SITE)
+// ============================================
+
+function resetAccountsData() {
+    const siteId = appState.currentSite;
+    const site = appState.sites[siteId];
+
+    if (!site) return;
+
+    if (!confirm(appState.currentLanguage === 'en'
+        ? 'Reset all account data (bank, savings, cash, invoices, bills)?'
+        : 'Redefinir todos os dados de contas (banco, poupança, caixa, faturas, contas)?')) {
+        return;
+    }
+
+    // Reset financial-related data
+    site.financials = {
+        bankBalance: 0,
+        savingsBalance: 0,
+        cashIn: 0,
+        cashOut: 0,
+        invoicesOwed: 0,
+        billsToPay: 0
+    };
+    site.invoices = [];
+    site.bills = [];
+    site.cashTransactions = {
+        cashIn: [],
+        cashOut: []
+    };
+    site.monthlyCashFlow = {};
+
+    saveSitesToLocalStorage();
+    if (window.saveCurrentSiteData) {
+        window.saveCurrentSiteData();
+    }
+
+    // Update all financial KPI displays to 0 for this site
+    if (typeof updateFinancialDisplay === 'function') {
+        Object.keys(site.financials).forEach(key => {
+            updateFinancialDisplay(key, site.financials[key] || 0);
+        });
+    }
+
+    // Refresh all account-related visuals if functions are available
+    if (window.updateBankReconciliationChart) window.updateBankReconciliationChart();
+    if (window.updateCashFlowChart) window.updateCashFlowChart();
+    if (window.updateAccountSummaryChart) window.updateAccountSummaryChart();
+    if (window.updateMonthlyCashFlowChart) window.updateMonthlyCashFlowChart();
+    if (window.updateInvoicesChart) window.updateInvoicesChart();
+    if (window.updateInvoicesOwedWidget) window.updateInvoicesOwedWidget();
+    if (window.updateBillsChart) window.updateBillsChart();
+    if (window.updateBillsSummary) window.updateBillsSummary();
+    if (window.updateBillsToPayWidget) window.updateBillsToPayWidget();
+    if (window.renderBillsTable) window.renderBillsTable();
+    if (window.renderInvoicesTable) window.renderInvoicesTable();
+}
+
+// ============================================
 // DATA TABLE MANAGEMENT
 // ============================================
 
@@ -414,8 +480,15 @@ function attachRowListeners(row) {
     };
     
     monthInputs.forEach(input => {
-        input.addEventListener('input', saveData);
-        input.addEventListener('blur', saveData); // Also save when leaving field
+        const handleMonthChange = () => {
+            saveData();
+            // Keep dashboard in sync when any month value is updated
+            if (window.updateDashboard) {
+                setTimeout(window.updateDashboard, 200);
+            }
+        };
+        input.addEventListener('input', handleMonthChange);
+        input.addEventListener('blur', handleMonthChange); // Also save when leaving field
     });
     
     if (descriptionInput) {
@@ -725,17 +798,21 @@ function saveCashTransaction() {
     // Close modal
     closeCashTransactionModal();
     
-    // Update charts
-    if (window.updateBankReconciliationChart) {
-        setTimeout(() => {
-            if (typeof updateBankReconciliationChart === 'function') {
-                updateBankReconciliationChart();
-            }
-            if (typeof updateMonthlyCashFlowChart === 'function') {
-                updateMonthlyCashFlowChart();
-            }
-        }, 100);
-    }
+    // Update charts (bank recon, monthly cash flow, cash flow donut, account summary)
+    setTimeout(() => {
+        if (typeof updateBankReconciliationChart === 'function') {
+            updateBankReconciliationChart();
+        }
+        if (typeof updateMonthlyCashFlowChart === 'function') {
+            updateMonthlyCashFlowChart();
+        }
+        if (typeof updateCashFlowChart === 'function') {
+            updateCashFlowChart();
+        }
+        if (typeof updateAccountSummaryChart === 'function') {
+            updateAccountSummaryChart();
+        }
+    }, 100);
 }
 
 // Legacy function for compatibility
