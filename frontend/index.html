@@ -68,6 +68,14 @@
             <aside class="sidebar">
                 <div class="sidebar-header">
                     <h3 data-en="Buildings / Events" data-pt="Edifícios / Eventos">Buildings / Events</h3>
+                    <div class="sidebar-top-actions">
+                        <button class="sidebar-circle-btn" onclick="setActiveTab('dashboard')" title="Dashboard">
+                            <i class="fas fa-chart-pie"></i>
+                        </button>
+                        <button class="sidebar-circle-btn" onclick="setActiveTab('accounts')" title="Accounts">
+                            <i class="fas fa-wallet"></i>
+                        </button>
+                    </div>
                 </div>
                 <ul id="sitesList" class="sites-list">
                     <li class="site-item active" data-site-id="site-1">
@@ -101,6 +109,13 @@
                             <label data-en="Notes" data-pt="Notas">Notes</label>
                             <input type="text" id="companyNotes" placeholder="Add any relevant notes here...">
                         </div>
+                        <div class="form-inline-group">
+                            <label data-en="Factors database" data-pt="Base de fatores">Factors database</label>
+                            <select id="countrySelect">
+                                <option value="UK" data-en="UK Govt (DEFRA 2025)" data-pt="Governo do Reino Unido (DEFRA 2025)">UK Govt (DEFRA 2025)</option>
+                                <option value="BRAZIL" data-en="Brazil GHG Protocol (SEEG)" data-pt="Brasil Protocolo GEE (SEEG)">Brazil GHG Protocol (SEEG)</option>
+                            </select>
+                        </div>
                     </div>
                 </section>
 
@@ -121,10 +136,10 @@
                     <button class="tab-btn" data-tab="refrigerants">
                         <i class="fas fa-snowflake"></i> <span data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</span>
                     </button>
-                    <button class="tab-btn" data-tab="dashboard">
+                    <button class="tab-btn" data-tab="dashboard" style="display: none;">
                         <i class="fas fa-chart-pie"></i> <span data-en="Dashboard" data-pt="Painel">Dashboard</span>
                     </button>
-                    <button class="tab-btn" data-tab="accounts">
+                    <button class="tab-btn" data-tab="accounts" style="display: none;">
                         <i class="fas fa-wallet"></i> <span data-en="Accounts" data-pt="Contas">Accounts</span>
                     </button>
                 </nav>
@@ -145,6 +160,7 @@
                             <table class="data-table" id="waterTable">
                                 <thead>
                                     <tr>
+                                        <th data-en="Emission type" data-pt="Tipo de emissão">Emission type</th>
                                         <th data-en="Description" data-pt="Descrição">Description</th>
                                         <th data-en="Year" data-pt="Ano">Year</th>
                                         <th>Jan</th>
@@ -166,6 +182,12 @@
                                 </thead>
                                 <tbody>
                                     <tr class="data-row">
+                                        <td>
+                                            <select class="emission-select" data-category="water">
+                                                <option value="water" selected data-en="Water supply" data-pt="Abastecimento de água">Water supply</option>
+                                                <option value="wastewater" data-en="Waste water" data-pt="Água residual">Waste water</option>
+                                            </select>
+                                        </td>
                                         <td><input type="text" placeholder="Water supply" value="Water supply"></td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
                                         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
@@ -207,6 +229,7 @@
                             <table class="data-table" id="energyTable">
                                 <thead>
                                     <tr>
+                                        <th data-en="Emission type" data-pt="Tipo de emissão">Emission type</th>
                                         <th data-en="Description" data-pt="Descrição">Description</th>
                                         <th data-en="Year" data-pt="Ano">Year</th>
                                         <th>Jan</th>
@@ -228,6 +251,13 @@
                                 </thead>
                                 <tbody>
                                     <tr class="data-row">
+                                        <td>
+                                            <select class="emission-select" data-category="energy">
+                                                <option value="electricity" selected data-en="Electricity (grid)" data-pt="Eletricidade (rede)">Electricity (grid)</option>
+                                                <option value="naturalGas" data-en="Natural gas" data-pt="Gás natural">Natural gas</option>
+                                                <option value="diesel" data-en="Diesel (generator/boiler)" data-pt="Diesel (gerador/caldeira)">Diesel (generator/boiler)</option>
+                                            </select>
+                                        </td>
                                         <td><input type="text" placeholder="Electricity" value="Electricity"></td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
                                         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
@@ -269,6 +299,7 @@
                             <table class="data-table" id="wasteTable">
                                 <thead>
                                     <tr>
+                                        <th data-en="Emission type" data-pt="Tipo de emissão">Emission type</th>
                                         <th data-en="Description" data-pt="Descrição">Description</th>
                                         <th data-en="Year" data-pt="Ano">Year</th>
                                         <th>Jan</th>
@@ -290,6 +321,12 @@
                                 </thead>
                                 <tbody>
                                     <tr class="data-row">
+                                        <td>
+                                            <select class="emission-select" data-category="waste">
+                                                <option value="waste" selected data-en="Mixed waste to landfill" data-pt="Resíduo misto para aterro">Mixed waste to landfill</option>
+                                                <option value="wasteRecycled" data-en="Recycled waste" data-pt="Resíduo reciclado">Recycled waste</option>
+                                            </select>
+                                        </td>
                                         <td><input type="text" placeholder="Waste disposal" value="Waste disposal"></td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
                                         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
@@ -331,6 +368,7 @@
                             <table class="data-table" id="transportTable">
                                 <thead>
                                     <tr>
+                                        <th data-en="Emission type" data-pt="Tipo de emissão">Emission type</th>
                                         <th data-en="Description" data-pt="Descrição">Description</th>
                                         <th data-en="Year" data-pt="Ano">Year</th>
                                         <th>Jan</th>
@@ -352,6 +390,16 @@
                                 </thead>
                                 <tbody>
                                     <tr class="data-row">
+                                        <td>
+                                            <select class="emission-select" data-category="transport">
+                                                <option value="transport_petrol" selected data-en="Company vehicles - petrol" data-pt="Veículos - gasolina">Company vehicles - petrol</option>
+                                                <option value="transport_diesel" data-en="Company vehicles - diesel" data-pt="Veículos - diesel">Company vehicles - diesel</option>
+                                                <option value="transport_electric" data-en="Company vehicles - electric" data-pt="Veículos - elétrico">Company vehicles - electric</option>
+                                                <option value="flights_short" data-en="Flights - short-haul" data-pt="Voos - curta distância">Flights - short-haul</option>
+                                                <option value="flights_medium" data-en="Flights - medium-haul" data-pt="Voos - média distância">Flights - medium-haul</option>
+                                                <option value="flights_long" data-en="Flights - long-haul" data-pt="Voos - longa distância">Flights - long-haul</option>
+                                            </select>
+                                        </td>
                                         <td><input type="text" placeholder="Company vehicles" value="Company vehicles"></td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
                                         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
@@ -393,6 +441,7 @@
                             <table class="data-table" id="refrigerantsTable">
                                 <thead>
                                     <tr>
+                                        <th data-en="Emission type" data-pt="Tipo de emissão">Emission type</th>
                                         <th data-en="Description" data-pt="Descrição">Description</th>
                                         <th data-en="Year" data-pt="Ano">Year</th>
                                         <th>Jan</th>
@@ -414,6 +463,13 @@
                                 </thead>
                                 <tbody>
                                     <tr class="data-row">
+                                        <td>
+                                            <select class="emission-select" data-category="refrigerants">
+                                                <option value="refrigerant_R410A" selected data-en="R-410A" data-pt="R-410A">R-410A</option>
+                                                <option value="refrigerant_R134a" data-en="R-134a" data-pt="R-134a">R-134a</option>
+                                                <option value="refrigerant_R32" data-en="R-32" data-pt="R-32">R-32</option>
+                                            </select>
+                                        </td>
                                         <td><input type="text" placeholder="R-410A" value="R-410A"></td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
                                         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>

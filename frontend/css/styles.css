@@ -323,6 +323,33 @@ body {
     font-weight: 600;
 }
 
+.sidebar-top-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.sidebar-circle-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-sidebar);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
+}
+
+.sidebar-circle-btn:hover {
+    background: var(--primary-color);
+    color: #FFFFFF;
+    transform: translateY(-2px);
+}
+
 .btn-add-site {
     width: 100%;
     background: var(--primary-color);
@@ -479,6 +506,22 @@ body {
 }
 
 .form-inline-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.form-inline-group select {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    transition: var(--transition);
+}
+
+.form-inline-group select:focus {
     outline: none;
     border-color: var(--primary-color);
 }

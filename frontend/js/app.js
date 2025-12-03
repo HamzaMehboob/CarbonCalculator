@@ -122,49 +122,66 @@ document.getElementById('logoutBtn')?.addEventListener('click', function() {
 // TABS NAVIGATION
 // ============================================
 
-function initializeTabs() {
+function setActiveTab(tabName) {
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
+
+    // Update active states
+    tabBtns.forEach(b => b.classList.remove('active'));
+    tabContents.forEach(c => c.classList.remove('active'));
+
+    const targetBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    }
+
+    const targetContent = document.querySelector(`[data-content="${tabName}"]`);
+    if (targetContent) {
+        targetContent.classList.add('active');
+    }
+
+    // Update dashboard when switching to it
+    if (tabName === 'dashboard') {
+        if (window.updateDashboard) {
+            updateDashboard();
+        }
+    } else if (tabName === 'accounts') {
+        // Update accounts dashboard
+        if (window.updateAccountsCharts) {
+            updateAccountsCharts();
+        }
+        // Sync financial displays
+        if (appState.currentSite && appState.sites[appState.currentSite] && appState.sites[appState.currentSite].financials) {
+            Object.keys(appState.sites[appState.currentSite].financials).forEach(key => {
+                const value = appState.sites[appState.currentSite].financials[key] || 0;
+                updateFinancialDisplay(key, value);
+            });
+            if (window.updateBankReconciliationChart) {
+                setTimeout(updateBankReconciliationChart, 100);
+            }
+            if (window.updateCashFlowChart) {
+                setTimeout(updateCashFlowChart, 100);
+            }
+            if (window.updateAccountSummaryChart) {
+                setTimeout(updateAccountSummaryChart, 100);
+            }
+        }
+    }
+}
+
+function initializeTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
     
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const tabName = btn.getAttribute('data-tab');
-            
-            // Update active states
-            tabBtns.forEach(b => b.classList.remove('active'));
-            tabContents.forEach(c => c.classList.remove('active'));
-            
-            btn.classList.add('active');
-            document.querySelector(`[data-content="${tabName}"]`).classList.add('active');
-            
-            // Update dashboard when switching to it
-            if (tabName === 'dashboard') {
-                updateDashboard();
-            } else if (tabName === 'accounts') {
-                // Update accounts dashboard
-                if (window.updateAccountsCharts) {
-                    updateAccountsCharts();
-                }
-                // Sync financial displays
-                if (appState.currentSite && appState.sites[appState.currentSite] && appState.sites[appState.currentSite].financials) {
-                    Object.keys(appState.sites[appState.currentSite].financials).forEach(key => {
-                        const value = appState.sites[appState.currentSite].financials[key] || 0;
-                        updateFinancialDisplay(key, value);
-                    });
-                    if (window.updateBankReconciliationChart) {
-                        setTimeout(updateBankReconciliationChart, 100);
-                    }
-                    if (window.updateCashFlowChart) {
-                        setTimeout(updateCashFlowChart, 100);
-                    }
-                    if (window.updateAccountSummaryChart) {
-                        setTimeout(updateAccountSummaryChart, 100);
-                    }
-                }
-            }
+            setActiveTab(tabName);
         });
     });
 }
+
+// Expose tab switcher so sidebar circular buttons can use it
+window.setActiveTab = setActiveTab;
 
 // ============================================
 // SITE MANAGEMENT
@@ -303,7 +320,11 @@ function addDataRow(category) {
     else if (category === 'transport') unit = 'km';
     else if (category === 'refrigerants') unit = 'kg';
     
+    // Build emission type selector based on category
+    const emissionSelectHtml = getEmissionSelectHtml(category);
+
     row.innerHTML = `
+        <td>${emissionSelectHtml}</td>
         <td><input type="text" placeholder="Description"></td>
         <td><input type="number" value="2025" min="2020" max="2030"></td>
         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
@@ -327,6 +348,49 @@ function addDataRow(category) {
     attachRowListeners(row);
 }
 
+// Build emission type dropdown HTML per category
+function getEmissionSelectHtml(category, selectedKey) {
+    const optionsByCategory = {
+        water: [
+            { key: 'water', labelEn: 'Water supply', labelPt: 'Abastecimento de água' },
+            { key: 'wastewater', labelEn: 'Waste water', labelPt: 'Água residual' }
+        ],
+        energy: [
+            { key: 'electricity', labelEn: 'Electricity (grid)', labelPt: 'Eletricidade (rede)' },
+            { key: 'naturalGas', labelEn: 'Natural gas', labelPt: 'Gás natural' },
+            { key: 'diesel', labelEn: 'Diesel (generator/boiler)', labelPt: 'Diesel (gerador/caldeira)' }
+        ],
+        waste: [
+            { key: 'waste', labelEn: 'Mixed waste to landfill', labelPt: 'Resíduo misto para aterro' },
+            { key: 'wasteRecycled', labelEn: 'Recycled waste', labelPt: 'Resíduo reciclado' }
+        ],
+        transport: [
+            { key: 'transport_petrol', labelEn: 'Company vehicles - petrol', labelPt: 'Veículos - gasolina' },
+            { key: 'transport_diesel', labelEn: 'Company vehicles - diesel', labelPt: 'Veículos - diesel' },
+            { key: 'transport_electric', labelEn: 'Company vehicles - electric', labelPt: 'Veículos - elétrico' },
+            { key: 'flights_short', labelEn: 'Flights - short-haul', labelPt: 'Voos - curta distância' },
+            { key: 'flights_medium', labelEn: 'Flights - medium-haul', labelPt: 'Voos - média distância' },
+            { key: 'flights_long', labelEn: 'Flights - long-haul', labelPt: 'Voos - longa distância' }
+        ],
+        refrigerants: [
+            { key: 'refrigerant_R410A', labelEn: 'R-410A', labelPt: 'R-410A' },
+            { key: 'refrigerant_R134a', labelEn: 'R-134a', labelPt: 'R-134a' },
+            { key: 'refrigerant_R32', labelEn: 'R-32', labelPt: 'R-32' }
+        ]
+    };
+
+    const options = optionsByCategory[category] || [];
+    const defaultSelected = selectedKey || (options[0] ? options[0].key : '');
+
+    let html = `<select class="emission-select" data-category="${category}">`;
+    options.forEach(opt => {
+        const selectedAttr = opt.key === defaultSelected ? 'selected' : '';
+        html += `<option value="${opt.key}" ${selectedAttr} data-en="${opt.labelEn}" data-pt="${opt.labelPt}">${opt.labelEn}</option>`;
+    });
+    html += '</select>';
+    return html;
+}
+
 function deleteRow(button) {
     if (confirm(appState.currentLanguage === 'en' 
         ? 'Delete this row?' 
@@ -340,6 +404,7 @@ function attachRowListeners(row) {
     const monthInputs = row.querySelectorAll('.month-input');
     const descriptionInput = row.querySelector('input[type="text"]');
     const yearInput = row.querySelector('input[type="number"]');
+    const emissionSelect = row.querySelector('.emission-select');
     
     // Save on any input change
     const saveData = () => {
@@ -356,6 +421,12 @@ function attachRowListeners(row) {
     if (descriptionInput) {
         descriptionInput.addEventListener('input', saveData);
         descriptionInput.addEventListener('blur', saveData);
+    }
+
+    if (emissionSelect) {
+        emissionSelect.addEventListener('change', () => {
+            saveData();
+        });
     }
     
     if (yearInput) {
@@ -461,8 +532,15 @@ function loadSiteData(siteId) {
 
 function loadRowData(row, data) {
     const inputs = row.querySelectorAll('input');
+    const emissionSelect = row.querySelector('.emission-select');
+
+    // Inputs: [description, year, months...]
     if (inputs[0]) inputs[0].value = data.description || '';
     if (inputs[1]) inputs[1].value = data.year || 2025;
+
+    if (emissionSelect && data.emissionType) {
+        emissionSelect.value = data.emissionType;
+    }
     
     data.months.forEach((value, index) => {
         const monthInput = row.querySelector(`.month-input[data-month="${index}"]`);
@@ -500,11 +578,13 @@ function saveCurrentSiteData() {
             rows.forEach(row => {
                 const inputs = row.querySelectorAll('input');
                 const monthInputs = row.querySelectorAll('.month-input');
+                const emissionSelect = row.querySelector('.emission-select');
                 
                 const rowData = {
                     description: inputs[0]?.value || '',
                     year: parseInt(inputs[1]?.value) || 2025,
-                    months: []
+                    months: [],
+                    emissionType: emissionSelect ? emissionSelect.value : null
                 };
                 
                 monthInputs.forEach(input => {
@@ -899,6 +979,17 @@ document.getElementById('companyNotes')?.addEventListener('blur', function() {
     }
 });
 
+// ============================================
+// FACTORS DATABASE / COUNTRY SELECTOR
+// ============================================
+
+document.getElementById('countrySelect')?.addEventListener('change', function() {
+    const value = this.value || 'UK';
+    if (window.carbonCalc && typeof window.carbonCalc.setCountry === 'function') {
+        window.carbonCalc.setCountry(value);
+    }
+});
+
 // Logo upload
 document.getElementById('logoUpload')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -977,6 +1068,19 @@ function initializeApp() {
         attachRowListeners(row);
     });
     
+    // Sync factors country selector with saved value (if calculations module is loaded)
+    try {
+        if (window.carbonCalc && typeof window.carbonCalc.getCountry === 'function') {
+            const savedCountry = window.carbonCalc.getCountry();
+            const selectEl = document.getElementById('countrySelect');
+            if (selectEl && savedCountry) {
+                selectEl.value = savedCountry;
+            }
+        }
+    } catch (err) {
+        console.error('Error syncing country selector', err);
+    }
+
     // Auto-save every 30 seconds
     setInterval(saveCurrentSiteData, 30000);
     

@@ -49,6 +49,32 @@ let currentCountry = 'UK';
 // CALCULATION FUNCTIONS
 // ============================================
 
+function getRowConversionFactor(row, tableId) {
+    const category = tableId.replace('Table', '');
+    const factors = CONVERSION_FACTORS[currentCountry] || CONVERSION_FACTORS['UK'];
+    const emissionSelect = row.querySelector('.emission-select');
+
+    if (emissionSelect && emissionSelect.value && factors[emissionSelect.value] !== undefined) {
+        return factors[emissionSelect.value];
+    }
+
+    // Fallback to category defaults (backwards compatibility)
+    switch (tableId) {
+        case 'waterTable':
+            return factors.water;
+        case 'energyTable':
+            return factors.electricity;
+        case 'wasteTable':
+            return factors.waste;
+        case 'transportTable':
+            return factors.transport_petrol;
+        case 'refrigerantsTable':
+            return factors.refrigerant_R410A;
+        default:
+            return 0;
+    }
+}
+
 function calculateRowTotal(row) {
     const monthInputs = row.querySelectorAll('.month-input');
     let total = 0;
@@ -69,27 +95,7 @@ function calculateRowTotal(row) {
 function calculateRowCO2(row, total) {
     const table = row.closest('table');
     const tableId = table.id;
-    
-    let conversionFactor = 0;
-    
-    // Determine conversion factor based on table type
-    switch(tableId) {
-        case 'waterTable':
-            conversionFactor = CONVERSION_FACTORS[currentCountry].water;
-            break;
-        case 'energyTable':
-            conversionFactor = CONVERSION_FACTORS[currentCountry].electricity;
-            break;
-        case 'wasteTable':
-            conversionFactor = CONVERSION_FACTORS[currentCountry].waste;
-            break;
-        case 'transportTable':
-            conversionFactor = CONVERSION_FACTORS[currentCountry].transport_petrol;
-            break;
-        case 'refrigerantsTable':
-            conversionFactor = CONVERSION_FACTORS[currentCountry].refrigerant_R410A;
-            break;
-    }
+    const conversionFactor = getRowConversionFactor(row, tableId);
     
     const co2e = (total * conversionFactor) / 1000; // Convert to tonnes
     const co2Cell = row.querySelector('.co2-cell');
@@ -188,27 +194,8 @@ function getMonthlyTotals() {
             const rows = table.querySelectorAll('.data-row');
             rows.forEach(row => {
                 const monthInputs = row.querySelectorAll('.month-input');
-                
-                // Get conversion factor for this category
-                let conversionFactor = 0;
-                switch(category) {
-                    case 'water':
-                        conversionFactor = CONVERSION_FACTORS[currentCountry].water;
-                        break;
-                    case 'energy':
-                        conversionFactor = CONVERSION_FACTORS[currentCountry].electricity;
-                        break;
-                    case 'waste':
-                        conversionFactor = CONVERSION_FACTORS[currentCountry].waste;
-                        break;
-                    case 'transport':
-                        conversionFactor = CONVERSION_FACTORS[currentCountry].transport_petrol;
-                        break;
-                    case 'refrigerants':
-                        conversionFactor = CONVERSION_FACTORS[currentCountry].refrigerant_R410A;
-                        break;
-                }
-                
+                const conversionFactor = getRowConversionFactor(row, `${category}Table`);
+
                 monthInputs.forEach((input, index) => {
                     const value = parseFloat(input.value) || 0;
                     const co2e = (value * conversionFactor) / 1000;
@@ -246,30 +233,15 @@ function getYearComparison() {
                     if (yearInput && yearInput.type === 'number') {
                         const year = parseInt(yearInput.value);
                         if (!isNaN(year) && year >= 2020 && year <= 2030) {
-                            // Calculate row total to get CO2 value
+                            // Ensure row total & CO2 cell are up to date
                             if (window.carbonCalc && window.carbonCalc.calculateRowTotal) {
                                 window.carbonCalc.calculateRowTotal(row);
                             }
-                            
-                            // Calculate CO2 value directly from row data
+
+                            // Read the already-calculated tCO₂e value from the CO2 cell
                             let co2Value = 0;
-                            
-                            // Get month inputs
-                            const monthInputs = row.querySelectorAll('.month-input');
-                            monthInputs.forEach((input, index) => {
-                                const monthValue = parseFloat(input.value) || 0;
-                                if (monthValue > 0) {
-                                    // Get category conversion factor
-                                    const category = table.id.replace('Table', '');
-                                    const factors = CONVERSION_FACTORS[currentCountry] || CONVERSION_FACTORS['UK'];
-                                    const factor = factors[category] || factors['energy'] || 0.5;
-                                    co2Value += monthValue * factor;
-                                }
-                            });
-                            
-                            // Also try to get from CO2 cell as fallback
                             const co2Cell = row.querySelector('.co2-cell');
-                            if (co2Cell && co2Cell.textContent && co2Value === 0) {
+                            if (co2Cell && co2Cell.textContent) {
                                 const co2Text = co2Cell.textContent.trim().replace(/[^\d.-]/g, '');
                                 co2Value = parseFloat(co2Text) || 0;
                             }
@@ -286,25 +258,35 @@ function getYearComparison() {
         }
     });
     
-    // If no years found, return default structure with current year
-    if (Object.keys(years).length === 0) {
+    const yearKeys = Object.keys(years).map(y => parseInt(y, 10));
+
+    // If no years found, return default structure with current year and previous year (both zero)
+    if (yearKeys.length === 0 || yearKeys.every(isNaN)) {
         const currentYear = new Date().getFullYear();
-        years[currentYear] = 0;
-        if (currentYear > 2020) {
-            years[currentYear - 1] = 0;
-        }
+        const sortedData = {};
+        sortedData[currentYear - 1] = 0;
+        sortedData[currentYear] = 0;
+        return sortedData;
     }
-    
-    // Sort years in ascending order
-    const sortedYears = Object.keys(years)
-        .map(y => parseInt(y))
-        .sort((a, b) => a - b);
-    
+
+    // Ensure there is always a "previous year" entry with zero data:
+    // if the earliest year with data is 2024, we create 2023 with value 0.
+    const minYear = Math.min(...yearKeys);
+    const prevYear = minYear - 1;
+    if (prevYear >= 2020 && !years[prevYear]) {
+        years[prevYear] = 0;
+    }
+
+    // Now sort and return all known years (including the synthetic previous year)
     const sortedData = {};
-    sortedYears.forEach(year => {
-        sortedData[year] = years[year] || 0;
-    });
-    
+    Object.keys(years)
+        .map(y => parseInt(y, 10))
+        .filter(y => !isNaN(y))
+        .sort((a, b) => a - b)
+        .forEach(year => {
+            sortedData[year] = years[year] || 0;
+        });
+
     return sortedData;
 }
 
