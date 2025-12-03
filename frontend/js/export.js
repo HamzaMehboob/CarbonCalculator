@@ -393,6 +393,165 @@ function exportToExcel() {
 }
 
 // ============================================
+// FACTOR DATABASE IMPORT / EXPORT (FRONTEND)
+// ============================================
+
+function exportFactorsToExcel() {
+    if (typeof XLSX === 'undefined' || !XLSX.utils) {
+        alert('Excel export library is loading. Please wait a moment and try again.');
+        return;
+    }
+    if (!window.carbonCalc || !window.carbonCalc.getConversionFactors || !window.carbonCalc.getCountry || !window.carbonCalc.getYearComparison) {
+        alert('Conversion factors are not available in the frontend.');
+        return;
+    }
+
+    try {
+        const factorsDb = window.carbonCalc.getConversionFactors();
+        const countryKey = window.carbonCalc.getCountry(); // e.g. 'UK' or 'BRAZIL'
+        const factors = factorsDb[countryKey];
+
+        if (!factors) {
+            alert('No factors found for the selected database: ' + countryKey);
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+
+        // Determine years to export from existing year comparison
+        const yearComparison = window.carbonCalc.getYearComparison();
+        let yearKeys = Object.keys(yearComparison || {})
+            .map(y => parseInt(y, 10))
+            .filter(y => !isNaN(y))
+            .sort((a, b) => a - b);
+
+        if (yearKeys.length === 0) {
+            yearKeys = [new Date().getFullYear()];
+        }
+
+        yearKeys.forEach(year => {
+            const rows = Object.entries(factors).map(([factorKey, value]) => ({
+                Factor: factorKey,
+                Value: value
+            }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const sheetName = String(year).substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Factors');
+        });
+
+        const fileName = `Conversion_Factors_${countryKey}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (error) {
+        console.error('Factors Excel Export Error:', error);
+        alert('Error exporting factors: ' + error.message);
+    }
+}
+
+function importFactorsFromExcel(file, baseName) {
+    if (typeof XLSX === 'undefined' || !XLSX.read) {
+        alert('Excel library is loading. Please wait a moment and try again.');
+        return;
+    }
+    if (!window.carbonCalc || !window.carbonCalc.setConversionFactors || !window.carbonCalc.getConversionFactors || !window.carbonCalc.getCountry) {
+        alert('Conversion factors are not available in the frontend.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+
+            const currentDb = window.carbonCalc.getConversionFactors();
+            const newDb = { ...currentDb };
+            const countryKey = window.carbonCalc.getCountry(); // 'UK' or 'BRAZIL'
+
+            const parsedSheets = [];
+
+            workbook.SheetNames.forEach(sheetName => {
+                const ws = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(ws);
+                const factors = {};
+
+                json.forEach(row => {
+                    const key = (row.Factor || row.factor || '').toString().trim();
+                    const raw = row.Value ?? row.value;
+                    if (!key || raw === undefined || raw === null) return;
+                    const v = parseFloat(raw);
+                    if (!isNaN(v)) {
+                        factors[key] = v;
+                    }
+                });
+
+                if (Object.keys(factors).length > 0) {
+                    parsedSheets.push({ name: sheetName, factors });
+                }
+            });
+
+            if (parsedSheets.length === 0) {
+                alert('No valid factors found in the uploaded file.');
+                return;
+            }
+
+            const userName = prompt(
+                appState.currentLanguage === 'en'
+                    ? 'Enter a name for this factors database (e.g. MyDB_2025):'
+                    : 'Digite um nome para esta base de fatores (ex: MeuBD_2025):',
+                (baseName || '').toString().trim() || ''
+            );
+
+            if (!userName || !userName.trim()) {
+                alert('Import cancelled: no name provided.');
+                return;
+            }
+
+            const dbKey = userName.trim().toUpperCase();
+
+            // Merge all sheets into one factor set for this new database
+            const mergedFactors = {};
+            parsedSheets.forEach(sheet => {
+                Object.assign(mergedFactors, sheet.factors);
+            });
+
+            newDb[dbKey] = mergedFactors;
+
+            window.carbonCalc.setConversionFactors(newDb);
+
+            // Add to dropdown and select it
+            const selectEl = document.getElementById('countrySelect');
+            if (selectEl) {
+                let option = Array.from(selectEl.options).find(opt => opt.value === dbKey);
+                if (!option) {
+                    option = document.createElement('option');
+                    option.value = dbKey;
+                    option.textContent = dbKey;
+                    option.setAttribute('data-en', dbKey);
+                    option.setAttribute('data-pt', dbKey);
+                    selectEl.appendChild(option);
+                }
+                selectEl.value = dbKey;
+                // Trigger change to apply new factors in calculations
+                const evt = new Event('change', { bubbles: true });
+                selectEl.dispatchEvent(evt);
+            }
+
+            showNotification(
+                appState.currentLanguage === 'en'
+                    ? `✅ Factors database '${dbKey}' imported successfully.`
+                    : `✅ Base de fatores '${dbKey}' importada com sucesso.`,
+                'success'
+            );
+        } catch (err) {
+            console.error('Factors Excel Import Error:', err);
+            alert('Error importing factors: ' + err.message);
+        }
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+
+// ============================================
 // HELPER: EXPORT TABLE TO ARRAY
 // ============================================
 
@@ -509,4 +668,6 @@ if (!document.getElementById('notification-styles')) {
 
 window.exportToPDF = exportToPDF;
 window.exportToExcel = exportToExcel;
+window.exportFactorsToExcel = exportFactorsToExcel;
+window.importFactorsFromExcel = importFactorsFromExcel;
 

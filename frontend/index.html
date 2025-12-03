@@ -109,12 +109,29 @@
                             <label data-en="Notes" data-pt="Notas">Notes</label>
                             <input type="text" id="companyNotes" placeholder="Add any relevant notes here...">
                         </div>
-                        <div class="form-inline-group">
-                            <label data-en="Factors database" data-pt="Base de fatores">Factors database</label>
-                            <select id="countrySelect">
-                                <option value="UK" data-en="UK Govt (DEFRA 2025)" data-pt="Governo do Reino Unido (DEFRA 2025)">UK Govt (DEFRA 2025)</option>
-                                <option value="BRAZIL" data-en="Brazil GHG Protocol (SEEG)" data-pt="Brasil Protocolo GEE (SEEG)">Brazil GHG Protocol (SEEG)</option>
-                            </select>
+                        <div class="form-inline-group" style="gap: 8px;">
+                            <div>
+                                <label data-en="Factors database" data-pt="Base de fatores">Factors database</label>
+                                <select id="countrySelect">
+                                    <option value="UK" data-en="UK Govt (DEFRA 2025)" data-pt="Governo do Reino Unido (DEFRA 2025)">UK Govt (DEFRA 2025)</option>
+                                    <option value="BRAZIL" data-en="Brazil GHG Protocol (SEEG)" data-pt="Brasil Protocolo GEE (SEEG)">Brazil GHG Protocol (SEEG)</option>
+                                </select>
+                            </div>
+                            <div class="factors-actions" style="display: flex; gap: 4px;">
+                                <button class="btn-secondary btn-sm" type="button"
+                                        onclick="exportFactorsToExcel()"
+                                        title="Export current factors database to Excel">
+                                    <i class="fas fa-file-export"></i>
+                                </button>
+                                <button class="btn-secondary btn-sm" type="button"
+                                        title="Import factors from Excel"
+                                        onclick="document.getElementById('factorsImportInput').click()">
+                                    <i class="fas fa-file-import"></i>
+                                </button>
+                                <input type="file" id="factorsImportInput" accept=".xlsx"
+                                       style="display:none"
+                                       onchange="if(this.files[0]) { importFactorsFromExcel(this.files[0], 'CUSTOM'); this.value=''; }">
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -598,6 +615,9 @@
                                 </button>
                                 <button class="btn-export-excel" onclick="exportToExcel()" title="Export to Excel">
                                     <i class="fas fa-file-excel"></i>
+                                </button>
+                                <button class="btn-secondary" onclick="exportFactorsToExcel()" title="Export Factors Excel">
+                                    <i class="fas fa-table"></i>
                                 </button>
                             </div>
                         </div>

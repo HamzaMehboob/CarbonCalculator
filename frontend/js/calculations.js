@@ -4,7 +4,8 @@
 // ============================================
 
 // Conversion Factors Database (kg CO2e per unit)
-const CONVERSION_FACTORS = {
+// This object can be extended/overwritten via import in the frontend.
+let CONVERSION_FACTORS = {
     // UK 2025 Factors (official government data)
     UK: {
         water: 0.344,           // per m³
@@ -344,7 +345,15 @@ window.carbonCalc = {
     getScopeBreakdown,
     setCountry,
     getCountry,
-    CONVERSION_FACTORS
+    CONVERSION_FACTORS,
+    // Allow external code (e.g. import/export tools) to replace factors database
+    setConversionFactors: function (newDb) {
+        if (!newDb || typeof newDb !== 'object') return;
+        CONVERSION_FACTORS = newDb;
+    },
+    getConversionFactors: function () {
+        return CONVERSION_FACTORS;
+    }
 };
 
 
