@@ -329,25 +329,36 @@ body {
     margin-top: 16px;
 }
 
-.sidebar-circle-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+.sidebar-btn {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 8px;
     border: none;
     background: rgba(255,255,255,0.08);
     color: var(--text-sidebar);
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     cursor: pointer;
     transition: var(--transition);
     box-shadow: var(--shadow-sm);
+    font-size: 14px;
+    font-weight: 500;
 }
 
-.sidebar-circle-btn:hover {
+.sidebar-btn:hover {
     background: var(--primary-color);
     color: #FFFFFF;
     transform: translateY(-2px);
+}
+
+.sidebar-btn i {
+    font-size: 16px;
+}
+
+.sidebar-btn span {
+    white-space: nowrap;
 }
 
 .btn-add-site {
@@ -413,6 +424,28 @@ body {
 
 .site-item:hover .btn-delete {
     opacity: 1;
+}
+
+.site-name-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-sidebar);
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: var(--transition);
+    min-width: 0;
+}
+
+.site-name-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.site-name-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
 }
 
 /* Center Content */
@@ -1309,6 +1342,14 @@ body {
 .btn-sm {
     padding: 8px 16px;
     font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-sm span {
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 /* Print Styles */

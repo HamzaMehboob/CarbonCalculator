@@ -311,12 +311,59 @@ function getCountry() {
 // ============================================
 
 function getScopeBreakdown() {
-    const totals = getCategoryTotals();
+    // Calculate Scope breakdown by analyzing each row's emission type
+    let scope1 = 0; // Direct emissions: natural gas, diesel, gasoline, fleet vehicles, refrigerants
+    let scope2 = 0; // Indirect energy: electricity
+    let scope3 = 0; // Other indirect: water, waste, transport (flights)
+    
+    const tables = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    
+    tables.forEach(category => {
+        const table = document.getElementById(`${category}Table`);
+        if (table) {
+            const rows = table.querySelectorAll('.data-row');
+            rows.forEach(row => {
+                const emissionSelect = row.querySelector('.emission-select');
+                const co2Cell = row.querySelector('.co2-cell');
+                const co2Value = parseFloat(co2Cell?.textContent) || 0;
+                
+                if (emissionSelect) {
+                    const emissionType = emissionSelect.value;
+                    
+                    // Scope 1: Direct emissions
+                    if (emissionType === 'naturalGas' || 
+                        emissionType === 'diesel' || 
+                        emissionType === 'transport_petrol' || 
+                        emissionType === 'transport_diesel' ||
+                        emissionType === 'refrigerant_R410A' ||
+                        emissionType === 'refrigerant_R134a' ||
+                        emissionType === 'refrigerant_R32') {
+                        scope1 += co2Value;
+                    }
+                    // Scope 2: Indirect energy (electricity)
+                    else if (emissionType === 'electricity') {
+                        scope2 += co2Value;
+                    }
+                    // Scope 3: Other indirect (water, waste, flights)
+                    else if (emissionType === 'water' || 
+                             emissionType === 'wastewater' ||
+                             emissionType === 'waste' || 
+                             emissionType === 'wasteRecycled' ||
+                             emissionType === 'flights_short' ||
+                             emissionType === 'flights_medium' ||
+                             emissionType === 'flights_long' ||
+                             emissionType === 'transport_electric') {
+                        scope3 += co2Value;
+                    }
+                }
+            });
+        }
+    });
     
     return {
-        scope1: totals.refrigerants, // Direct emissions
-        scope2: totals.energy,        // Indirect from electricity
-        scope3: totals.water + totals.waste + totals.transport // Other indirect
+        scope1: scope1,
+        scope2: scope2,
+        scope3: scope3
     };
 }
 

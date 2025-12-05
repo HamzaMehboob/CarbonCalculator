@@ -244,12 +244,31 @@ function addSiteToList(siteId, siteName) {
     siteItem.setAttribute('data-site-id', siteId);
     siteItem.innerHTML = `
         <i class="fas fa-building"></i>
-        <span>${siteName}</span>
+        <input type="text" class="site-name-input" value="${siteName}" placeholder="Site name">
         <button class="btn-delete"><i class="fas fa-times"></i></button>
     `;
     
+    // Handle site name editing
+    const nameInput = siteItem.querySelector('.site-name-input');
+    nameInput.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    nameInput.addEventListener('blur', function() {
+        const newName = this.value.trim() || 'Unnamed Site';
+        this.value = newName;
+        if (appState.sites[siteId]) {
+            appState.sites[siteId].name = newName;
+            saveSitesToLocalStorage();
+        }
+    });
+    nameInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            this.blur();
+        }
+    });
+    
     siteItem.addEventListener('click', function(e) {
-        if (!e.target.closest('.btn-delete')) {
+        if (!e.target.closest('.btn-delete') && !e.target.closest('.site-name-input')) {
             switchSite(siteId);
         }
     });
@@ -1143,6 +1162,25 @@ function initializeApp() {
     // Attach listeners to existing rows
     document.querySelectorAll('.data-row').forEach(row => {
         attachRowListeners(row);
+    });
+    
+    // Attach listeners to existing site name inputs
+    document.querySelectorAll('.site-name-input').forEach(input => {
+        input.addEventListener('blur', function() {
+            const siteItem = this.closest('.site-item');
+            const siteId = siteItem?.getAttribute('data-site-id');
+            if (siteId && appState.sites[siteId]) {
+                const newName = this.value.trim() || 'Unnamed Site';
+                this.value = newName;
+                appState.sites[siteId].name = newName;
+                saveSitesToLocalStorage();
+            }
+        });
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                this.blur();
+            }
+        });
     });
     
     // Sync factors country selector with saved value (if calculations module is loaded)

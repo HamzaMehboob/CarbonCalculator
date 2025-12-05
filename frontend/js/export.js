@@ -666,6 +666,10 @@ if (!document.getElementById('notification-styles')) {
 // EXPORT FUNCTIONS
 // ============================================
 
+// ============================================
+// EXPORT FUNCTIONS
+// ============================================
+
 window.exportToPDF = exportToPDF;
 window.exportToExcel = exportToExcel;
 window.exportFactorsToExcel = exportFactorsToExcel;

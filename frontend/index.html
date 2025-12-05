@@ -69,18 +69,20 @@
                 <div class="sidebar-header">
                     <h3 data-en="Buildings / Events" data-pt="Edifícios / Eventos">Buildings / Events</h3>
                     <div class="sidebar-top-actions">
-                        <button class="sidebar-circle-btn" onclick="setActiveTab('dashboard')" title="Dashboard">
+                        <button class="sidebar-btn" onclick="setActiveTab('dashboard')" title="Dashboard">
                             <i class="fas fa-chart-pie"></i>
+                            <span data-en="Dashboard" data-pt="Painel">Dashboard</span>
                         </button>
-                        <button class="sidebar-circle-btn" onclick="setActiveTab('accounts')" title="Accounts">
+                        <button class="sidebar-btn" onclick="setActiveTab('accounts')" title="Accounts">
                             <i class="fas fa-wallet"></i>
+                            <span data-en="Accounts" data-pt="Contas">Accounts</span>
                         </button>
                     </div>
                 </div>
                 <ul id="sitesList" class="sites-list">
                     <li class="site-item active" data-site-id="site-1">
                         <i class="fas fa-building"></i>
-                        <span>Headquarters</span>
+                        <input type="text" class="site-name-input" value="Headquarters" placeholder="Site name">
                         <button class="btn-delete"><i class="fas fa-times"></i></button>
                     </li>
                 </ul>
@@ -117,20 +119,27 @@
                                     <option value="BRAZIL" data-en="Brazil GHG Protocol (SEEG)" data-pt="Brasil Protocolo GEE (SEEG)">Brazil GHG Protocol (SEEG)</option>
                                 </select>
                             </div>
-                            <div class="factors-actions" style="display: flex; gap: 4px;">
-                                <button class="btn-secondary btn-sm" type="button"
-                                        onclick="exportFactorsToExcel()"
-                                        title="Export current factors database to Excel">
-                                    <i class="fas fa-file-export"></i>
-                                </button>
-                                <button class="btn-secondary btn-sm" type="button"
-                                        title="Import factors from Excel"
-                                        onclick="document.getElementById('factorsImportInput').click()">
-                                    <i class="fas fa-file-import"></i>
-                                </button>
-                                <input type="file" id="factorsImportInput" accept=".xlsx"
-                                       style="display:none"
-                                       onchange="if(this.files[0]) { importFactorsFromExcel(this.files[0], 'CUSTOM'); this.value=''; }">
+                            <div class="factors-actions" style="display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; gap: 4px;">
+                                    <button class="btn-secondary btn-sm" type="button"
+                                            onclick="exportFactorsToExcel()"
+                                            title="Export current factors database to Excel">
+                                        <i class="fas fa-file-export"></i>
+                                    </button>
+                                    <button class="btn-secondary btn-sm" type="button"
+                                            title="Import factors from Excel"
+                                            onclick="document.getElementById('factorsImportInput').click()">
+                                        <i class="fas fa-file-import"></i>
+                                    </button>
+                                    <input type="file" id="factorsImportInput" accept=".xlsx"
+                                           style="display:none"
+                                           onchange="if(this.files[0]) { importFactorsFromExcel(this.files[0], 'CUSTOM'); this.value=''; }">
+                                </div>
+                                <div style="display: flex; gap: 4px; justify-content: center; font-size: 11px; color: var(--text-secondary);">
+                                    <span data-en="Export" data-pt="Exportar">Export</span>
+                                    <span>|</span>
+                                    <span data-en="Import" data-pt="Importar">Import</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -542,6 +551,33 @@
                                 </div>
                                 <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
                             </div>
+                            <div class="kpi-card widget-card" data-widget="scope1">
+                                <div class="kpi-icon" style="background: #DC3545;"><i class="fas fa-fire"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Scope 1" data-pt="Escopo 1">Scope 1</h3>
+                                    <div class="kpi-value" id="scope1Emissions">0.000 tCO₂e</div>
+                                    <div class="kpi-change" data-en="Direct Emissions" data-pt="Emissões Diretas">Direct Emissions</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card" data-widget="scope2">
+                                <div class="kpi-icon" style="background: #FFC107;"><i class="fas fa-bolt"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Scope 2" data-pt="Escopo 2">Scope 2</h3>
+                                    <div class="kpi-value" id="scope2Emissions">0.000 tCO₂e</div>
+                                    <div class="kpi-change" data-en="Indirect Energy" data-pt="Energia Indireta">Indirect Energy</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card" data-widget="scope3">
+                                <div class="kpi-icon" style="background: #13B5EA;"><i class="fas fa-network-wired"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Scope 3" data-pt="Escopo 3">Scope 3</h3>
+                                    <div class="kpi-value" id="scope3Emissions">0.000 tCO₂e</div>
+                                    <div class="kpi-change" data-en="Other Indirect" data-pt="Outras Indiretas">Other Indirect</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
                             <div class="kpi-card widget-card" data-widget="thisyear">
                                 <div class="kpi-icon"><i class="fas fa-calendar"></i></div>
                                 <div class="kpi-content">
@@ -563,6 +599,22 @@
                                 <div class="kpi-content">
                                     <h3 data-en="Average/Month" data-pt="Média/Mês">Average/Month</h3>
                                     <div class="kpi-value" id="avgMonthEmissions">0.000 tCO₂e</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card" data-widget="thisyear">
+                                <div class="kpi-icon"><i class="fas fa-calendar"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="This Year" data-pt="Este Ano">This Year (2025)</h3>
+                                    <div class="kpi-value" id="currentYearEmissions">0.000 tCO₂e</div>
+                                </div>
+                                <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
+                            </div>
+                            <div class="kpi-card widget-card" data-widget="lastyear">
+                                <div class="kpi-icon"><i class="fas fa-history"></i></div>
+                                <div class="kpi-content">
+                                    <h3 data-en="Last Year" data-pt="Ano Passado">Last Year (2024)</h3>
+                                    <div class="kpi-value" id="lastYearEmissions">0.000 tCO₂e</div>
                                 </div>
                                 <button class="widget-hide" onclick="toggleWidget(this)"><i class="fas fa-eye-slash"></i></button>
                             </div>

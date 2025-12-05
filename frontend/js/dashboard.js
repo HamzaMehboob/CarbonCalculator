@@ -51,6 +51,9 @@ function updateKPIs() {
     const totals = window.carbonCalc.getCategoryTotals();
     const grandTotal = Object.values(totals).reduce((sum, val) => sum + val, 0);
     
+    // Get Scope breakdown
+    const scopeBreakdown = window.carbonCalc.getScopeBreakdown();
+    
     // Get year comparison (dynamic years)
     const yearComparison = window.carbonCalc.getYearComparison();
     const years = Object.keys(yearComparison).map(y => parseInt(y)).sort((a, b) => b - a); // Sort descending
@@ -81,6 +84,22 @@ function updateKPIs() {
     const totalEmissionsEl = document.getElementById('totalEmissions');
     if (totalEmissionsEl) {
         totalEmissionsEl.textContent = `${grandTotal.toFixed(3)} tCO₂e`;
+    }
+    
+    // Update Scope breakdown KPIs
+    const scope1El = document.getElementById('scope1Emissions');
+    if (scope1El) {
+        scope1El.textContent = `${scopeBreakdown.scope1.toFixed(3)} tCO₂e`;
+    }
+    
+    const scope2El = document.getElementById('scope2Emissions');
+    if (scope2El) {
+        scope2El.textContent = `${scopeBreakdown.scope2.toFixed(3)} tCO₂e`;
+    }
+    
+    const scope3El = document.getElementById('scope3Emissions');
+    if (scope3El) {
+        scope3El.textContent = `${scopeBreakdown.scope3.toFixed(3)} tCO₂e`;
     }
     
     const currentYearEmissionsEl = document.getElementById('currentYearEmissions');
