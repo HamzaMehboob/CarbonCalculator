@@ -204,11 +204,29 @@ else:
     st.markdown(
         """
         <style>
-        .stApp > header {
-            display: none;
+        /* Hide Streamlit Header */
+        header[data-testid="stHeader"] {
+            display: none !important;
         }
+        
+        /* Hide Streamlit Sidebar */
+        [data-testid="stSidebar"] {
+            display: none !important;
+        }
+        
+        /* Remove padding from the main block to allow full width/height */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
+            padding-left: 0rem !important;
+            padding-right: 0rem !important;
+            max-width: 100% !important;
+        }
+        
+        /* Remove default iframe border and try to maximize */
         iframe {
             border: none;
+            width: 100% !important;
         }
         </style>
         """,
@@ -220,7 +238,7 @@ else:
     html_content = inject_css_and_js(html_content)
     
     # Display the integrated app
-    components.html(html_content, height=900, scrolling=True)
+    components.html(html_content, height=1200, scrolling=True)
     
     # Add footer info
     st.sidebar.markdown("---")
