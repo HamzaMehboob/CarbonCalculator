@@ -542,6 +542,21 @@ function importFactorsFromExcel(file, baseName) {
                     : `✅ Base de fatores '${dbKey}' importada com sucesso.`,
                 'success'
             );
+            
+            // Sync new factors with backend if logged in
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                // Assuming API_BASE_URL is broadly available from app.js
+                const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://localhost:5000/api';
+                fetch(`${apiBase}/factors`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ country_key: dbKey, factors: mergedFactors })
+                }).catch(err => console.error('Error auto-syncing imported factors:', err));
+            }
         } catch (err) {
             console.error('Factors Excel Import Error:', err);
             alert('Error importing factors: ' + err.message);

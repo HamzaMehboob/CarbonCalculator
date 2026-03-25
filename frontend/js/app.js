@@ -35,86 +35,200 @@ const appState = {
 };
 
 // ============================================
-// LOGIN SYSTEM
+// LOGIN & SIGNUP SYSTEM (MongoDB Integration)
 // ============================================
 
-document.getElementById('loginForm')?.addEventListener('submit', function(e) {
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Toggle between Login and Signup forms
+document.getElementById('showSignup')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('loginFormContainer').style.display = 'none';
+    document.getElementById('signupFormContainer').style.display = 'block';
+});
+
+document.getElementById('showLogin')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('loginFormContainer').style.display = 'block';
+    document.getElementById('signupFormContainer').style.display = 'none';
+});
+
+// LOGIN FORM SUBMIT
+document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
+    const loginError = document.getElementById('loginError');
     
-    // Simple authentication (replace with backend API in production)
-    if (email === 'admin@company.com' && password === 'admin123') {
-        appState.loggedIn = true;
-        localStorage.setItem('loggedIn', 'true'); // Save login state
-        localStorage.setItem('loginEmail', email); // Save email for convenience
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('mainApp').style.display = 'flex';
-        initializeApp();
-    } else {
-        document.getElementById('loginError').textContent = 
-            appState.currentLanguage === 'en' 
-                ? 'Invalid email or password' 
-                : 'E-mail ou senha inválidos';
+    loginError.textContent = '';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            appState.loggedIn = true;
+            localStorage.setItem('loggedIn', 'true');
+            localStorage.setItem('loginEmail', email);
+            localStorage.setItem('authToken', data.access_token);
+            
+            if (data.user) {
+                localStorage.setItem('userName', data.user.full_name || '');
+                localStorage.setItem('companyName', data.user.company_name || 'My Company');
+            }
+            
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'flex';
+            
+            // Load user data from MongoDB
+            await loadUserDataFromBackend();
+            
+            initializeApp();
+        } else {
+            loginError.textContent = data.msg || 'Invalid email or password';
+        }
+    } catch (err) {
+        console.error('Login error:', err);
+        loginError.textContent = 'Connection error. Is the backend running?';
     }
 });
 
-// ============================================
-// LANGUAGE TOGGLE
-// ============================================
-
-function toggleLanguage() {
-    appState.currentLanguage = appState.currentLanguage === 'en' ? 'pt' : 'en';
-    updateLanguage();
-    localStorage.setItem('language', appState.currentLanguage);
-}
-
-function updateLanguage() {
-    const elements = document.querySelectorAll('[data-en][data-pt]');
-    elements.forEach(el => {
-        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-            el.placeholder = el.getAttribute(`data-${appState.currentLanguage}`);
+// SIGNUP FORM SUBMIT
+document.getElementById('signupForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const full_name = document.getElementById('signupName').value;
+    const email = document.getElementById('signupEmail').value;
+    const company_name = document.getElementById('signupCompany').value;
+    const password = document.getElementById('signupPassword').value;
+    const confirm_password = document.getElementById('signupConfirmPassword').value;
+    const signupError = document.getElementById('signupError');
+    const signupSuccess = document.getElementById('signupSuccess');
+    
+    signupError.textContent = '';
+    signupSuccess.textContent = '';
+    
+    if (password !== confirm_password) {
+        signupError.textContent = 'Passwords do not match';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/signup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                full_name, 
+                email, 
+                company_name, 
+                password, 
+                confirm_password 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            signupSuccess.textContent = 'Registration successful! You can now login.';
+            setTimeout(() => {
+                document.getElementById('showLogin').click();
+                document.getElementById('loginEmail').value = email;
+            }, 2000);
         } else {
-            el.textContent = el.getAttribute(`data-${appState.currentLanguage}`);
+            signupError.textContent = data.msg || 'Signup failed';
         }
-    });
+    } catch (err) {
+        console.error('Signup error:', err);
+        signupError.textContent = 'Connection error. Is the backend running?';
+    }
+});
+
+// BACKEND DATA PERSISTENCE
+async function loadUserDataFromBackend() {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
     
-    document.getElementById('langText').textContent = appState.currentLanguage.toUpperCase();
-    document.getElementById('langTextLogin').textContent = appState.currentLanguage === 'en' ? 'PT' : 'EN';
+    try {
+        const response = await fetch(`${API_BASE_URL}/data`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.sites && Object.keys(data.sites).length > 0) {
+                appState.sites = data.sites;
+                saveSitesToLocalStorage(); // Sync with local cache
+            }
+        }
+    } catch (err) {
+        console.error('Error loading data from backend:', err);
+    }
+
+    try {
+        // Also load custom factors
+        const factorsRes = await fetch(`${API_BASE_URL}/factors`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (factorsRes.ok) {
+            const factorsData = await factorsRes.json();
+            if (Array.isArray(factorsData) && factorsData.length > 0) {
+                // Reconstruct dictionary
+                const db = {};
+                factorsData.forEach(item => {
+                    db[item.country_key] = item;
+                });
+                if (window.carbonCalc && window.carbonCalc.setConversionFactors) {
+                    window.carbonCalc.setConversionFactors(db);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error loading factors from backend:', err);
+    }
 }
 
-document.getElementById('langToggle')?.addEventListener('click', toggleLanguage);
-document.getElementById('langToggleLogin')?.addEventListener('click', toggleLanguage);
-
-// ============================================
-// DARK MODE TOGGLE
-// ============================================
-
-function toggleDarkMode() {
-    appState.darkMode = !appState.darkMode;
-    document.body.setAttribute('data-theme', appState.darkMode ? 'dark' : 'light');
-    localStorage.setItem('darkMode', appState.darkMode);
+async function saveUserDataToBackend() {
+    if (!appState.loggedIn) return;
     
-    const icon = document.querySelector('#darkModeToggle i');
-    icon.className = appState.darkMode ? 'fas fa-sun' : 'fas fa-moon';
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+    
+    try {
+        await fetch(`${API_BASE_URL}/data`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ sites: appState.sites })
+        });
+    } catch (err) {
+        console.error('Error saving data to backend:', err);
+    }
 }
 
-document.getElementById('darkModeToggle')?.addEventListener('click', toggleDarkMode);
-
-// ============================================
 // LOGOUT
-// ============================================
-
 document.getElementById('logoutBtn')?.addEventListener('click', function() {
     if (confirm(appState.currentLanguage === 'en' ? 'Are you sure you want to logout?' : 'Tem certeza que deseja sair?')) {
         appState.loggedIn = false;
-        localStorage.removeItem('loggedIn'); // Remove login state
+        localStorage.removeItem('loggedIn');
         localStorage.removeItem('loginEmail');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userName');
+        
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('mainApp').style.display = 'none';
-        document.getElementById('loginEmail').value = '';
+        
+        // Reset inputs
         document.getElementById('loginPassword').value = '';
+        if (document.getElementById('signupPassword')) document.getElementById('signupPassword').value = '';
+        if (document.getElementById('signupConfirmPassword')) document.getElementById('signupConfirmPassword').value = '';
     }
 });
 
@@ -859,7 +973,11 @@ function updateFinancialWidget(widgetId, value) {
         };
     }
     
-    const numValue = parseFloat(value) || 0;
+    // If the input was cleared to empty string, ignore the subsequent blur event
+    if (value === '' || value === null) return;
+    
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return;
     
     // Don't allow direct updates to invoicesOwed and billsToPay (they come from charts)
     if (widgetId === 'invoicesOwed' || widgetId === 'billsToPay') {
@@ -898,6 +1016,16 @@ function updateFinancialWidget(widgetId, value) {
             }
         }, 100);
     }
+    
+    // Clear and reset the input field smoothly if it was triggered by a manual entry
+    const matchingInput = document.querySelector(`.kpi-edit[onchange*="${widgetId}"]`);
+    if (matchingInput) {
+        setTimeout(() => {
+            if (document.activeElement !== matchingInput) {
+                matchingInput.value = '';
+            }
+        }, 150);
+    }
 }
 
 // Helper function to update financial display
@@ -917,7 +1045,7 @@ function updateFinancialDisplay(widgetId, value) {
     // Also update the input field value if it exists (only if not focused)
     document.querySelectorAll(`.kpi-edit[onchange*="${widgetId}"]`).forEach(input => {
         if (document.activeElement !== input) {
-            input.value = value;
+            input.value = '';
         }
     });
 }
@@ -1044,7 +1172,7 @@ window.toggleDashboardWidgets = toggleDashboardWidgets;
 // COMPANY NAME & LOGO UPDATE
 // ============================================
 
-document.getElementById('companyNameInput')?.addEventListener('input', function() {
+document.getElementById('companyNameInput')?.addEventListener('input', async function() {
     const name = this.value || 'My Company';
     document.getElementById('companyName').textContent = name;
     localStorage.setItem('companyName', name);
@@ -1052,6 +1180,23 @@ document.getElementById('companyNameInput')?.addEventListener('input', function(
     if (appState.currentSite && appState.sites[appState.currentSite]) {
         appState.sites[appState.currentSite].companyName = name;
         saveSitesToLocalStorage();
+    }
+    
+    // Sync with backend profile
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        try {
+            await fetch(`${API_BASE_URL}/user`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ company_name: name })
+            });
+        } catch (err) {
+            console.error('Error syncing company name to profile:', err);
+        }
     }
 });
 
@@ -1148,11 +1293,18 @@ function initializeApp() {
     // Initialize tabs
     initializeTabs();
     
-    // Load sites (this will also load site data and switch to first site)
+    // Load local data first for fast UI responsiveness
     loadSitesFromLocalStorage();
     
+    // Sync with MongoDB backend in the background
+    loadUserDataFromBackend().then(() => {
+        // Refresh UI from newly synced data if backend data arrived
+        if (appState.currentSite) {
+            loadSiteData(appState.currentSite);
+        }
+    });
+    
     // Ensure current site data is fully loaded after a short delay
-    // This ensures all DOM elements are ready
     setTimeout(() => {
         if (appState.currentSite && appState.sites[appState.currentSite]) {
             loadSiteData(appState.currentSite);
@@ -1174,6 +1326,7 @@ function initializeApp() {
                 this.value = newName;
                 appState.sites[siteId].name = newName;
                 saveSitesToLocalStorage();
+                saveUserDataToBackend(); // Sync backend on site name change
             }
         });
         input.addEventListener('keypress', function(e) {
@@ -1183,7 +1336,7 @@ function initializeApp() {
         });
     });
     
-    // Sync factors country selector with saved value (if calculations module is loaded)
+    // Sync factors country selector
     try {
         if (window.carbonCalc && typeof window.carbonCalc.getCountry === 'function') {
             const savedCountry = window.carbonCalc.getCountry();
@@ -1196,8 +1349,13 @@ function initializeApp() {
         console.error('Error syncing country selector', err);
     }
 
-    // Auto-save every 30 seconds
-    setInterval(saveCurrentSiteData, 30000);
+    // Auto-save every 5 seconds to local storage and backend
+    setInterval(() => {
+        if (appState.loggedIn) {
+            saveCurrentSiteData();
+            saveUserDataToBackend();
+        }
+    }, 5000);
     
     console.log('✅ Carbon Calculator Phase 1 initialized successfully!');
 }
@@ -1207,6 +1365,12 @@ function initializeApp() {
 // ============================================
 
 window.addEventListener('DOMContentLoaded', function() {
+    // Restore dark mode state first
+    if (localStorage.getItem('darkMode') === 'true') {
+        appState.darkMode = false; // toggleDarkMode will flip this to true
+        toggleDarkMode();
+    }
+    
     updateLanguage();
     
     // Check if user was previously logged in
@@ -1214,14 +1378,18 @@ window.addEventListener('DOMContentLoaded', function() {
     const savedEmail = localStorage.getItem('loginEmail');
     
     if (wasLoggedIn && savedEmail) {
-        // Auto-login if previously logged in
+        // Auto-login: set state and sync
         appState.loggedIn = true;
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainApp').style.display = 'flex';
         if (document.getElementById('loginEmail')) {
             document.getElementById('loginEmail').value = savedEmail;
         }
-        initializeApp();
+        
+        // Load latest from backend then init
+        loadUserDataFromBackend().then(() => {
+            initializeApp();
+        });
     } else {
         // Show login screen
         document.getElementById('loginScreen').style.display = 'flex';
@@ -1229,10 +1397,70 @@ window.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// ============================================
+// DARK MODE & LANGUAGE TOGGLE
+// ============================================
+
+function toggleDarkMode() {
+    appState.darkMode = !appState.darkMode;
+    
+    if (appState.darkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.body.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        document.body.removeAttribute('data-theme');
+    }
+    
+    localStorage.setItem('darkMode', appState.darkMode);
+    
+    const icon = document.querySelector('#darkModeToggle i');
+    if (icon) {
+        icon.className = appState.darkMode ? 'fas fa-sun' : 'fas fa-moon';
+    }
+}
+
+function updateLanguage() {
+    const lang = appState.currentLanguage;
+    document.querySelectorAll('[data-en]').forEach(el => {
+        const text = el.getAttribute(`data-${lang}`);
+        if (text) {
+            if (el.tagName === 'INPUT' && el.placeholder) {
+                el.placeholder = text;
+            } else {
+                el.textContent = text;
+            }
+        }
+    });
+    
+    // Update labels and other specific elements
+    const langBtnText = document.getElementById('langText');
+    if (langBtnText) langBtnText.textContent = lang.toUpperCase();
+    
+    const langBtnTextLogin = document.getElementById('langTextLogin');
+    if (langBtnTextLogin) langBtnTextLogin.textContent = lang === 'en' ? 'PT' : 'EN';
+}
+
+function toggleLanguage() {
+    appState.currentLanguage = appState.currentLanguage === 'en' ? 'pt' : 'en';
+    localStorage.setItem('language', appState.currentLanguage);
+    updateLanguage();
+}
+
+// Attach UI Toggles
+document.getElementById('darkModeToggle')?.addEventListener('click', toggleDarkMode);
+document.getElementById('langToggle')?.addEventListener('click', toggleLanguage);
+document.getElementById('langToggleLogin')?.addEventListener('click', toggleLanguage);
+
+window.toggleDarkMode = toggleDarkMode;
+window.updateLanguage = updateLanguage;
+window.toggleLanguage = toggleLanguage;
+
 // Prevent data loss on page unload
 window.addEventListener('beforeunload', function(e) {
     if (appState.loggedIn) {
         saveCurrentSiteData();
+        saveUserDataToBackend(); // Attempt background sync
     }
 });
 
