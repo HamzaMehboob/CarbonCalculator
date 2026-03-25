@@ -9,7 +9,6 @@
 </head>
 <body>
     <!-- Login Screen -->
-    <!-- Login Screen -->
     <div id="loginScreen" class="login-container">
         <div class="login-box">
             <div class="login-header">
@@ -17,58 +16,18 @@
                 <h1 data-en="Carbon Calculator" data-pt="Calculadora de Carbono">Carbon Calculator</h1>
                 <p data-en="GHG Protocol Compliant" data-pt="Conforme com Protocolo GEE">GHG Protocol Compliant</p>
             </div>
-            
-            <!-- Login Form -->
-            <div id="loginFormContainer">
-                <form id="loginForm">
-                    <div class="form-group">
-                        <label data-en="Email" data-pt="E-mail">Email</label>
-                        <input type="email" id="loginEmail" required placeholder="admin@company.com">
-                    </div>
-                    <div class="form-group">
-                        <label data-en="Password" data-pt="Senha">Password</label>
-                        <input type="password" id="loginPassword" required placeholder="••••••••">
-                    </div>
-                    <button type="submit" class="btn-primary" data-en="Login" data-pt="Entrar">Login</button>
-                    <div class="login-extra" style="text-align: center; margin-top: 15px;">
-                        <p><span data-en="Don't have an account?" data-pt="Não tem uma conta?">Don't have an account?</span> <a href="#" id="showSignup"><span data-en="Sign Up" data-pt="Inscrever-se">Sign Up</span></a></p>
-                    </div>
-                    <div id="loginError" class="error-message"></div>
-                </form>
-            </div>
-
-            <!-- Signup Form (Hidden by default) -->
-            <div id="signupFormContainer" style="display: none;">
-                <form id="signupForm">
-                    <div class="form-group">
-                        <label data-en="Full Name" data-pt="Nome Completo">Full Name</label>
-                        <input type="text" id="signupName" required placeholder="John Doe">
-                    </div>
-                    <div class="form-group">
-                        <label data-en="Email" data-pt="E-mail">Email</label>
-                        <input type="email" id="signupEmail" required placeholder="john@company.com">
-                    </div>
-                    <div class="form-group">
-                        <label data-en="Company Name" data-pt="Nome da Empresa">Company Name</label>
-                        <input type="text" id="signupCompany" placeholder="Acme Inc">
-                    </div>
-                    <div class="form-group">
-                        <label data-en="Password" data-pt="Senha">Password</label>
-                        <input type="password" id="signupPassword" required placeholder="••••••••">
-                    </div>
-                    <div class="form-group">
-                        <label data-en="Confirm Password" data-pt="Confirmar Senha">Confirm Password</label>
-                        <input type="password" id="signupConfirmPassword" required placeholder="••••••••">
-                    </div>
-                    <button type="submit" class="btn-primary" data-en="Sign Up" data-pt="Cadastrar">Sign Up</button>
-                    <div class="login-extra" style="text-align: center; margin-top: 15px;">
-                        <p><span data-en="Already have an account?" data-pt="Já tem uma conta?">Already have an account?</span> <a href="#" id="showLogin"><span data-en="Login" data-pt="Entrar">Login</span></a></p>
-                    </div>
-                    <div id="signupError" class="error-message"></div>
-                    <div id="signupSuccess" class="success-message" style="color: var(--success-color); text-align: center; margin-top: 10px;"></div>
-                </form>
-            </div>
-
+            <form id="loginForm">
+                <div class="form-group">
+                    <label data-en="Email" data-pt="E-mail">Email</label>
+                    <input type="email" id="loginEmail" required placeholder="admin@company.com">
+                </div>
+                <div class="form-group">
+                    <label data-en="Password" data-pt="Senha">Password</label>
+                    <input type="password" id="loginPassword" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn-primary" data-en="Login" data-pt="Entrar">Login</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
             <div class="login-footer">
                 <button id="langToggleLogin" class="btn-link">
                     <i class="fas fa-globe"></i> <span id="langTextLogin">PT</span>
