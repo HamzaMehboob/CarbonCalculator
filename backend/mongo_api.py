@@ -1,27 +1,31 @@
 from flask import Flask, request, jsonify
-from flask_pymongo import PyMongo
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
 from pymongo import MongoClient
 import datetime
+import os
 
 app = Flask(__name__)
-CORS(app)
+# Enable CORS for the Streamlit app URL and localhost
+CORS(app, resources={r"/api/*": {"origins": ["*"]}})
 
 # MongoDB Configuration
-CONNECTION_STRING = 'mongodb+srv://hamzamehboob103_db_user:Yf2m6xtao73allOJ@cluster0.yl1fnm7.mongodb.net/?appName=Cluster0'
-# The user provided a DATABASE_STRING that looks like an Atlas SQL connection string, 
-# but for standard MongoDB operations with PyMongo, we should use the CONNECTION_STRING.
-# We'll use 'carbon_calculator' as the database name.
+# Use environment variable for security - MUST set this in Render.com
+# Example: MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/dbname
+CONNECTION_STRING = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/carbon_calculator')
 
 client = MongoClient(CONNECTION_STRING)
-db = client['carbon_calculator']
+db = client.get_default_database() if '?' not in CONNECTION_STRING else client[CONNECTION_STRING.split('/')[-1].split('?')[0] or 'carbon_calculator']
+# Fallback database name if not specified in URI
+if not db.name or db.name == 'admin':
+    db = client['carbon_calculator']
+
 users_collection = db['users']
 data_collection = db['user_data']
 factors_collection = db['conversion_factors']
 
-# Conversion Factors (Migrated from app.py)
+# Conversion Factors (Default ones)
 DEFAULT_CONVERSION_FACTORS = {
     "UK_2025": {
         "version": "2025.1",
@@ -55,7 +59,6 @@ DEFAULT_CONVERSION_FACTORS = {
     }
 }
 
-# Initialize factors per-user (called dynamically)
 def init_user_factors(email):
     inserted_factors = []
     for key, data in DEFAULT_CONVERSION_FACTORS.items():
@@ -72,21 +75,27 @@ def init_user_factors(email):
             {"$setOnInsert": doc},
             upsert=True
         )
-        # Prepare for JSON response
         doc.pop('_id', None)
         inserted_factors.append(doc)
     return inserted_factors
 
 # Security Configuration
-app.config['JWT_SECRET_KEY'] = 'super-secret-key-change-this-in-production'
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = datetime.timedelta(days=1)
+# Set JWT_SECRET_KEY in Render.com
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'default-dev-key-change-this')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = datetime.timedelta(days=7)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"status": "healthy", "service": "Carbon Calculator API"}), 200
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.get_json()
-    
+    if not data:
+        return jsonify({"msg": "Missing JSON in request"}), 400
+        
     email = data.get('email')
     password = data.get('password')
     confirm_password = data.get('confirm_password')
@@ -107,13 +116,13 @@ def signup():
         
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
     
-    user_id = users_collection.insert_one({
+    users_collection.insert_one({
         "email": email,
         "password": hashed_password,
         "full_name": full_name,
         "company_name": company_name,
         "created_at": datetime.datetime.utcnow()
-    }).inserted_id
+    })
     
     access_token = create_access_token(identity=email)
     return jsonify({"msg": "User created successfully", "access_token": access_token}), 201
@@ -121,6 +130,8 @@ def signup():
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
+    if not data:
+        return jsonify({"msg": "Missing JSON in request"}), 400
     email = data.get('email')
     password = data.get('password')
     
@@ -162,11 +173,9 @@ def get_user_data():
     user_data = data_collection.find_one({"email": current_user_email})
     
     if user_data:
-        # Remove MongoDB internal ID for JSON serialization
         user_data['_id'] = str(user_data['_id'])
         return jsonify(user_data), 200
     else:
-        # Return default structure if no data exists
         return jsonify({
             "email": current_user_email,
             "sites": {}
@@ -177,12 +186,12 @@ def get_user_data():
 def save_user_data():
     current_user_email = get_jwt_identity()
     data = request.get_json()
+    if not data:
+        return jsonify({"msg": "Missing JSON in request"}), 400
     
-    # Ensure email is correct
     data['email'] = current_user_email
     data['updated_at'] = datetime.datetime.utcnow()
     
-    # Upsert data
     data_collection.update_one(
         {"email": current_user_email},
         {"$set": data},
@@ -197,7 +206,6 @@ def get_factors():
     current_user_email = get_jwt_identity()
     factors = list(factors_collection.find({"email": current_user_email}, {"_id": 0}))
     
-    # Initialize basic factors if not available
     if not factors:
         factors = init_user_factors(current_user_email)
         
@@ -208,6 +216,8 @@ def get_factors():
 def update_factors():
     current_user_email = get_jwt_identity()
     data = request.get_json()
+    if not data:
+        return jsonify({"msg": "Missing JSON in request"}), 400
     country_key = data.get('country_key')
     factors = data.get('factors')
     
@@ -226,4 +236,5 @@ def update_factors():
     return jsonify({"msg": "Factors updated successfully"}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)

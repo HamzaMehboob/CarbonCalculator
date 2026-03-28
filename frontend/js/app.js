@@ -38,7 +38,10 @@ const appState = {
 // LOGIN & SIGNUP SYSTEM (MongoDB Integration)
 // ============================================
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// CHANGE THIS to your deployed Render URL once set up
+const API_BASE_URL = 'https://carbon-calculator-api-xyz.onrender.com/api'; 
+// Use 'http://localhost:5000/api' for local testing
+
 
 // Toggle between Login and Signup forms
 document.getElementById('showSignup')?.addEventListener('click', function(e) {

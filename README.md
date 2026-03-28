@@ -31,6 +31,13 @@ Signin at https://share.streamlit.io/
 
 📖 **Full deployment guide:** See `DEPLOYMENT_GUIDE.md`
 
+### 🔒 Secure Backend (Render.com):
+To fix MongoDB credential leaks and ensure a secure production environment:
+1.  **Backend:** Deployed on [Render.com](https://render.com) using the code in the `/backend` folder.
+2.  **Security:** Credentials (MONGODB_URI) are stored as Environment Variables on Render, not in the code.
+3.  **Setup:** Follow the `render_setup_guide.md` (in artifacts) to configure your own Render service.
+
+
 ---
 
 ## 📋 Overview
