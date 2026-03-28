@@ -39,7 +39,7 @@ const appState = {
 // ============================================
 
 // CHANGE THIS to your deployed Render URL once set up
-const API_BASE_URL = 'https://carbon-calculator-api-fe1o.onrender.com'; 
+const API_BASE_URL = 'https://carbon-calculator-api-fe1o.onrender.com/api'; 
 // Use 'http://localhost:5000/api' for local testing
 
 
