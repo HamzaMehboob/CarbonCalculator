@@ -7,8 +7,9 @@ import datetime
 import os
 
 app = Flask(__name__)
-# Enable CORS for the Streamlit app URL and localhost
-CORS(app, resources={r"/api/*": {"origins": ["*"]}})
+# Enable CORS for all origins in development/testing
+# This ensures that requests from Streamlit Cloud (diverse URLs) are not blocked
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # MongoDB Configuration
 # Use environment variable for security - MUST set this in Render.com
