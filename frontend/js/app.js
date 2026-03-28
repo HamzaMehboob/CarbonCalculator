@@ -164,8 +164,17 @@ async function loadUserDataFromBackend() {
         
         if (response.ok) {
             const data = await response.json();
-            if (data.sites && Object.keys(data.sites).length > 0) {
-                appState.sites = data.sites;
+            // ALWAYS overwrite local state with backend state to avoid "ghost" data from deleted clusters
+            if (data.sites) {
+                appState.sites = Object.keys(data.sites).length > 0 ? data.sites : {
+                    'site-1': {
+                        name: 'Headquarters',
+                        companyName: localStorage.getItem('companyName') || 'My Company',
+                        notes: '',
+                        data: { water: [], energy: [], waste: [], transport: [], refrigerants: [] },
+                        financials: { bankBalance: 0, savingsBalance: 0, cashIn: 0, cashOut: 0, invoicesOwed: 0, billsToPay: 0 }
+                    }
+                };
                 saveSitesToLocalStorage(); // Sync with local cache
             }
         }
@@ -223,6 +232,7 @@ document.getElementById('logoutBtn')?.addEventListener('click', function() {
         localStorage.removeItem('loggedIn');
         localStorage.removeItem('loginEmail');
         localStorage.removeItem('authToken');
+        localStorage.removeItem('carbonCalcSites'); // Clear site data
         localStorage.removeItem('userName');
         
         document.getElementById('loginScreen').style.display = 'flex';
