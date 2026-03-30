@@ -690,3 +690,484 @@ window.exportToExcel = exportToExcel;
 window.exportFactorsToExcel = exportFactorsToExcel;
 window.importFactorsFromExcel = importFactorsFromExcel;
 
+// ============================================
+// ADDED: Report printing (PDF)
+// ============================================
+
+function _getReportLogoDataUrl() {
+    // Prefer the uploaded company logo (if any). It is typically stored as a data: URL.
+    const logoImg =
+        document.getElementById('companyLogoImg') ||
+        document.querySelector('img[alt="EcoAudit Logo"]') ||
+        document.querySelector('img[src^="data:image"]');
+
+    if (logoImg && logoImg.src && typeof logoImg.src === 'string' && logoImg.src.startsWith('data:image')) {
+        return logoImg.src;
+    }
+    return null;
+}
+
+function _addLogo(doc) {
+    const dataUrl = _getReportLogoDataUrl();
+    if (!dataUrl) return;
+    try {
+        const base64 = dataUrl.split(',')[1];
+        doc.addImage(base64, 'PNG', 15, 8, 18, 18);
+    } catch (e) {
+        // If the image is not a PNG/base64 that jsPDF can decode, just skip.
+    }
+}
+
+function _ensurePdfReady() {
+    if (!window.jspdf) {
+        alert('PDF export library is loading. Please wait a moment and try again.');
+        return null;
+    }
+    return window.jspdf.jsPDF;
+}
+
+function _formatKg(num) {
+    const n = Number(num) || 0;
+    // Keep consistent decimal formatting for tables.
+    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function _unitForCategory(categoryKey) {
+    switch (categoryKey) {
+        case 'water': return 'm³';
+        case 'energy': return 'kWh';
+        case 'waste': return 'tonnes';
+        case 'transport': return 'km';
+        case 'refrigerants': return 'kg';
+        default: return '';
+    }
+}
+
+function _categoryLabel(categoryKey) {
+    const map = {
+        water: 'Water',
+        energy: 'Energy',
+        waste: 'Waste',
+        transport: 'Transport',
+        refrigerants: 'Refrigerants',
+    };
+    return map[categoryKey] || categoryKey;
+}
+
+function _ensureCarbonCalc() {
+    if (!window.carbonCalc) {
+        alert('Conversion factors are not available in the frontend.');
+        return false;
+    }
+    return true;
+}
+
+function printConversionFactorsReportPDF() {
+    const jsPDFCtor = _ensurePdfReady();
+    if (!jsPDFCtor) return;
+
+    if (!_ensureCarbonCalc()) return;
+
+    const checked = Array.from(document.querySelectorAll('.conversion-factor-checkbox:checked'));
+    if (checked.length === 0) {
+        alert('Select at least one conversion factor to include.');
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    const companyName = document.getElementById('companyNameInput')?.value || 'My Company';
+    const currentDate = new Date().toLocaleDateString();
+    const countryKey = window.carbonCalc.getCountry();
+
+    let yPos = 18;
+    _addLogo(doc);
+
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Conversion Factors Report', 105, yPos, { align: 'center' });
+
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Company: ${companyName}`, 20, yPos);
+    doc.text(`Date: ${currentDate}`, 120, yPos);
+    yPos += 6;
+    doc.text(`Database/Country: ${countryKey}`, 20, yPos);
+
+    yPos += 10;
+
+    const factorsDb = window.carbonCalc.getConversionFactors();
+    const factors = factorsDb[countryKey] || {};
+
+    const unitByKey = (key) => {
+        if (key === 'water' || key === 'wastewater') return 'kg CO2e per m³';
+        if (key === 'electricity' || key === 'naturalGas' || key === 'diesel') return 'kg CO2e per kWh';
+        if (key === 'waste' || key === 'wasteRecycled' || key === 'waste_composted') return 'kg CO2e per tonne';
+        if (key.startsWith('transport_')) return 'kg CO2e per km';
+        if (key.startsWith('flights_')) return 'kg CO2e per passenger-km';
+        if (key.startsWith('refrigerant_')) return 'kg CO2e per kg';
+        return '';
+    };
+
+    const keys = checked.map(cb => cb.dataset.factorKey).filter(Boolean);
+
+    // Simple table layout
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    const left = 20;
+    const colKeyX = 20;
+    const colValX = 110;
+    const colUnitX = 160;
+
+    // Header row
+    doc.setFillColor(19, 181, 234);
+    doc.rect(left, yPos, 180, 6, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text('Factor', colKeyX + 2, yPos + 4);
+    doc.text('Value', colValX + 2, yPos + 4);
+    doc.setTextColor(255, 255, 255);
+    doc.text('Unit', colUnitX + 2, yPos + 4);
+
+    yPos += 10;
+
+    keys.forEach((k, idx) => {
+        if (yPos > 270) {
+            doc.addPage();
+            yPos = 20;
+        }
+
+        const value = factors[k];
+        if (value === undefined) return;
+
+        const name = k;
+        const unit = unitByKey(k);
+
+        doc.setTextColor(0, 0, 0);
+        doc.text(String(idx + 1).padStart(2, '0'), left, yPos);
+        doc.text(name, colKeyX, yPos);
+        doc.text(Number(value).toFixed(6).replace(/\.?0+$/, ''), colValX, yPos);
+        if (unit) {
+            const wrapped = doc.splitTextToSize(unit, 45);
+            doc.text(wrapped, colUnitX, yPos);
+        }
+
+        yPos += 6;
+    });
+
+    const fileName = `Conversion_Factors_Used_${countryKey}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+}
+
+function printInputDataSummaryPDF() {
+    const jsPDFCtor = _ensurePdfReady();
+    if (!jsPDFCtor) return;
+    if (!_ensureCarbonCalc()) return;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    const companyName = document.getElementById('companyNameInput')?.value || 'My Company';
+    const currentDate = new Date().toLocaleDateString();
+    const countryKey = window.carbonCalc.getCountry();
+
+    _addLogo(doc);
+
+    let yPos = 20;
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Input Data Summary (Raw)', 105, yPos, { align: 'center' });
+
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Company: ${companyName}`, 20, yPos);
+    doc.text(`Date: ${currentDate}`, 120, yPos);
+    yPos += 6;
+    doc.text(`Database/Country: ${countryKey}`, 20, yPos);
+
+    yPos += 10;
+
+    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+
+    categories.forEach((catKey, catIdx) => {
+        const table = document.getElementById(`${catKey}Table`);
+        if (!table) return;
+
+        if (catIdx > 0) yPos += 4;
+        if (yPos > 250) { doc.addPage(); yPos = 20; }
+
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${_categoryLabel(catKey)} Inputs`, 20, yPos);
+
+        yPos += 7;
+        doc.setFontSize(9);
+        doc.setTextColor(60, 60, 60);
+
+        const rows = table.querySelectorAll('.data-row');
+        rows.forEach((row, rowIdx) => {
+            if (yPos > 270) { doc.addPage(); yPos = 20; }
+
+            const sel = row.querySelector('.emission-select');
+            const emissionKey = sel?.value || '';
+
+            const descInput = row.querySelector('input[type="text"]');
+            const desc = descInput?.value?.trim() || emissionKey;
+
+            const yearInput = row.querySelector('input[type="number"]:not(.month-input)');
+            const year = yearInput?.value || '';
+
+            const totalCell = row.querySelector('.total-cell')?.textContent || '';
+            const unit = _unitForCategory(catKey);
+
+            const monthInputs = Array.from(row.querySelectorAll('input.month-input'));
+            const months = monthInputs.map(i => Number(i.value) || 0);
+            const monthsTotal = months.reduce((a, b) => a + b, 0);
+
+            // Show a compact line: description, year, total, and kg total (if possible)
+            const co2Cell = row.querySelector('.co2-cell')?.textContent || '0';
+            const co2T = parseFloat(String(co2Cell).replace(/[^\d.-]/g, '')) || 0;
+            const kgCO2e = co2T * 1000;
+
+            const line = `${rowIdx + 1}. ${desc} (${year}) | Total: ${monthsTotal.toFixed(2)} ${unit} | Emissions: ${kgCO2e.toFixed(2)} kgCO2e`;
+            const wrapped = doc.splitTextToSize(line, 180);
+            doc.text(wrapped, 20, yPos);
+            yPos += wrapped.length * 4;
+        });
+    });
+
+    const fileName = `Input_Data_Summary_${countryKey}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+}
+
+function printInputEmissionsReportPDF() {
+    const jsPDFCtor = _ensurePdfReady();
+    if (!jsPDFCtor) return;
+    if (!_ensureCarbonCalc()) return;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    const companyName = document.getElementById('companyNameInput')?.value || 'My Company';
+    const currentDate = new Date().toLocaleDateString();
+    const countryKey = window.carbonCalc.getCountry();
+
+    _addLogo(doc);
+
+    let yPos = 20;
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Input Emissions (KgCO2e)', 105, yPos, { align: 'center' });
+
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Company: ${companyName}`, 20, yPos);
+    doc.text(`Date: ${currentDate}`, 120, yPos);
+    yPos += 6;
+    doc.text(`Database/Country: ${countryKey}`, 20, yPos);
+
+    yPos += 10;
+
+    const factorsDb = window.carbonCalc.getConversionFactors();
+    const factors = factorsDb[countryKey] || {};
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    categories.forEach((catKey, catIdx) => {
+        const table = document.getElementById(`${catKey}Table`);
+        if (!table) return;
+
+        if (catIdx > 0) yPos += 4;
+        if (yPos > 245) { doc.addPage(); yPos = 20; }
+
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${_categoryLabel(catKey)} Emissions`, 20, yPos);
+        yPos += 7;
+        doc.setFontSize(9);
+        doc.setTextColor(60, 60, 60);
+
+        const rows = table.querySelectorAll('.data-row');
+        rows.forEach((row, rowIdx) => {
+            if (yPos > 270) { doc.addPage(); yPos = 20; }
+
+            const sel = row.querySelector('.emission-select');
+            const emissionKey = sel?.value || '';
+
+            const descInput = row.querySelector('input[type="text"]');
+            const desc = descInput?.value?.trim() || emissionKey;
+
+            const yearInput = row.querySelector('input[type="number"]:not(.month-input)');
+            const year = yearInput?.value || '';
+
+            const co2Cell = row.querySelector('.co2-cell')?.textContent || '0';
+            const co2T = parseFloat(String(co2Cell).replace(/[^\d.-]/g, '')) || 0;
+            const kgCO2eTotal = co2T * 1000;
+
+            const factor = factors[emissionKey] || 0;
+            const monthInputs = Array.from(row.querySelectorAll('input.month-input'));
+            const monthVals = monthInputs.map(i => Number(i.value) || 0);
+            const monthKg = monthVals.map(v => v * factor);
+
+            const headerLine = `${rowIdx + 1}. ${desc} (${year}) | Total: ${kgCO2eTotal.toFixed(2)} kgCO2e`;
+            const headerWrapped = doc.splitTextToSize(headerLine, 180);
+            doc.text(headerWrapped, 20, yPos);
+            yPos += headerWrapped.length * 4;
+
+            const monthLine = monthLabels.map((m, i) => `${m}:${monthKg[i].toFixed(0)}`).join(' ');
+            const monthWrapped = doc.splitTextToSize(monthLine, 180);
+            doc.text(monthWrapped, 20, yPos);
+            yPos += monthWrapped.length * 4;
+        });
+    });
+
+    const fileName = `Input_Emissions_${countryKey}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+}
+
+// Expose in case HTML inline handlers want the global reference
+window.printConversionFactorsReportPDF = printConversionFactorsReportPDF;
+window.printInputDataSummaryPDF = printInputDataSummaryPDF;
+window.printInputEmissionsReportPDF = printInputEmissionsReportPDF;
+
+async function generateFinalReportDOCX() {
+    if (!_ensureCarbonCalc()) return;
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        alert('Please login first.');
+        return;
+    }
+
+    const orgName = localStorage.getItem('companyName') || 'Organization';
+    const activeSiteInput = document.querySelector('.site-item.active .site-name-input');
+    const siteName = activeSiteInput?.value?.trim() || 'Site';
+
+    const categoryTotalsT = window.carbonCalc.getCategoryTotals();
+    const scopeT = window.carbonCalc.getScopeBreakdown();
+
+    const totals_kg = {
+        water: (categoryTotalsT.water || 0) * 1000,
+        energy: (categoryTotalsT.energy || 0) * 1000,
+        waste: (categoryTotalsT.waste || 0) * 1000,
+        transport: (categoryTotalsT.transport || 0) * 1000,
+        refrigerants: (categoryTotalsT.refrigerants || 0) * 1000,
+    };
+
+    const scope_kg = {
+        scope1: (scopeT.scope1 || 0) * 1000,
+        scope2: (scopeT.scope2 || 0) * 1000,
+        scope3: (scopeT.scope3 || 0) * 1000,
+    };
+
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+
+    // Prefer the General Info fields from the UI for the DOCX template placeholders.
+    const issueDateInput = document.getElementById('issueDateInput');
+    const issueDateRaw = issueDateInput?.value || '';
+    // type="date" => yyyy-mm-dd
+    let issue_date = '';
+    if (issueDateRaw && issueDateRaw.includes('-')) {
+        const parts = issueDateRaw.split('-');
+        if (parts.length === 3) {
+            issue_date = `${pad(parseInt(parts[2], 10))}/${pad(parseInt(parts[1], 10))}/${parts[0]}`;
+        }
+    }
+    if (!issue_date) {
+        issue_date = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    }
+
+    const reportStatusSelect = document.getElementById('reportStatusSelect');
+    const reportVersionInput = document.getElementById('reportVersionInput');
+    const reportingPeriodInput = document.getElementById('reportingPeriodInput');
+    const projectNumberInput = document.getElementById('projectNumberInput');
+    const status = reportStatusSelect?.value || 'Final';
+    const version = (reportVersionInput?.value || '').toString().trim() || '1.0';
+    const reporting_period = (reportingPeriodInput?.value || '').toString().trim();
+    const project_number = (projectNumberInput?.value || '').toString().trim();
+    const company_logo_data_url = _getReportLogoDataUrl();
+
+    const organization_profile = document.getElementById('organizationProfileInput')?.value?.trim() || '';
+    const org_registered_address = document.getElementById('orgRegisteredAddressInput')?.value?.trim() || '';
+    const scope_streams_summary = document.getElementById('scopeStreamsSummaryInput')?.value?.trim() || '';
+    const assessment_period_detail = document.getElementById('assessmentPeriodDetailInput')?.value?.trim() || '';
+    const assessment_general_notes = document.getElementById('assessmentGeneralNotesInput')?.value?.trim() || '';
+    const assessment_extra_note1 = document.getElementById('assessmentExtraNote1Input')?.value?.trim() || '';
+    const assessment_extra_note2 = document.getElementById('assessmentExtraNote2Input')?.value?.trim() || '';
+    const buildings_assessed = document.getElementById('buildingsAssessedInput')?.value?.trim() || '';
+    const assessment_base_year = document.getElementById('assessmentBaseYearInput')?.value?.trim() || '';
+
+    const grand_total_kg = (Object.values(totals_kg).reduce((a, b) => a + b, 0)) || 0;
+
+    const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://localhost:5000/api';
+    const payload = {
+        organization_name: orgName,
+        site_name: siteName,
+        issue_date,
+        status,
+        version,
+        reporting_period,
+        project_number,
+        totals_kg,
+        scope_kg,
+        grand_total_kg,
+    };
+    if (company_logo_data_url) {
+        payload.company_logo_data_url = company_logo_data_url;
+    }
+    if (organization_profile) payload.organization_profile = organization_profile;
+    if (org_registered_address) payload.org_registered_address = org_registered_address;
+    if (scope_streams_summary) payload.scope_streams_summary = scope_streams_summary;
+    if (assessment_period_detail) payload.assessment_period_detail = assessment_period_detail;
+    if (assessment_general_notes) payload.assessment_general_notes = assessment_general_notes;
+    if (assessment_extra_note1) payload.assessment_extra_note1 = assessment_extra_note1;
+    if (assessment_extra_note2) payload.assessment_extra_note2 = assessment_extra_note2;
+    if (buildings_assessed) payload.buildings_assessed_count = buildings_assessed;
+    if (assessment_base_year) payload.assessment_base_year = assessment_base_year;
+
+    try {
+        const res = await fetch(`${apiBase}/reports/final`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const msg = await res.text();
+            alert('Failed to generate Final report: ' + msg);
+            return;
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+
+        let fileName = 'Final_Report.docx';
+        const disp = res.headers.get('content-disposition') || '';
+        const match = disp.match(/filename[^;=\n]*=((['\"]).*?\\2|[^;\\n]*)/i);
+        if (match && match[1]) {
+            fileName = match[1].replace(/['\"]/g, '').trim();
+        }
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error(err);
+        alert('Error generating Final report. See console for details.');
+    }
+}
+
+window.generateFinalReportDOCX = generateFinalReportDOCX;
+

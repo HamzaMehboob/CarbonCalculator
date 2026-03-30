@@ -228,6 +228,12 @@
                                 <i class="fas fa-snowflake"></i> <span data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</span>
                             </button>
                         </nav>
+                        <div class="report-actions" style="margin-top: 12px;">
+                            <button class="btn-secondary" type="button" onclick="printInputDataSummaryPDF()"
+                                    title="Print input data summary (raw inputs)">
+                                <i class="fas fa-file-alt"></i> <span data-en="Print Input Summary" data-pt="Imprimir Resumo">Print Input Summary</span>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- General Info Section -->
@@ -236,7 +242,37 @@
                             <h2 data-en="General Info" data-pt="Informações Gerais">General Info</h2>
                         </div>
                         <div class="card p-4">
-                            <p data-en="Define your organizational boundaries and reporting periods here." data-pt="Defina seus limites organizacionais e períodos de relato aqui.">Define your organizational boundaries and reporting periods here.</p>
+                            <div class="form-inline-group">
+                                <label data-en="Project Number" data-pt="Número do Projeto">Project Number</label>
+                                <input type="text" id="projectNumberInput" placeholder="e.g. Project 123" value=""/>
+                            </div>
+                            <div class="form-inline-group">
+                                <label data-en="Reporting Period" data-pt="Período de Relato">Reporting Period</label>
+                                <input type="text" id="reportingPeriodInput" placeholder="e.g. 2024 (FY)" value=""/>
+                            </div>
+                            <div class="form-inline-group">
+                                <label data-en="Issue Date" data-pt="Data de Emissão">Issue Date</label>
+                                <input type="date" id="issueDateInput" value=""/>
+                            </div>
+                            <div class="form-inline-group">
+                                <label data-en="Report Version" data-pt="Versão do Relatório">Report Version</label>
+                                <input type="text" id="reportVersionInput" placeholder="Version" value="1.0"/>
+                            </div>
+                            <div class="form-inline-group">
+                                <label data-en="Report Status" data-pt="Status do Relatório">Report Status</label>
+                                <select id="reportStatusSelect">
+                                    <option value="Draft" data-en="Draft" data-pt="Rascunho">Draft</option>
+                                    <option value="Final" data-en="Final" data-pt="Final">Final</option>
+                                </select>
+                            </div>
+                            <div class="form-inline-group full-width">
+                                <label data-en="Registered / head office address" data-pt="Endereço registrado">Registered / head office address</label>
+                                <input type="text" id="orgRegisteredAddressInput" placeholder="As on Companies House / charity register" value=""/>
+                            </div>
+                            <div class="form-inline-group full-width">
+                                <label data-en="Organisation profile (report narrative)" data-pt="Perfil da organização">Organisation profile (report narrative)</label>
+                                <textarea id="organizationProfileInput" rows="3" placeholder="Replaces the sample community-centre description in the Word report when filled."></textarea>
+                            </div>
                         </div>
                     </div>
 
@@ -245,8 +281,130 @@
                         <div class="tab-header">
                             <h2 data-en="Assessment Scope" data-pt="Escopo da Avaliação">Assessment Scope</h2>
                         </div>
+                        <div class="card p-4" style="flex-wrap: wrap; align-items: stretch;">
+                            <div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 100%;">
+                                <label style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="scope1EnabledInput" data-scope-enabled="scope1" checked>
+                                    <span data-en="Include Scope 1 (Direct emissions)" data-pt="Incluir Escopo 1 (Emissões diretas)">Include Scope 1 (Direct emissions)</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="scope2EnabledInput" data-scope-enabled="scope2" checked>
+                                    <span data-en="Include Scope 2 (Indirect - electricity)" data-pt="Incluir Escopo 2 (Indiretas - eletricidade)">Include Scope 2 (Indirect - electricity)</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="scope3EnabledInput" data-scope-enabled="scope3" checked>
+                                    <span data-en="Include Scope 3 (Other indirect)" data-pt="Incluir Escopo 3 (Outras indiretas)">Include Scope 3 (Other indirect)</span>
+                                </label>
+                            </div>
+                            <div class="form-inline-group" style="margin-top: 14px;">
+                                <label data-en="Buildings assessed" data-pt="Edifícios avaliados">Buildings assessed</label>
+                                <input type="number" id="buildingsAssessedInput" min="0" step="1" placeholder="e.g. 3" value=""/>
+                            </div>
+                            <div class="form-inline-group">
+                                <label data-en="Base year" data-pt="Ano base">Base year</label>
+                                <input type="text" id="assessmentBaseYearInput" placeholder="e.g. 2023" value=""/>
+                            </div>
+                            <div class="form-inline-group full-width">
+                                <label data-en="Assessment / data period detail" data-pt="Detalhe do período">Assessment / data period detail</label>
+                                <input type="text" id="assessmentPeriodDetailInput" placeholder="Replaces sample period text in the Word report (e.g. March 2022 to April 2023)" value=""/>
+                            </div>
+                            <div class="form-inline-group full-width">
+                                <label data-en="Streams included (Word report)" data-pt="Fluxos incluídos">Streams included (Word report)</label>
+                                <textarea id="scopeStreamsSummaryInput" rows="2" placeholder="Optional. Replaces the sample list (energy, water, waste, travel). Leave blank to keep template wording."></textarea>
+                            </div>
+                            <div class="form-inline-group full-width">
+                                <label data-en="General notes (assessment)" data-pt="Notas gerais">General notes (assessment)</label>
+                                <textarea id="assessmentGeneralNotesInput" rows="2" placeholder="For your records and future report versions."></textarea>
+                            </div>
+                            <div class="form-inline-group full-width">
+                                <label data-en="Extra note 1" data-pt="Nota extra 1">Extra note 1</label>
+                                <textarea id="assessmentExtraNote1Input" rows="2" placeholder="e.g. offsets, exclusions (Excel “Extra note” style)."></textarea>
+                            </div>
+                            <div class="form-inline-group full-width">
+                                <label data-en="Extra note 2" data-pt="Nota extra 2">Extra note 2</label>
+                                <textarea id="assessmentExtraNote2Input" rows="2" placeholder=""></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Conversion Factors Section -->
+                    <div id="section-conversion-factors" class="sub-content-section" style="display: none;">
+                        <div class="tab-header">
+                            <h2 data-en="Conversion Factors" data-pt="Fatores de Conversão">Conversion Factors</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" type="button" onclick="printConversionFactorsReportPDF()"
+                                        title="Print conversion factors report (selected factors)">
+                                    <i class="fas fa-print"></i> <span data-en="Print Report" data-pt="Imprimir Relatório">Print Report</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="card p-4">
-                            <p data-en="Select which GHG Protocol Scopes to include in your assessment." data-pt="Selecione quais escopos do Protocolo GEE incluir em sua avaliação.">Select which GHG Protocol Scopes to include in your assessment.</p>
+                            <p data-en="Select which conversion factors to include in the report." data-pt="Selecione quais fatores de conversão incluir no relatório.">
+                                Select which conversion factors to include in the report.
+                            </p>
+
+                            <div class="conversion-factor-grid">
+                                <div class="conversion-factor-group">
+                                    <h3 data-en="Energy" data-pt="Energia">Energy</h3>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="electricity" checked> Electricity (grid)</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="naturalGas" checked> Natural gas</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="diesel" checked> Diesel (generator/boiler)</label>
+                                </div>
+
+                                <div class="conversion-factor-group">
+                                    <h3 data-en="Water" data-pt="Água">Water</h3>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="water" checked> Water supply</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="wastewater" checked> Waste water</label>
+                                </div>
+
+                                <div class="conversion-factor-group">
+                                    <h3 data-en="Transport" data-pt="Transporte">Transport</h3>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="transport_petrol" checked> Company vehicles (petrol)</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="transport_diesel" checked> Company vehicles (diesel)</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="transport_electric" checked> Company vehicles (electric)</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="flights_short" checked> Flights (short-haul)</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="flights_medium" checked> Flights (medium-haul)</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="flights_long" checked> Flights (long-haul)</label>
+                                </div>
+
+                                <div class="conversion-factor-group">
+                                    <h3 data-en="Waste" data-pt="Resíduos">Waste</h3>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="waste" checked> Mixed waste to landfill</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="wasteRecycled" checked> Recycled waste</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="waste_composted" checked> Composted waste</label>
+                                </div>
+
+                                <div class="conversion-factor-group">
+                                    <h3 data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</h3>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="refrigerant_R410A" checked> R-410A</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="refrigerant_R134a" checked> R-134a</label>
+                                    <label><input type="checkbox" class="conversion-factor-checkbox" data-factor-key="refrigerant_R32" checked> R-32</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Emissions Section -->
+                    <div id="section-input-emissions" class="sub-content-section" style="display: none;">
+                        <div class="tab-header">
+                            <h2 data-en="Input Emissions" data-pt="Emissões de Entrada">Input Emissions</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" type="button" onclick="printInputEmissionsReportPDF()"
+                                        title="Print input emissions report (kg CO2e)">
+                                    <i class="fas fa-print"></i> <span data-en="Print Report" data-pt="Imprimir Relatório">Print Report</span>
+                                </button>
+                                <button class="btn-secondary" type="button" onclick="generateFinalReportDOCX()"
+                                        title="Generate final Word report (DOCX)">
+                                    <i class="fas fa-file-word"></i> <span data-en="Final Report" data-pt="Relatório Final">Final Report</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card p-4">
+                            <p data-en="This report prints the raw input-derived emissions in kg CO2e." data-pt="Este relatório imprime as emissões calculadas a partir das entradas em kg CO2e.">
+                                This report prints the raw input-derived emissions in kg CO2e.
+                            </p>
                         </div>
                     </div>
                 </div>

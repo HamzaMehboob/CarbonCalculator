@@ -218,7 +218,9 @@ body {
 .site-sub-nav {
     display: none;
     flex-direction: column;
-    padding: 0 0 10px 40px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 0 10px 24px;
     background: rgba(0, 0, 0, 0.02);
 }
 
@@ -453,10 +455,13 @@ body {
     cursor: pointer;
     transition: var(--transition);
     display: flex;
-    align-items: center;
+    flex-direction: column; /* Keep sub-nav below the main header row */
+    align-items: stretch;
     gap: 12px;
     color: var(--text-sidebar);
     position: relative;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .site-item i {
@@ -470,6 +475,7 @@ body {
 .site-item.active {
     background: var(--primary-color);
     box-shadow: var(--shadow-sm);
+    color: #FFFFFF;
 }
 
 .site-item .btn-delete {
@@ -615,6 +621,33 @@ body {
     border-color: var(--primary-color);
 }
 
+.form-inline-group.full-width {
+    flex: 1 1 100%;
+    align-items: flex-start;
+}
+
+.form-inline-group.full-width label {
+    padding-top: 8px;
+}
+
+.form-inline-group textarea {
+    flex: 1;
+    min-height: 72px;
+    padding: 8px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    resize: vertical;
+}
+
+.form-inline-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
 /* Tabs Navigation */
 .tabs-nav {
     display: flex;
@@ -625,6 +658,38 @@ body {
     border-radius: 12px;
     box-shadow: var(--shadow-sm);
     overflow-x: auto;
+}
+
+/* Conversion Factors UI */
+.conversion-factor-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.conversion-factor-group {
+    flex: 1;
+    min-width: 220px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.conversion-factor-group h3 {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.conversion-factor-group label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
 }
 
 .tab-btn {

@@ -84,6 +84,8 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             if (data.user) {
                 localStorage.setItem('userName', data.user.full_name || '');
                 localStorage.setItem('companyName', data.user.company_name || 'My Company');
+                localStorage.setItem('organizationId', data.user.organization_id || '');
+                localStorage.setItem('organizationName', data.user.organization_name || '');
             }
             
             document.getElementById('loginScreen').style.display = 'none';
@@ -164,6 +166,9 @@ async function loadUserDataFromBackend() {
         
         if (response.ok) {
             const data = await response.json();
+            if (data.organization_id) {
+                localStorage.setItem('organizationId', data.organization_id);
+            }
             // ALWAYS overwrite local state with backend state to avoid "ghost" data from deleted clusters
             if (data.sites) {
                 appState.sites = Object.keys(data.sites).length > 0 ? data.sites : {
@@ -232,7 +237,12 @@ document.getElementById('logoutBtn')?.addEventListener('click', function() {
         localStorage.removeItem('loggedIn');
         localStorage.removeItem('loginEmail');
         localStorage.removeItem('authToken');
-        localStorage.removeItem('carbonCalcSites'); // Clear site data
+        // Clear site data (old single-user key + new org-scoped keys)
+        localStorage.removeItem('carbonCalcSites');
+        const orgId = localStorage.getItem('organizationId') || 'default';
+        localStorage.removeItem(`carbonCalcSites_${orgId}`);
+        localStorage.removeItem('organizationId');
+        localStorage.removeItem('organizationName');
         localStorage.removeItem('userName');
         
         document.getElementById('loginScreen').style.display = 'flex';
@@ -734,11 +744,13 @@ function attachRowListeners(row) {
 // ============================================
 
 function saveSitesToLocalStorage() {
-    localStorage.setItem('carbonCalcSites', JSON.stringify(appState.sites));
+    const orgId = localStorage.getItem('organizationId') || 'default';
+    localStorage.setItem(`carbonCalcSites_${orgId}`, JSON.stringify(appState.sites));
 }
 
 function loadSitesFromLocalStorage() {
-    const saved = localStorage.getItem('carbonCalcSites');
+    const orgId = localStorage.getItem('organizationId') || 'default';
+    const saved = localStorage.getItem(`carbonCalcSites_${orgId}`) || localStorage.getItem('carbonCalcSites');
     if (saved) {
         appState.sites = JSON.parse(saved);
         
@@ -1350,6 +1362,28 @@ function initializeApp() {
     if (savedCompanyNotes !== null) {
         document.getElementById('companyNotes').value = savedCompanyNotes;
     }
+
+    // Load General Info fields (drives final report + placeholders)
+    const projectNumberEl = document.getElementById('projectNumberInput');
+    if (projectNumberEl) {
+        projectNumberEl.value = localStorage.getItem('projectNumber') || '';
+    }
+    const reportingPeriodEl = document.getElementById('reportingPeriodInput');
+    if (reportingPeriodEl) {
+        reportingPeriodEl.value = localStorage.getItem('reportingPeriod') || '';
+    }
+    const issueDateEl = document.getElementById('issueDateInput');
+    if (issueDateEl) {
+        issueDateEl.value = localStorage.getItem('issueDate') || '';
+    }
+    const reportVersionEl = document.getElementById('reportVersionInput');
+    if (reportVersionEl) {
+        reportVersionEl.value = localStorage.getItem('reportVersion') || '1.0';
+    }
+    const reportStatusEl = document.getElementById('reportStatusSelect');
+    if (reportStatusEl) {
+        reportStatusEl.value = localStorage.getItem('reportStatus') || 'Draft';
+    }
     
     const savedLogo = localStorage.getItem('companyLogo');
     if (savedLogo) {
@@ -1368,6 +1402,91 @@ function initializeApp() {
     
     // Initialize tabs
     initializeTabs();
+
+    // Bind Assessment Scope checkboxes (Scope 1/2/3)
+    const s1El = document.getElementById('scope1EnabledInput');
+    const s2El = document.getElementById('scope2EnabledInput');
+    const s3El = document.getElementById('scope3EnabledInput');
+    if (s1El) s1El.checked = localStorage.getItem('scope1Enabled') !== 'false';
+    if (s2El) s2El.checked = localStorage.getItem('scope2Enabled') !== 'false';
+    if (s3El) s3El.checked = localStorage.getItem('scope3Enabled') !== 'false';
+
+    const bindScope = (el, key) => {
+        if (!el || el.dataset.scopeBound === '1') return;
+        el.dataset.scopeBound = '1';
+        el.addEventListener('change', () => {
+            localStorage.setItem(key, el.checked ? 'true' : 'false');
+            if (window.carbonCalc && window.carbonCalc.calculateAllTotals) window.carbonCalc.calculateAllTotals();
+            if (window.updateDashboard) window.updateDashboard();
+        });
+    };
+    bindScope(s1El, 'scope1Enabled');
+    bindScope(s2El, 'scope2Enabled');
+    bindScope(s3El, 'scope3Enabled');
+
+    // Bind General Info inputs to localStorage
+    const bindTextInput = (el, key) => {
+        if (!el || el.dataset.bound === '1') return;
+        el.dataset.bound = '1';
+        el.addEventListener('input', () => localStorage.setItem(key, el.value || ''));
+        el.addEventListener('change', () => localStorage.setItem(key, el.value || ''));
+    };
+    bindTextInput(projectNumberEl, 'projectNumber');
+    bindTextInput(reportingPeriodEl, 'reportingPeriod');
+    bindTextInput(issueDateEl, 'issueDate');
+    bindTextInput(reportVersionEl, 'reportVersion');
+    if (reportStatusEl && reportStatusEl.dataset.bound !== '1') {
+        reportStatusEl.dataset.bound = '1';
+        reportStatusEl.addEventListener('change', () => localStorage.setItem('reportStatus', reportStatusEl.value));
+    }
+
+    const orgRegisteredAddressEl = document.getElementById('orgRegisteredAddressInput');
+    const organizationProfileEl = document.getElementById('organizationProfileInput');
+    const buildingsAssessedEl = document.getElementById('buildingsAssessedInput');
+    const assessmentBaseYearEl = document.getElementById('assessmentBaseYearInput');
+    const assessmentPeriodDetailEl = document.getElementById('assessmentPeriodDetailInput');
+    const scopeStreamsSummaryEl = document.getElementById('scopeStreamsSummaryInput');
+    const assessmentGeneralNotesEl = document.getElementById('assessmentGeneralNotesInput');
+    const assessmentExtraNote1El = document.getElementById('assessmentExtraNote1Input');
+    const assessmentExtraNote2El = document.getElementById('assessmentExtraNote2Input');
+
+    if (orgRegisteredAddressEl) {
+        orgRegisteredAddressEl.value = localStorage.getItem('orgRegisteredAddress') || '';
+    }
+    if (organizationProfileEl) {
+        organizationProfileEl.value = localStorage.getItem('organizationProfile') || '';
+    }
+    if (buildingsAssessedEl) {
+        buildingsAssessedEl.value = localStorage.getItem('buildingsAssessedCount') || '';
+    }
+    if (assessmentBaseYearEl) {
+        assessmentBaseYearEl.value = localStorage.getItem('assessmentBaseYear') || '';
+    }
+    if (assessmentPeriodDetailEl) {
+        assessmentPeriodDetailEl.value = localStorage.getItem('assessmentPeriodDetail') || '';
+    }
+    if (scopeStreamsSummaryEl) {
+        scopeStreamsSummaryEl.value = localStorage.getItem('scopeStreamsSummary') || '';
+    }
+    if (assessmentGeneralNotesEl) {
+        assessmentGeneralNotesEl.value = localStorage.getItem('assessmentGeneralNotes') || '';
+    }
+    if (assessmentExtraNote1El) {
+        assessmentExtraNote1El.value = localStorage.getItem('assessmentExtraNote1') || '';
+    }
+    if (assessmentExtraNote2El) {
+        assessmentExtraNote2El.value = localStorage.getItem('assessmentExtraNote2') || '';
+    }
+
+    bindTextInput(orgRegisteredAddressEl, 'orgRegisteredAddress');
+    bindTextInput(organizationProfileEl, 'organizationProfile');
+    bindTextInput(buildingsAssessedEl, 'buildingsAssessedCount');
+    bindTextInput(assessmentBaseYearEl, 'assessmentBaseYear');
+    bindTextInput(assessmentPeriodDetailEl, 'assessmentPeriodDetail');
+    bindTextInput(scopeStreamsSummaryEl, 'scopeStreamsSummary');
+    bindTextInput(assessmentGeneralNotesEl, 'assessmentGeneralNotes');
+    bindTextInput(assessmentExtraNote1El, 'assessmentExtraNote1');
+    bindTextInput(assessmentExtraNote2El, 'assessmentExtraNote2');
     
     // Load local data first for fast UI responsiveness
     loadSitesFromLocalStorage();

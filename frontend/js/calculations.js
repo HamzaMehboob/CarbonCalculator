@@ -11,8 +11,13 @@ let CONVERSION_FACTORS = {
         water: 0.344,           // per m³
         electricity: 0.177,     // per kWh
         naturalGas: 0.183,      // per kWh
+        // UI uses "diesel" for generator/boiler energy; map it to the available UK heating oil factor.
+        diesel: 0.246,          // per kWh (approx: heating oil)
+        // UI uses "wastewater" emission type in the water table.
+        wastewater: 0.708,      // per m³ (water treatment)
         waste: 21.28,           // per tonne (average mixed waste)
         wasteRecycled: 0.021,   // per tonne
+        waste_composted: 8.8,  // per tonne (approx; composted waste)
         transport_petrol: 0.168, // per km (average car)
         transport_diesel: 0.171, // per km (average car)
         transport_electric: 0.053, // per km
@@ -29,8 +34,13 @@ let CONVERSION_FACTORS = {
         water: 0.421,           // per m³
         electricity: 0.233,     // per kWh (grid average)
         naturalGas: 0.202,      // per kWh
+        // UI uses "diesel" for generator/boiler energy; map it to the available Brazil heating oil factor.
+        diesel: 0.264,          // per kWh (approx: heating oil)
+        // UI uses "wastewater" emission type in the water table.
+        wastewater: 0.856,      // per m³ (water treatment)
         waste: 25.84,           // per tonne
         wasteRecycled: 0.025,   // per tonne
+        waste_composted: 10.2,  // per tonne (approx; composted waste)
         transport_petrol: 0.175, // per km
         transport_diesel: 0.182, // per km
         transport_electric: 0.062, // per km
@@ -359,6 +369,14 @@ function getScopeBreakdown() {
             });
         }
     });
+
+    // If the user disabled specific scopes in "Assessment Scope", zero them out.
+    const scope1El = document.getElementById('scope1EnabledInput');
+    const scope2El = document.getElementById('scope2EnabledInput');
+    const scope3El = document.getElementById('scope3EnabledInput');
+    if (scope1El && !scope1El.checked) scope1 = 0;
+    if (scope2El && !scope2El.checked) scope2 = 0;
+    if (scope3El && !scope3El.checked) scope3 = 0;
     
     return {
         scope1: scope1,

@@ -60,9 +60,12 @@ function updateKPIs() {
     
     // Get current year (latest year) - use current year if no data
     const currentYearNum = new Date().getFullYear();
-    const latestYear = years.length > 0 ? years[0] : currentYearNum;
+    // Prefer spreadsheet "2024 Results Graphs" (2024 vs 2023) when available.
+    const latestYear = (yearComparison[2024] !== undefined) ? 2024 : (years.length > 0 ? years[0] : currentYearNum);
     const lastYearValue = yearComparison[latestYear] || 0;
-    const previousYear = years.length > 1 ? years[1] : (years.length > 0 && years[0] > 2020 ? years[0] - 1 : currentYearNum - 1);
+    const previousYear = (yearComparison[2023] !== undefined)
+        ? 2023
+        : (years.length > 1 ? years[1] : (years.length > 0 && years[0] > 2020 ? years[0] - 1 : currentYearNum - 1));
     const previousYearValue = previousYear ? (yearComparison[previousYear] || 0) : 0;
     
     // Calculate change percentage
@@ -256,7 +259,34 @@ function updateBarChart() {
     }
     
     const yearComparison = window.carbonCalc.getYearComparison();
-    const years = Object.keys(yearComparison).sort((a, b) => parseInt(a) - parseInt(b)); // Sort years
+    let years = Object.keys(yearComparison).sort((a, b) => parseInt(a) - parseInt(b)); // Sort years (ascending)
+
+    // Prefer spreadsheet "2024 Results Graphs" (2024 vs 2023) when present.
+    const has2024 = yearComparison[2024] !== undefined;
+    const has2023 = yearComparison[2023] !== undefined;
+    if (has2024 || has2023) {
+        const preferred = [];
+        if (has2023) preferred.push('2023');
+        if (has2024) preferred.push('2024');
+        years = preferred;
+
+        // If only one preferred year is available, fall back to the closest other year.
+        if (years.length < 2) {
+            const preferredNums = years.map(y => parseInt(y));
+            const remaining = Object.keys(yearComparison)
+                .map(y => parseInt(y))
+                .filter(y => !preferredNums.includes(y))
+                .sort((a, b) => a - b);
+            if (remaining.length > 0) {
+                // Take the nearest previous year (smaller than preferred latest), otherwise just the first.
+                const latestPreferred = Math.max.apply(null, preferredNums);
+                const candidate = remaining.filter(y => y < latestPreferred).pop() ?? remaining[0];
+                years.push(String(candidate));
+                years = years.sort((a, b) => parseInt(a) - parseInt(b));
+            }
+        }
+    }
+
     const values = years.map(year => yearComparison[year] || 0); // Get values in same order
     
     // Debug logging

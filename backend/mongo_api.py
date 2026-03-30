@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
@@ -6,6 +6,53 @@ from pymongo import MongoClient
 import datetime
 import os
 import sys
+import io
+import json
+import re
+import base64
+import binascii
+import zipfile
+from pathlib import Path
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+# First embedded image in the ECO AUDIT template (client branding area).
+_DOCX_CLIENT_LOGO_PART = 'word/media/image1.png'
+_YELLOW_MAP_JSON = Path(__file__).resolve().parent / 'final_report_yellow_map.json'
+
+# Optional narrative fragments in the Selby template; values come from the JSON payload keys.
+_DOCX_NARRATIVE_SNIPPETS = (
+    ('is a community centre located in the London Borough of Haringey.', 'organization_profile'),
+    (
+        'energy use (electricity and gas), water consumption, waste generation, and business travel',
+        'scope_streams_summary',
+    ),
+    ('March 2022 to April 2023', 'assessment_period_detail'),
+)
+
+
+def _load_yellow_numeric_field_map() -> list:
+    try:
+        data = json.loads(_YELLOW_MAP_JSON.read_text(encoding='utf-8'))
+        fields = data.get('fields')
+        return list(fields) if isinstance(fields, list) else []
+    except (OSError, json.JSONDecodeError, TypeError):
+        return []
+
+
+def _apply_docx_narrative_overrides(xml_str: str, payload: dict) -> str:
+    """Replace known template clauses when the client supplies non-empty text (XML-escaped)."""
+    for needle, key in _DOCX_NARRATIVE_SNIPPETS:
+        val = (payload.get(key) or '').strip()
+        if not val or needle not in xml_str:
+            continue
+        xml_str = xml_str.replace(needle, escape(val))
+    return xml_str
 
 app = Flask(__name__)
 # Enable CORS for all origins in development/testing
@@ -33,6 +80,10 @@ def get_db():
 def get_users_col():
     db = get_db()
     return db['users'] if db is not None else None
+
+def get_orgs_col():
+    db = get_db()
+    return db['organizations'] if db is not None else None
 
 def get_data_col():
     db = get_db()
@@ -73,13 +124,19 @@ DEFAULT_CONVERSION_FACTORS = {
     }
 }
 
-def init_user_factors(email):
+def init_org_factors(organization_id: str):
+    """
+    Initialize conversion factors for a given organization.
+
+    Note: Frontend stores factors per company/org for report generation.
+    """
     col = get_factors_col()
-    if not col: return []
+    if not col:
+        return []
     inserted_factors = []
     for key, data in DEFAULT_CONVERSION_FACTORS.items():
         doc = {
-            "email": email,
+            "organization_id": organization_id,
             "country_key": key,
             "version": data.get("version", "2025"),
             "source": data.get("source", "Default"),
@@ -87,7 +144,7 @@ def init_user_factors(email):
             "updated_at": datetime.datetime.utcnow()
         }
         col.update_one(
-            {"email": email, "country_key": key},
+            {"organization_id": organization_id, "country_key": key},
             {"$setOnInsert": doc},
             upsert=True
         )
@@ -109,8 +166,11 @@ def home():
 @app.route('/api/signup', methods=['POST'])
 def signup():
     users_col = get_users_col()
+    orgs_col = get_orgs_col()
     if users_col is None:
         return jsonify({"msg": "Database connection error. Please check MongoDB whitelist or URI."}), 503
+    if orgs_col is None:
+        return jsonify({"msg": "Database connection error (organizations)."}), 503
         
     data = request.get_json()
     if not data: return jsonify({"msg": "Missing JSON"}), 400
@@ -118,6 +178,7 @@ def signup():
     email = data.get('email')
     password = data.get('password')
     confirm_password = data.get('confirm_password')
+    company_name = data.get('company_name') or data.get('organization_name') or ''
     
     if not email or not password or not confirm_password:
         return jsonify({"msg": "Missing required fields"}), 400
@@ -127,15 +188,37 @@ def signup():
         
     if users_col.find_one({"email": email}):
         return jsonify({"msg": "User already exists"}), 400
+
+    if not company_name or not str(company_name).strip():
+        return jsonify({"msg": "Missing organization/company name"}), 400
+
+    # Create (or reuse) organization record
+    existing_org = orgs_col.find_one({"name": company_name})
+    if existing_org and existing_org.get('_id') is not None:
+        org_id = str(existing_org['_id'])
+    else:
+        insert_res = orgs_col.insert_one({
+            "name": company_name,
+            "created_at": datetime.datetime.utcnow(),
+        })
+        org_id = str(insert_res.inserted_id)
         
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
     users_col.insert_one({
         "email": email,
         "password": hashed_password,
         "full_name": data.get('full_name'),
-        "company_name": data.get('company_name'),
+        "organization_id": org_id,
+        "organization_name": company_name,
         "created_at": datetime.datetime.utcnow()
     })
+
+    # Initialize factors at org level
+    try:
+        init_org_factors(org_id)
+    except Exception:
+        # Don't block signup if factors init fails; factors can be lazily initialized later.
+        pass
     
     access_token = create_access_token(identity=email)
     return jsonify({"msg": "User created", "access_token": access_token}), 201
@@ -143,8 +226,11 @@ def signup():
 @app.route('/api/login', methods=['POST'])
 def login():
     users_col = get_users_col()
+    orgs_col = get_orgs_col()
     if users_col is None:
         return jsonify({"msg": "Database connection error"}), 503
+    if orgs_col is None:
+        return jsonify({"msg": "Database connection error (organizations)."}), 503
         
     data = request.get_json()
     email = data.get('email')
@@ -153,12 +239,22 @@ def login():
     user = users_col.find_one({"email": email})
     if user and bcrypt.check_password_hash(user['password'], password):
         access_token = create_access_token(identity=email)
+
+        org_id = user.get("organization_id")
+        org_name = user.get("organization_name") or user.get("company_name")
+        if not org_name and org_id:
+            org_doc = orgs_col.find_one({"_id": org_id}) or orgs_col.find_one({"name": org_id})
+            if org_doc:
+                org_name = org_doc.get("name")
+
         return jsonify({
             "access_token": access_token,
             "user": {
                 "email": user['email'],
                 "full_name": user.get('full_name'),
-                "company_name": user.get('company_name')
+                "company_name": org_name,
+                "organization_id": org_id,
+                "organization_name": org_name
             }
         }), 200
     
@@ -171,12 +267,20 @@ def get_user_data():
     if data_col is None: return jsonify({"msg": "DB Error"}), 503
     
     current_user_email = get_jwt_identity()
-    user_data = data_col.find_one({"email": current_user_email})
+    users_col = get_users_col()
+    user = users_col.find_one({"email": current_user_email}) if users_col else None
+    org_id = user.get("organization_id") if user else None
+
+    user_data = data_col.find_one({"organization_id": org_id}) if org_id else None
+    if not user_data:
+        # Backwards compatibility for existing deployments
+        user_data = data_col.find_one({"email": current_user_email})
     
     if user_data:
         user_data['_id'] = str(user_data['_id'])
+        user_data['organization_id'] = user_data.get('organization_id', org_id)
         return jsonify(user_data), 200
-    return jsonify({"email": current_user_email, "sites": {}}), 200
+    return jsonify({"email": current_user_email, "organization_id": org_id, "sites": {}}), 200
 
 @app.route('/api/data', methods=['POST'])
 @jwt_required()
@@ -186,10 +290,19 @@ def save_user_data():
     
     current_user_email = get_jwt_identity()
     data = request.get_json()
-    data['email'] = current_user_email
+
+    users_col = get_users_col()
+    user = users_col.find_one({"email": current_user_email}) if users_col else None
+    org_id = user.get("organization_id") if user else None
+
+    data['email'] = current_user_email  # keep for backwards compatibility
+    data['organization_id'] = org_id
     data['updated_at'] = datetime.datetime.utcnow()
     
-    data_col.update_one({"email": current_user_email}, {"$set": data}, upsert=True)
+    if org_id:
+        data_col.update_one({"organization_id": org_id}, {"$set": data}, upsert=True)
+    else:
+        data_col.update_one({"email": current_user_email}, {"$set": data}, upsert=True)
     return jsonify({"msg": "Data saved"}), 200
 
 @app.route('/api/factors', methods=['GET', 'POST'])
@@ -199,11 +312,19 @@ def handle_factors():
     if factors_col is None: return jsonify({"msg": "DB Error"}), 503
     
     current_user_email = get_jwt_identity()
+    users_col = get_users_col()
+    user = users_col.find_one({"email": current_user_email}) if users_col else None
+    org_id = user.get("organization_id") if user else None
     
     if request.method == 'GET':
-        factors = list(factors_col.find({"email": current_user_email}, {"_id": 0}))
+        query = {"organization_id": org_id} if org_id else {"email": current_user_email}
+        factors = list(factors_col.find(query, {"_id": 0}))
         if not factors:
-            factors = init_user_factors(current_user_email)
+            if org_id:
+                factors = init_org_factors(org_id)
+            else:
+                # Backwards compatibility fallback
+                factors = init_org_factors(current_user_email)
         return jsonify(factors), 200
         
     if request.method == 'POST':
@@ -217,7 +338,7 @@ def handle_factors():
             return jsonify({"msg": "Missing country_key or factors"}), 400
             
         doc = {
-            "email": current_user_email,
+            "organization_id": org_id,
             "country_key": country_key,
             "version": data.get("version", "Custom"),
             "source": data.get("source", "Imported"),
@@ -226,11 +347,198 @@ def handle_factors():
         }
         
         factors_col.update_one(
-            {"email": current_user_email, "country_key": country_key},
+            {"organization_id": org_id, "country_key": country_key} if org_id else {"email": current_user_email, "country_key": country_key},
             {"$set": doc},
             upsert=True
         )
         return jsonify({"msg": "Factors saved successfully"}), 200
+
+def _png_bytes_from_logo_data_url(data_url: str | None) -> bytes | None:
+    """Decode a data: URL to PNG bytes for word/media (accept PNG; rasterize JPEG/WebP via Pillow if installed)."""
+    if not data_url or not isinstance(data_url, str) or not data_url.startswith('data:image'):
+        return None
+    try:
+        _head, b64 = data_url.split(',', 1)
+        raw = base64.b64decode(b64)
+    except (ValueError, binascii.Error, TypeError):
+        return None
+    if raw.startswith(b'\x89PNG\r\n\x1a\n'):
+        return raw
+    if Image is None:
+        return None
+    try:
+        img = Image.open(io.BytesIO(raw))
+        if img.mode not in ('RGB', 'RGBA'):
+            img = img.convert('RGBA')
+        out = io.BytesIO()
+        img.save(out, format='PNG', compress_level=6)
+        return out.getvalue()
+    except Exception:
+        return None
+
+
+def _docx_with_document_xml(template_bytes: bytes, document_xml_bytes: bytes, logo_png: bytes | None) -> bytes:
+    """Rebuild the .docx package with a new word/document.xml and optional first-page PNG swap."""
+    out_buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(template_bytes), 'r') as zin:
+        with zipfile.ZipFile(out_buf, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                name = item.filename
+                if name == 'word/document.xml':
+                    zout.writestr(name, document_xml_bytes)
+                elif logo_png and name == _DOCX_CLIENT_LOGO_PART:
+                    zout.writestr(name, logo_png)
+                else:
+                    zout.writestr(name, zin.read(name))
+    return out_buf.getvalue()
+
+
+def build_final_report_docx_bytes(payload: dict) -> tuple[bytes, str]:
+    """
+    Build the final report .docx from the Selby ECO AUDIT template and JSON payload.
+
+    Returns (file_bytes, suggested_filename). Raises FileNotFoundError if the template is missing.
+    """
+    organization_name = payload.get('organization_name') or payload.get('company_name') or 'Organization'
+    site_name = payload.get('site_name') or 'Site'
+
+    totals_kg = payload.get('totals_kg') or {}
+    scope_kg = payload.get('scope_kg') or {}
+
+    water_kg = float(totals_kg.get('water', 0))
+    energy_kg = float(totals_kg.get('energy', 0))
+    waste_kg = float(totals_kg.get('waste', 0))
+    transport_kg = float(totals_kg.get('transport', 0))
+    refrigerants_kg = float(totals_kg.get('refrigerants', 0))
+    grand_total_kg = float(payload.get('grand_total_kg', water_kg + energy_kg + waste_kg + transport_kg + refrigerants_kg))
+
+    scope1_kg = float(scope_kg.get('scope1', 0))
+    scope2_kg = float(scope_kg.get('scope2', 0))
+    scope3_kg = float(scope_kg.get('scope3', 0))
+
+    issue_date = payload.get('issue_date') or datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y')
+    reporting_period = (payload.get('reporting_period') or '').strip()
+
+    logo_payload = payload.get('company_logo_data_url') or payload.get('logo_data_url')
+    logo_png = _png_bytes_from_logo_data_url(logo_payload)
+
+    template_path = Path(__file__).resolve().parent.parent / 'requirements' / 'Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx'
+    if not template_path.exists():
+        raise FileNotFoundError(str(template_path))
+
+    template_bytes = template_path.read_bytes()
+    with zipfile.ZipFile(io.BytesIO(template_bytes), 'r') as zin:
+        doc_xml = zin.read('word/document.xml')
+
+    xml_str = doc_xml.decode('utf-8', errors='ignore')
+    xml_str = xml_str.replace('Selby Trust', organization_name)
+    xml_str = xml_str.replace('Selby', site_name)
+    if reporting_period:
+        xml_str = xml_str.replace('2022/2023', reporting_period)
+
+    xml_str = _apply_docx_narrative_overrides(xml_str, payload)
+
+    def _has_yellow_highlight(run_el: ET.Element) -> bool:
+        for child in run_el.iter():
+            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+            if tag == 'highlight':
+                if child.attrib.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val') == 'yellow':
+                    return True
+                if child.attrib.get('w:val') == 'yellow':
+                    return True
+                if child.attrib.get('val') == 'yellow':
+                    return True
+        return False
+
+    numeric_pattern = re.compile(r'^[\d,]+(\.\d+)?$')
+
+    try:
+        root = ET.fromstring(xml_str)
+    except ET.ParseError:
+        doc_bytes = xml_str.encode('utf-8')
+        out_bytes = _docx_with_document_xml(template_bytes, doc_bytes, logo_png)
+        file_name = f"Final_Report_{organization_name}_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.docx"
+        return out_bytes, file_name
+
+    numeric_nodes: list[ET.Element] = []
+    for run in root.iter():
+        if run.tag.split('}')[-1] != 'r':
+            continue
+        if not _has_yellow_highlight(run):
+            continue
+        for t in list(run):
+            if t.tag.split('}')[-1] != 't':
+                continue
+            txt = (t.text or '').strip()
+            if txt and numeric_pattern.match(txt):
+                numeric_nodes.append(t)
+
+    numeric_field_map = _load_yellow_numeric_field_map()
+    values_by_key = {
+        'grand_total_kg': grand_total_kg,
+        'scope1_kg': scope1_kg,
+        'scope2_kg': scope2_kg,
+        'scope3_kg': scope3_kg,
+        'water_kg': water_kg,
+        'energy_kg': energy_kg,
+        'waste_kg': waste_kg,
+        'transport_kg': transport_kg,
+        'refrigerants_kg': refrigerants_kg,
+    }
+    for idx, node in enumerate(numeric_nodes):
+        if idx >= len(numeric_field_map):
+            break
+        field_name = numeric_field_map[idx]
+        if not field_name:
+            continue
+        if field_name == 'project_number':
+            pn = (payload.get('project_number') or '').strip()
+            if pn:
+                node.text = pn
+            continue
+        if field_name not in values_by_key:
+            continue
+        node.text = f"{float(values_by_key[field_name]):,.2f}"
+
+    for t in root.iter():
+        if t.tag.split('}')[-1] != 't':
+            continue
+        if (t.text or '').strip() == '07/05/2023':
+            t.text = issue_date
+        if (t.text or '').strip() == 'Draft':
+            t.text = payload.get('status', 'Final')
+        if (t.text or '').strip() == 'Version 1.0':
+            t.text = f"Version {payload.get('version', '1.0')}"
+
+    body = ET.tostring(root, encoding='utf-8', method='xml')
+    doc_bytes = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + body
+    out_bytes = _docx_with_document_xml(template_bytes, doc_bytes, logo_png)
+    file_name = f"Final_Report_{organization_name}_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.docx"
+    return out_bytes, file_name
+
+
+@app.route('/api/reports/final', methods=['POST'])
+@jwt_required()
+def generate_final_report_docx():
+    """
+    Generate the "Final Report" DOCX from the provided Word template.
+
+    Fills the Selby ECO AUDIT Word template with:
+    - Org/site names, reporting period, and optional narrative snippets from the JSON payload.
+    - Yellow-highlighted numbers mapped by `backend/final_report_yellow_map.json` (per-template indices).
+    - Optional logo: PNG bytes or raster types converted via Pillow to PNG for `word/media/image1.png`.
+    """
+    payload = request.get_json() or {}
+    try:
+        out_bytes, file_name = build_final_report_docx_bytes(payload)
+    except FileNotFoundError as e:
+        return jsonify({"msg": f"Template not found: {e}"}), 500
+    return Response(
+        out_bytes,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers={'Content-Disposition': f'attachment; filename=\"{file_name}\"'}
+    )
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
