@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carbon Calculator - Phase 1</title>
+    <title>EcoAudit - Carbon Emissions Management</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -13,9 +13,9 @@
     <div id="loginScreen" class="login-container">
         <div class="login-box">
             <div class="login-header">
-                <i class="fas fa-leaf"></i>
-                <h1 data-en="Carbon Calculator" data-pt="Calculadora de Carbono">Carbon Calculator</h1>
-                <p data-en="GHG Protocol Compliant" data-pt="Conforme com Protocolo GEE">GHG Protocol Compliant</p>
+                <img src="assets/logo.png" alt="EcoAudit Logo" style="width: 80px; margin-bottom: 15px;">
+                <h1 data-en="EcoAudit" data-pt="EcoAudit">EcoAudit</h1>
+                <p data-en="GHG Protocol Carbon Platform" data-pt="Plataforma de Carbono Protocolo GEE">GHG Protocol Carbon Platform</p>
             </div>
             
             <!-- Login Form -->
@@ -83,12 +83,12 @@
         <header class="top-header">
             <div class="header-left">
                 <div class="company-logo">
-                    <i class="fas fa-leaf"></i>
-                    <span id="companyName">My Company</span>
+                    <img src="assets/logo.png" alt="EcoAudit" style="height: 32px; margin-right: 10px;">
+                    <span id="companyName" style="font-weight: 700; font-size: 1.4rem;">EcoAudit</span>
                 </div>
             </div>
             <div class="header-center">
-                <h1 data-en="Carbon Emissions Calculator" data-pt="Calculadora de Emissões de Carbono">Carbon Emissions Calculator</h1>
+                <h1 data-en="Carbon Emissions Management" data-pt="Gestão de Emissões de Carbono">Carbon Emissions Management</h1>
             </div>
             <div class="header-right">
                 <button id="langToggle" class="btn-icon" title="Language / Idioma">
@@ -122,9 +122,29 @@
                 </div>
                 <ul id="sitesList" class="sites-list">
                     <li class="site-item active" data-site-id="site-1">
-                        <i class="fas fa-building"></i>
-                        <input type="text" class="site-name-input" value="Headquarters" placeholder="Site name">
-                        <button class="btn-delete"><i class="fas fa-times"></i></button>
+                        <div class="site-main-item">
+                            <i class="fas fa-building"></i>
+                            <input type="text" class="site-name-input" value="Headquarters" placeholder="Site name">
+                            <button class="btn-delete"><i class="fas fa-times"></i></button>
+                        </div>
+                        <!-- Site Sub-navigation (New from Requirements) -->
+                        <div class="site-sub-nav">
+                            <button class="sub-nav-btn active" data-sub="data-input">
+                                <i class="fas fa-keyboard"></i> <span data-en="Data Input" data-pt="Entrada de Dados">Data Input</span>
+                            </button>
+                            <button class="sub-nav-btn" data-sub="general-info">
+                                <i class="fas fa-info-circle"></i> <span data-en="General Info" data-pt="Informações Gerais">General Info</span>
+                            </button>
+                            <button class="sub-nav-btn" data-sub="assessment-scope">
+                                <i class="fas fa-crosshairs"></i> <span data-en="Assessment Scope" data-pt="Escopo da Avaliação">Assessment Scope</span>
+                            </button>
+                            <button class="sub-nav-btn" data-sub="conversion-factors">
+                                <i class="fas fa-database"></i> <span data-en="Conversion Factor" data-pt="Fator de Conversão">Conversion Factor</span>
+                            </button>
+                            <button class="sub-nav-btn" data-sub="input-emissions">
+                                <i class="fas fa-cloud"></i> <span data-en="Input Emissions" data-pt="Emissões de Entrada">Input Emissions</span>
+                            </button>
+                        </div>
                     </li>
                 </ul>
                 <button id="addSiteBtn" class="btn-add-site">
@@ -186,30 +206,50 @@
                     </div>
                 </section>
 
-                <!-- Tabs Navigation -->
-                <nav class="tabs-nav">
-                    <button class="tab-btn active" data-tab="water">
-                        <i class="fas fa-tint"></i> <span data-en="Water" data-pt="Água">Water</span>
-                    </button>
-                    <button class="tab-btn" data-tab="energy">
-                        <i class="fas fa-bolt"></i> <span data-en="Energy" data-pt="Energia">Energy</span>
-                    </button>
-                    <button class="tab-btn" data-tab="waste">
-                        <i class="fas fa-trash"></i> <span data-en="Waste" data-pt="Resíduos">Waste</span>
-                    </button>
-                    <button class="tab-btn" data-tab="transport">
-                        <i class="fas fa-car"></i> <span data-en="Transport" data-pt="Transporte">Transport</span>
-                    </button>
-                    <button class="tab-btn" data-tab="refrigerants">
-                        <i class="fas fa-snowflake"></i> <span data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</span>
-                    </button>
-                    <button class="tab-btn" data-tab="dashboard" style="display: none;">
-                        <i class="fas fa-chart-pie"></i> <span data-en="Dashboard" data-pt="Painel">Dashboard</span>
-                    </button>
-                    <button class="tab-btn" data-tab="accounts" style="display: none;">
-                        <i class="fas fa-wallet"></i> <span data-en="Accounts" data-pt="Contas">Accounts</span>
-                    </button>
-                </nav>
+                <!-- Dynamic Content Sections -->
+                <div id="subContentSections">
+                    <!-- Data Input Section (Default) -->
+                    <div id="section-data-input" class="sub-content-section active">
+                        <!-- Tabs Navigation -->
+                        <nav class="tabs-nav">
+                            <button class="tab-btn active" data-tab="water">
+                                <i class="fas fa-tint"></i> <span data-en="Water" data-pt="Água">Water</span>
+                            </button>
+                            <button class="tab-btn" data-tab="energy">
+                                <i class="fas fa-bolt"></i> <span data-en="Energy" data-pt="Energia">Energy</span>
+                            </button>
+                            <button class="tab-btn" data-tab="waste">
+                                <i class="fas fa-trash"></i> <span data-en="Waste" data-pt="Resíduos">Waste</span>
+                            </button>
+                            <button class="tab-btn" data-tab="transport">
+                                <i class="fas fa-car"></i> <span data-en="Transport" data-pt="Transporte">Transport</span>
+                            </button>
+                            <button class="tab-btn" data-tab="refrigerants">
+                                <i class="fas fa-snowflake"></i> <span data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</span>
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- General Info Section -->
+                    <div id="section-general-info" class="sub-content-section" style="display: none;">
+                        <div class="tab-header">
+                            <h2 data-en="General Info" data-pt="Informações Gerais">General Info</h2>
+                        </div>
+                        <div class="card p-4">
+                            <p data-en="Define your organizational boundaries and reporting periods here." data-pt="Defina seus limites organizacionais e períodos de relato aqui.">Define your organizational boundaries and reporting periods here.</p>
+                        </div>
+                    </div>
+
+                    <!-- Assessment Scope Section -->
+                    <div id="section-assessment-scope" class="sub-content-section" style="display: none;">
+                        <div class="tab-header">
+                            <h2 data-en="Assessment Scope" data-pt="Escopo da Avaliação">Assessment Scope</h2>
+                        </div>
+                        <div class="card p-4">
+                            <p data-en="Select which GHG Protocol Scopes to include in your assessment." data-pt="Selecione quais escopos do Protocolo GEE incluir em sua avaliação.">Select which GHG Protocol Scopes to include in your assessment.</p>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Tab Content -->
                 <div id="tabsContent" class="tabs-content">

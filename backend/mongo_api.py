@@ -192,17 +192,45 @@ def save_user_data():
     data_col.update_one({"email": current_user_email}, {"$set": data}, upsert=True)
     return jsonify({"msg": "Data saved"}), 200
 
-@app.route('/api/factors', methods=['GET'])
+@app.route('/api/factors', methods=['GET', 'POST'])
 @jwt_required()
-def get_factors():
+def handle_factors():
     factors_col = get_factors_col()
     if factors_col is None: return jsonify({"msg": "DB Error"}), 503
     
     current_user_email = get_jwt_identity()
-    factors = list(factors_col.find({"email": current_user_email}, {"_id": 0}))
-    if not factors:
-        factors = init_user_factors(current_user_email)
-    return jsonify(factors), 200
+    
+    if request.method == 'GET':
+        factors = list(factors_col.find({"email": current_user_email}, {"_id": 0}))
+        if not factors:
+            factors = init_user_factors(current_user_email)
+        return jsonify(factors), 200
+        
+    if request.method == 'POST':
+        data = request.get_json()
+        if not data: return jsonify({"msg": "Missing JSON"}), 400
+        
+        country_key = data.get('country_key')
+        factors = data.get('factors')
+        
+        if not country_key or not factors:
+            return jsonify({"msg": "Missing country_key or factors"}), 400
+            
+        doc = {
+            "email": current_user_email,
+            "country_key": country_key,
+            "version": data.get("version", "Custom"),
+            "source": data.get("source", "Imported"),
+            "factors": factors,
+            "updated_at": datetime.datetime.utcnow()
+        }
+        
+        factors_col.update_one(
+            {"email": current_user_email, "country_key": country_key},
+            {"$set": doc},
+            upsert=True
+        )
+        return jsonify({"msg": "Factors saved successfully"}), 200
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

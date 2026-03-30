@@ -75,14 +75,14 @@ body {
     justify-content: center;
     min-height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 20px;
+    padding: 10px; /* Reduced from 20px */
 }
 
 .login-box {
     background: var(--bg-card);
     border-radius: 16px;
     box-shadow: var(--shadow-lg);
-    padding: 30px;
+    padding: 20px; /* Reduced from 30px to fit better in viewport */
     width: 100%;
     max-width: 420px;
     animation: fadeInUp 0.5s ease;
@@ -101,13 +101,13 @@ body {
 
 .login-header {
     text-align: center;
-    margin-bottom: 16px;
+    margin-bottom: 12px; /* Reduced from 16px */
 }
 
 .login-header i {
-    font-size: 48px;
+    font-size: 32px; /* Reduced from 48px */
     color: var(--primary-color);
-    margin-bottom: 16px;
+    margin-bottom: 8px; /* Reduced from 16px */
 }
 
 .login-header h1 {
@@ -122,7 +122,7 @@ body {
 }
 
 .form-group {
-    margin-bottom: 12px;
+    margin-bottom: 8px; /* Reduced from 12px */
 }
 
 .form-group label {
@@ -200,6 +200,62 @@ body {
 .login-footer {
     margin-top: 24px;
     text-align: center;
+}
+
+.site-item.active {
+    background: rgba(19, 181, 234, 0.1);
+    color: var(--primary-color);
+}
+
+.site-main-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    width: 100%;
+}
+
+.site-sub-nav {
+    display: none;
+    flex-direction: column;
+    padding: 0 0 10px 40px;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.site-item.active .site-sub-nav {
+    display: flex;
+}
+
+.sub-nav-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.sub-nav-btn i {
+    width: 16px;
+    text-align: center;
+    font-size: 0.8rem;
+}
+
+.sub-nav-btn:hover {
+    color: var(--primary-color);
+    background: rgba(19, 181, 234, 0.05);
+}
+
+.sub-nav-btn.active {
+    color: white;
+    background: var(--primary-color);
+    font-weight: 600;
 }
 
 .btn-link {

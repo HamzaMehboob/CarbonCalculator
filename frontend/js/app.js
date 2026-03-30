@@ -303,6 +303,39 @@ function setActiveTab(tabName) {
     }
 }
 
+function setActiveSubNav(subName) {
+    const subNavBtns = document.querySelectorAll('.sub-nav-btn');
+    const subContentSections = document.querySelectorAll('.sub-content-section');
+
+    // Remove active class from all buttons and sections
+    subNavBtns.forEach(b => b.classList.remove('active'));
+    subContentSections.forEach(c => {
+        c.style.display = 'none';
+        c.classList.remove('active');
+    });
+
+    // Add active class to target button
+    const targetBtn = document.querySelector(`.sub-nav-btn[data-sub="${subName}"]`);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    }
+
+    // Show target section
+    const targetSection = document.getElementById(`section-${subName}`);
+    if (targetSection) {
+        targetSection.style.display = 'block';
+        targetSection.classList.add('active');
+        
+        // Ensure Tabs Content is visible if Data Input is selected
+        const tabsContent = document.getElementById('tabsContent');
+        if (subName === 'data-input') {
+            tabsContent.style.display = 'block';
+        } else {
+            tabsContent.style.display = 'none';
+        }
+    }
+}
+
 function initializeTabs() {
     const tabBtns = document.querySelectorAll('.tab-btn');
     
@@ -312,10 +345,20 @@ function initializeTabs() {
             setActiveTab(tabName);
         });
     });
+
+    // Initialize Sub Nav Buttons
+    document.body.addEventListener('click', function(e) {
+        const subNavBtn = e.target.closest('.sub-nav-btn');
+        if (subNavBtn) {
+            const subName = subNavBtn.getAttribute('data-sub');
+            setActiveSubNav(subName);
+        }
+    });
 }
 
 // Expose tab switcher so sidebar circular buttons can use it
 window.setActiveTab = setActiveTab;
+window.setActiveSubNav = setActiveSubNav;
 
 // ============================================
 // SITE MANAGEMENT
@@ -370,9 +413,29 @@ function addSiteToList(siteId, siteName) {
     siteItem.className = 'site-item';
     siteItem.setAttribute('data-site-id', siteId);
     siteItem.innerHTML = `
-        <i class="fas fa-building"></i>
-        <input type="text" class="site-name-input" value="${siteName}" placeholder="Site name">
-        <button class="btn-delete"><i class="fas fa-times"></i></button>
+        <div class="site-main-item">
+            <i class="fas fa-building"></i>
+            <input type="text" class="site-name-input" value="${siteName}" placeholder="Site name">
+            <button class="btn-delete"><i class="fas fa-times"></i></button>
+        </div>
+        <!-- Site Sub-navigation -->
+        <div class="site-sub-nav">
+            <button class="sub-nav-btn active" data-sub="data-input">
+                <i class="fas fa-keyboard"></i> <span data-en="Data Input" data-pt="Entrada de Dados">Data Input</span>
+            </button>
+            <button class="sub-nav-btn" data-sub="general-info">
+                <i class="fas fa-info-circle"></i> <span data-en="General Info" data-pt="Informações Gerais">General Info</span>
+            </button>
+            <button class="sub-nav-btn" data-sub="assessment-scope">
+                <i class="fas fa-crosshairs"></i> <span data-en="Assessment Scope" data-pt="Escopo da Avaliação">Assessment Scope</span>
+            </button>
+            <button class="sub-nav-btn" data-sub="conversion-factors">
+                <i class="fas fa-database"></i> <span data-en="Conversion Factor" data-pt="Fator de Conversão">Conversion Factor</span>
+            </button>
+            <button class="sub-nav-btn" data-sub="input-emissions">
+                <i class="fas fa-cloud"></i> <span data-en="Input Emissions" data-pt="Emissões de Entrada">Input Emissions</span>
+            </button>
+        </div>
     `;
     
     // Handle site name editing
