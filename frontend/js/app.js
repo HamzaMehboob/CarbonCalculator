@@ -38,9 +38,10 @@ const appState = {
 // LOGIN & SIGNUP SYSTEM (MongoDB Integration)
 // ============================================
 
-// CHANGE THIS to your deployed Render URL once set up
-const API_BASE_URL = 'https://carbon-calculator-api-fe1o.onrender.com/api'; 
-// Use 'http://localhost:5000/api' for local testing
+// Render / local API. Streamlit sets window.__CARBON_API_BASE__ in app_integrated.py when embedded.
+const API_BASE_URL =
+    (typeof window !== 'undefined' && window.__CARBON_API_BASE__) ||
+    'https://carbon-calculator-api-fe1o.onrender.com/api';
 
 
 // Toggle between Login and Signup forms

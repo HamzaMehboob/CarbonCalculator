@@ -4,12 +4,15 @@ Serves both frontend (HTML/CSS/JS) and backend API
 Ready for Streamlit Cloud deployment
 """
 
+import json
+import urllib.error
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import pandas as pd
-import json
-from pathlib import Path
-from datetime import datetime
 
 # ============================================
 # PAGE CONFIG
@@ -33,8 +36,89 @@ def load_html():
         return html_file.read_text(encoding='utf-8')
     return "<h1>Error: Frontend files not found</h1>"
 
+
+def _resolve_api_base_url() -> str:
+    """Backend API for login/sync. Override with env API_BASE_URL or Streamlit secret API_BASE_URL."""
+    import os
+
+    raw = (os.environ.get("API_BASE_URL") or "").strip()
+    if not raw:
+        try:
+            if hasattr(st, "secrets") and "API_BASE_URL" in st.secrets:
+                raw = str(st.secrets["API_BASE_URL"]).strip()
+        except Exception:
+            raw = ""
+    if not raw:
+        return "https://carbon-calculator-api-fe1o.onrender.com/api"
+    raw = raw.rstrip("/")
+    if raw.endswith("/api"):
+        return raw
+    return f"{raw}/api"
+
+
+def _inject_streamlit_runtime_config(html_content: str) -> str:
+    """Expose API URL to inlined app.js (must run before any fetch in the iframe)."""
+    api = _resolve_api_base_url()
+    snippet = "<script>window.__CARBON_API_BASE__=" + json.dumps(api) + ";</script>"
+    if "<body>" in html_content:
+        return html_content.replace("<body>", "<body>" + snippet, 1)
+    return snippet + html_content
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_url_text(url: str) -> str:
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "CarbonCalculator-Streamlit/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8")
+
+
+def _inline_cdn_scripts_for_streamlit_iframe(html_content: str) -> str:
+    """
+    Streamlit Cloud serves components.html inside a sandboxed iframe where external
+    <script src="https://..."> loads are often blocked by CSP. Inline the same bundles
+    so Chart.js / jsPDF / SheetJS run like they do when opening index.html locally.
+    """
+    replacements = [
+        (
+            '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>',
+            "https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js",
+        ),
+        (
+            '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>',
+            "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+        ),
+        (
+            '<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>',
+            "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+        ),
+    ]
+    vendor_dir = Path(__file__).parent / "frontend" / "js" / "vendor"
+
+    for tag, url in replacements:
+        if tag not in html_content:
+            continue
+
+        fname = url.split("/")[-1]
+        local = vendor_dir / fname
+        try:
+            if local.exists():
+                body = local.read_text(encoding="utf-8")
+            else:
+                body = _fetch_url_text(url)
+        except (urllib.error.URLError, TimeoutError, OSError, UnicodeDecodeError) as e:
+            st.warning(f"⚠️ Could not inline {fname} ({e}). Charts/PDF/Excel may fail in this embed.")
+            continue
+        html_content = html_content.replace(tag, f"<script>\n{body}\n</script>", 1)
+
+    return html_content
+
+
 def inject_css_and_js(html_content):
     """Inject CSS and JavaScript into HTML"""
+    html_content = _inject_streamlit_runtime_config(html_content)
     css_file = Path(__file__).parent / "frontend" / "css" / "styles.css"
     
     js_files = [
@@ -52,6 +136,9 @@ def inject_css_and_js(html_content):
             '<link rel="stylesheet" href="css/styles.css">',
             f'<style>{css_content}</style>'
         )
+
+    # Inline third-party JS (Chart.js, jsPDF, xlsx) — required on many Streamlit hosts (CSP).
+    html_content = _inline_cdn_scripts_for_streamlit_iframe(html_content)
     
     # Load JavaScript files
     for js_file_path in js_files:
