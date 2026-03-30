@@ -68,6 +68,27 @@ def inject_css_and_js(html_content):
             # Log warning if file not found (useful for debugging)
             st.warning(f"⚠️ JavaScript file not found: {js_file_path}")
     
+    # Streamlit components don't automatically serve repo "assets/" files.
+    # Inline the logo so it always renders in production.
+    try:
+        logo_path = Path(__file__).parent / "frontend" / "assets" / "logo.png"
+        if logo_path.exists():
+            import base64
+
+            logo_b64 = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
+            data_uri = f"data:image/png;base64,{logo_b64}"
+
+            html_content = html_content.replace(
+                'src="assets/logo.png"',
+                f'src="{data_uri}"'
+            )
+            html_content = html_content.replace(
+                "src='assets/logo.png'",
+                f"src='{data_uri}'"
+            )
+    except Exception as e:
+        st.warning(f"⚠️ Failed to inline logo.png: {e}")
+
     return html_content
 
 # ============================================
