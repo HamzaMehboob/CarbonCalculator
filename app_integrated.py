@@ -108,7 +108,7 @@ def _inline_cdn_scripts_for_streamlit_iframe(html_content: str) -> str:
                 body = local.read_text(encoding="utf-8")
             else:
                 body = _fetch_url_text(url)
-        except (urllib.error.URLError, TimeoutError, OSError, UnicodeDecodeError) as e:
+        except Exception as e:
             st.warning(f"⚠️ Could not inline {fname} ({e}). Charts/PDF/Excel may fail in this embed.")
             continue
         html_content = html_content.replace(tag, f"<script>\n{body}\n</script>", 1)

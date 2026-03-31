@@ -9,7 +9,8 @@ font="sans serif"
 headless = true
 port = 8501
 enableCORS = false
-enableXsrfProtection = true
+# Match devcontainer / Streamlit Cloud embeds: avoids CORS being forced on when XSRF is on
+enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = false
