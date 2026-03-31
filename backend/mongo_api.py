@@ -154,7 +154,7 @@ def init_org_factors(organization_id: str):
 
 # Security
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'default-dev-key')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = datetime.timedelta(days=7)
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = datetime.timedelta(minutes=30)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 

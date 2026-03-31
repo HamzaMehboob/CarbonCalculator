@@ -43,6 +43,82 @@ const API_BASE_URL =
     (typeof window !== 'undefined' && window.__CARBON_API_BASE__) ||
     'https://carbon-calculator-api-fe1o.onrender.com/api';
 
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+const SESSION_EXPIRES_AT_KEY = 'sessionExpiresAt';
+const SESSION_LAST_ACTIVITY_KEY = 'sessionLastActivity';
+let sessionMonitorStarted = false;
+
+function clearAuthSession() {
+    appState.loggedIn = false;
+    localStorage.removeItem('loggedIn');
+    localStorage.removeItem('loginEmail');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem(SESSION_EXPIRES_AT_KEY);
+    localStorage.removeItem(SESSION_LAST_ACTIVITY_KEY);
+    // Clear site data (old single-user key + new org-scoped keys)
+    localStorage.removeItem('carbonCalcSites');
+    const orgId = localStorage.getItem('organizationId') || 'default';
+    localStorage.removeItem(`carbonCalcSites_${orgId}`);
+    localStorage.removeItem('organizationId');
+    localStorage.removeItem('organizationName');
+    localStorage.removeItem('userName');
+}
+
+function touchSession() {
+    if (!appState.loggedIn || !localStorage.getItem('authToken')) return;
+    const now = Date.now();
+    localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(now));
+    localStorage.setItem(SESSION_EXPIRES_AT_KEY, String(now + SESSION_TIMEOUT_MS));
+}
+
+function isSessionExpired() {
+    const expiresAtRaw = localStorage.getItem(SESSION_EXPIRES_AT_KEY);
+    if (!expiresAtRaw) return false;
+    const expiresAt = parseInt(expiresAtRaw, 10);
+    if (Number.isNaN(expiresAt)) return false;
+    return Date.now() > expiresAt;
+}
+
+function forceLogoutForExpiredSession(showMessage = true) {
+    clearAuthSession();
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+    if (loginScreen) loginScreen.style.display = 'flex';
+    if (mainApp) mainApp.style.display = 'none';
+    if (showMessage) {
+        alert('Your session has expired after 30 minutes. Please login again.');
+    }
+}
+
+function getActiveAuthToken() {
+    const token = localStorage.getItem('authToken');
+    if (!token) return null;
+    if (isSessionExpired()) {
+        forceLogoutForExpiredSession(true);
+        return null;
+    }
+    touchSession();
+    return token;
+}
+
+function startSessionMonitor() {
+    if (sessionMonitorStarted) return;
+    sessionMonitorStarted = true;
+
+    const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+    activityEvents.forEach(evt => {
+        document.addEventListener(evt, () => {
+            if (appState.loggedIn) touchSession();
+        }, { passive: true });
+    });
+
+    setInterval(() => {
+        if (appState.loggedIn && isSessionExpired()) {
+            forceLogoutForExpiredSession(true);
+        }
+    }, 60000);
+}
+
 
 // Toggle between Login and Signup forms
 document.getElementById('showSignup')?.addEventListener('click', function(e) {
@@ -81,6 +157,8 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             localStorage.setItem('loggedIn', 'true');
             localStorage.setItem('loginEmail', email);
             localStorage.setItem('authToken', data.access_token);
+            touchSession();
+            startSessionMonitor();
             
             if (data.user) {
                 localStorage.setItem('userName', data.user.full_name || '');
@@ -157,13 +235,17 @@ document.getElementById('signupForm')?.addEventListener('submit', async function
 
 // BACKEND DATA PERSISTENCE
 async function loadUserDataFromBackend() {
-    const token = localStorage.getItem('authToken');
+    const token = getActiveAuthToken();
     if (!token) return;
     
     try {
         const response = await fetch(`${API_BASE_URL}/data`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (response.status === 401) {
+            forceLogoutForExpiredSession(true);
+            return;
+        }
         
         if (response.ok) {
             const data = await response.json();
@@ -193,6 +275,10 @@ async function loadUserDataFromBackend() {
         const factorsRes = await fetch(`${API_BASE_URL}/factors`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (factorsRes.status === 401) {
+            forceLogoutForExpiredSession(true);
+            return;
+        }
         if (factorsRes.ok) {
             const factorsData = await factorsRes.json();
             if (Array.isArray(factorsData) && factorsData.length > 0) {
@@ -214,11 +300,11 @@ async function loadUserDataFromBackend() {
 async function saveUserDataToBackend() {
     if (!appState.loggedIn) return;
     
-    const token = localStorage.getItem('authToken');
+    const token = getActiveAuthToken();
     if (!token) return;
     
     try {
-        await fetch(`${API_BASE_URL}/data`, {
+        const response = await fetch(`${API_BASE_URL}/data`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -226,6 +312,9 @@ async function saveUserDataToBackend() {
             },
             body: JSON.stringify({ sites: appState.sites })
         });
+        if (response.status === 401) {
+            forceLogoutForExpiredSession(true);
+        }
     } catch (err) {
         console.error('Error saving data to backend:', err);
     }
@@ -234,17 +323,7 @@ async function saveUserDataToBackend() {
 // LOGOUT
 document.getElementById('logoutBtn')?.addEventListener('click', function() {
     if (confirm(appState.currentLanguage === 'en' ? 'Are you sure you want to logout?' : 'Tem certeza que deseja sair?')) {
-        appState.loggedIn = false;
-        localStorage.removeItem('loggedIn');
-        localStorage.removeItem('loginEmail');
-        localStorage.removeItem('authToken');
-        // Clear site data (old single-user key + new org-scoped keys)
-        localStorage.removeItem('carbonCalcSites');
-        const orgId = localStorage.getItem('organizationId') || 'default';
-        localStorage.removeItem(`carbonCalcSites_${orgId}`);
-        localStorage.removeItem('organizationId');
-        localStorage.removeItem('organizationName');
-        localStorage.removeItem('userName');
+        clearAuthSession();
         
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('mainApp').style.display = 'none';
@@ -1572,10 +1651,17 @@ window.addEventListener('DOMContentLoaded', function() {
     // Check if user was previously logged in
     const wasLoggedIn = localStorage.getItem('loggedIn') === 'true';
     const savedEmail = localStorage.getItem('loginEmail');
+    const token = localStorage.getItem('authToken');
     
-    if (wasLoggedIn && savedEmail) {
+    if (wasLoggedIn && savedEmail && token) {
+        if (isSessionExpired()) {
+            forceLogoutForExpiredSession(false);
+            return;
+        }
         // Auto-login: set state and sync
         appState.loggedIn = true;
+        touchSession();
+        startSessionMonitor();
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainApp').style.display = 'flex';
         if (document.getElementById('loginEmail')) {
