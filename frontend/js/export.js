@@ -817,7 +817,8 @@ function printConversionFactorsReportPDF() {
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     const left = 20;
-    const colKeyX = 20;
+    const colIdxX = left + 2;
+    const colKeyX = left + 16;
     const colValX = 110;
     const colUnitX = 160;
 
@@ -845,7 +846,7 @@ function printConversionFactorsReportPDF() {
         const unit = unitByKey(k);
 
         doc.setTextColor(0, 0, 0);
-        doc.text(String(idx + 1).padStart(2, '0'), left, yPos);
+        doc.text(String(idx + 1).padStart(2, '0'), colIdxX, yPos);
         doc.text(name, colKeyX, yPos);
         doc.text(Number(value).toFixed(6).replace(/\.?0+$/, ''), colValX, yPos);
         if (unit) {
