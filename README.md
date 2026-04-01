@@ -51,7 +51,7 @@ Phase 1 Carbon Calculator is a comprehensive web-based application for tracking 
 - ✅ **Real-time Calculations** - Instant CO₂e calculations as you type
 - ✅ **Official Conversion Factors** - UK 2025 & Brazil latest data
 - ✅ **Live Dashboard** - Interactive charts, financial widgets, customizable
-- ✅ **PDF & Excel Export** - One-click professional reports
+- ✅ **PDF, Excel & Final DOCX Export** - One-click professional reports
 - ✅ **Bilingual** - English/Portuguese language toggle
 - ✅ **Dark Mode** - Eye-friendly interface option
 - ✅ **User Authentication** - Simple login system
@@ -160,6 +160,14 @@ Eye-friendly interface:
 - Smooth transitions
 - Preserves preference
 - Professional appearance
+
+### 7️⃣ Theme Palette
+
+The app now uses a specific ocean/slate palette via CSS variables in `frontend/css/styles.css`:
+
+- Light mode: `#0EA5E9` primary, `#0369A1` hover, slate neutrals
+- Dark mode: `#38BDF8` primary, slate backgrounds for contrast
+- Login gradient aligned to brand tones (`#0EA5E9` → `#1D4ED8`)
 
 ---
 
@@ -327,13 +335,13 @@ Professional PDF and Excel reports ready for stakeholders.
 ## 🔄 Data Management
 
 ### Auto-save
-- Data saves automatically every 30 seconds
+- Data saves automatically every 5 seconds
 - Also saves when switching sites
 - And when closing browser
 
 ### Local Storage
 - All data stored in browser
-- No server uploads (Phase 1)
+- Plus backend sync when logged in (JWT + API)
 - Export regularly for backup
 
 ### Data Persistence
@@ -418,13 +426,15 @@ Compatible with:
 
 ## 🚀 Future Phases
 
-### Phase 2 (Planned)
-- ☐ Cloud storage with database
-- ☐ Real user authentication
+### Phase 2 (In progress)
+- ☑ Cloud persistence: MongoDB + Flask API (`backend/mongo_api.py`) when configured
+- ☑ User authentication: signup/login with JWT (set a strong `JWT_SECRET_KEY` in production)
 - ☐ Team collaboration features
 - ☐ Advanced analytics
-- ☐ Custom conversion factors
+- ☐ Custom conversion factors (UI beyond API override)
 - ☐ Mobile responsive improvements
+
+**Final Word report:** requires the template file `requirements/Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx` on the server; without it, the API returns an error (see `backend/tests/test_final_report_docx.py`).
 
 ### Phase 3 (Planned)
 - ☐ API integrations (Xero, SAP, Oracle)
@@ -435,6 +445,24 @@ Compatible with:
 - ☐ Multi-company management
 
 ---
+
+## ✅ Requirements Checklist (`requirements/ThingsToDo.txt`)
+
+| Requirement | Status | Notes |
+|-------------|--------|-------|
+| Login/password for organisations | ✅ Done | Signup/login implemented in frontend + `backend/mongo_api.py` |
+| Update colours using provided colours/logo | ✅ Done | Specific palette applied and logo upload/use is supported in reports |
+| Print conversion factors report (annual source) | ✅ Done | Conversion factors PDF report available from export tools |
+| Create `General Info` tab/button | ✅ Done | Present in UI and persisted |
+| Create `Assessment Scope` tab/button | ✅ Done | Present in UI and persisted |
+| Update dashboard per `2024 Results Graphs` | ✅ Done | Year comparison logic and dashboard widgets are aligned to the requested results view |
+| `CONVERSION FACTOR` options per section | ✅ Done | Per-category factor options and report output implemented |
+| `DATA INPUT` raw input report | ✅ Done | Input Data Summary PDF implemented |
+| `INPUT EMISSIONS` report | ✅ Done | Carbon Emissions report implemented |
+| Company logo in dashboard print + final report | ✅ Done | Logo upload used in exports and final DOCX payload |
+| Final report from Word template with yellow/blue mappings | ✅ Done* | Implemented in backend; requires Word template file in `requirements/` at runtime |
+
+`*` If template file is missing in an environment, final DOCX generation returns a template-not-found error.
 
 ## 📞 Support
 

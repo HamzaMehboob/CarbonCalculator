@@ -1,0 +1,12 @@
+DONE - Login/password for organisations
+DONE - Update the colours of the tool using a specific palette and keep logo support
+DONE - Print report of the carbon conversion factors used as per tab "1 Conversion Factor UK SQ" (annual factors are data-driven)
+DONE - Create tabs below:
+DONE - General Info button/tab
+DONE - Assessment Scope button/tab
+DONE - Update Dashboard information to reflect "2024 Results Graphs" behavior (year comparison and related widgets)
+DONE - CONVERSION FACTOR button with options per section (energy, water, transport, etc.)
+DONE - DATA INPUT button/report as per "2 Input data Summary SQ" (raw input data)
+DONE - INPUT EMISSIONS button/report as per "1x2 Carbon Emissions KgCO2e SQ"
+DONE - Option for each company to attach their logo for dashboard print and final report
+DONE - Final report from attached Word template with yellow-field mapping and spreadsheet-referenced values

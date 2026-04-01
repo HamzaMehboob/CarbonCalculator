@@ -13,11 +13,11 @@ let accountSummaryChart = null;
 // Generate colors for year bars dynamically
 function generateYearColors(count) {
     const colorPalette = [
-        '#6C757D',  // Gray
-        '#13B5EA',  // Blue
-        '#28A745',  // Green
-        '#FFC107',  // Yellow
-        '#DC3545',  // Red
+        '#64748B',  // Slate
+        '#0EA5E9',  // Sky
+        '#16A34A',  // Green
+        '#F59E0B',  // Amber
+        '#DC2626',  // Red
         '#6610F2',  // Purple
         '#FD7E14',  // Orange
         '#20C997',  // Teal
@@ -136,10 +136,10 @@ function updateKPIs() {
     if (changeElement && previousYear && previousYearValue > 0) {
         const changeText = changePercent > 0 ? `+${changePercent.toFixed(1)}%` : `${changePercent.toFixed(1)}%`;
         changeElement.textContent = changeText;
-        changeElement.style.color = changePercent > 0 ? '#DC3545' : '#28A745';
+        changeElement.style.color = changePercent > 0 ? '#DC2626' : '#16A34A';
     } else if (changeElement) {
         changeElement.textContent = 'N/A';
-        changeElement.style.color = '#6C757D';
+        changeElement.style.color = '#64748B';
     }
     
     // Update current year label
@@ -208,14 +208,14 @@ function updatePieChart() {
             datasets: [{
                 data: data,
                 backgroundColor: [
-                    '#13B5EA',  // Water
-                    '#FFC107',  // Energy
-                    '#28A745',  // Waste
-                    '#DC3545',  // Transport
-                    '#6C757D'   // Refrigerants
+                    '#0EA5E9',  // Water
+                    '#F59E0B',  // Energy
+                    '#16A34A',  // Waste
+                    '#DC2626',  // Transport
+                    '#64748B'   // Refrigerants
                 ],
                 borderWidth: 2,
-                borderColor: appState.darkMode ? '#23272F' : '#FFFFFF'
+                borderColor: appState.darkMode ? '#0F172A' : '#FFFFFF'
             }]
         },
         options: {
@@ -225,7 +225,7 @@ function updatePieChart() {
                 legend: {
                     position: 'bottom',
                     labels: {
-                        color: appState.darkMode ? '#E8EAED' : '#2C3E50',
+                        color: appState.darkMode ? '#E2E8F0' : '#0F172A',
                         padding: 15,
                         font: {
                             size: 12
@@ -353,20 +353,20 @@ function updateBarChart() {
                     beginAtZero: true,
                     position: 'left',
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         callback: function(value) {
                             return value.toFixed(1);
                         }
                     },
                     grid: {
-                        color: appState.darkMode ? '#3A3F47' : '#DEE2E6',
+                        color: appState.darkMode ? '#1E293B' : '#CBD5E1',
                         drawBorder: false
                     }
                 },
                 x: {
                     position: 'bottom',
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         maxRotation: 0,
                         minRotation: 0
                     },
@@ -415,14 +415,14 @@ function updateLineChart() {
             datasets: [{
                 label: appState.currentLanguage === 'en' ? 'Monthly Emissions (tCO₂e)' : 'Emissões Mensais (tCO₂e)',
                 data: monthlyData,
-                borderColor: '#13B5EA',
-                backgroundColor: 'rgba(19, 181, 234, 0.1)',
+                borderColor: '#0EA5E9',
+                backgroundColor: 'rgba(14, 165, 233, 0.1)',
                 borderWidth: 3,
                 fill: true,
                 tension: 0.4,
                 pointRadius: 5,
                 pointHoverRadius: 7,
-                pointBackgroundColor: '#13B5EA',
+                pointBackgroundColor: '#0EA5E9',
                 pointBorderColor: '#FFFFFF',
                 pointBorderWidth: 2
             }]
@@ -434,21 +434,21 @@ function updateLineChart() {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         callback: function(value) {
                             return value.toFixed(2);
                         }
                     },
                     grid: {
-                        color: appState.darkMode ? '#3A3F47' : '#DEE2E6'
+                        color: appState.darkMode ? '#1E293B' : '#CBD5E1'
                     }
                 },
                 x: {
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D'
+                        color: appState.darkMode ? '#94A3B8' : '#64748B'
                     },
                     grid: {
-                        color: appState.darkMode ? '#3A3F47' : '#DEE2E6'
+                        color: appState.darkMode ? '#1E293B' : '#CBD5E1'
                     }
                 }
             },
@@ -635,8 +635,8 @@ function updateBankReconciliationChart() {
                 {
                     label: appState.currentLanguage === 'en' ? 'Bank Balance' : 'Saldo Bancário',
                     data: bankBalance,
-                    borderColor: '#13B5EA',
-                    backgroundColor: 'rgba(19, 181, 234, 0.1)',
+                    borderColor: '#0EA5E9',
+                    backgroundColor: 'rgba(14, 165, 233, 0.1)',
                     borderWidth: 2,
                     fill: true,
                     tension: 0.4,
@@ -645,8 +645,8 @@ function updateBankReconciliationChart() {
                 {
                     label: appState.currentLanguage === 'en' ? 'Cash In' : 'Entrada',
                     data: cashIn,
-                    borderColor: '#28A745',
-                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderColor: '#16A34A',
+                    backgroundColor: 'rgba(22, 163, 74, 0.1)',
                     borderWidth: 2,
                     fill: false,
                     tension: 0.4,
@@ -655,8 +655,8 @@ function updateBankReconciliationChart() {
                 {
                     label: appState.currentLanguage === 'en' ? 'Cash Out' : 'Saída',
                     data: cashOut,
-                    borderColor: '#DC3545',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    borderColor: '#DC2626',
+                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
                     borderWidth: 2,
                     fill: false,
                     tension: 0.4,
@@ -677,13 +677,13 @@ function updateBankReconciliationChart() {
                     display: true,
                     position: 'left',
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         callback: function(value) {
                             return '$' + value.toFixed(2);
                         }
                     },
                     grid: {
-                        color: appState.darkMode ? '#3A3F47' : '#DEE2E6'
+                        color: appState.darkMode ? '#1E293B' : '#CBD5E1'
                     }
                 },
                 y1: {
@@ -691,7 +691,7 @@ function updateBankReconciliationChart() {
                     display: true,
                     position: 'right',
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         callback: function(value) {
                             return '$' + value.toFixed(2);
                         }
@@ -702,12 +702,12 @@ function updateBankReconciliationChart() {
                 },
                 x: {
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         maxRotation: 45,
                         minRotation: 45
                     },
                     grid: {
-                        color: appState.darkMode ? '#3A3F47' : '#DEE2E6'
+                        color: appState.darkMode ? '#1E293B' : '#CBD5E1'
                     }
                 }
             },
@@ -716,7 +716,7 @@ function updateBankReconciliationChart() {
                     display: true,
                     position: 'top',
                     labels: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D'
+                        color: appState.darkMode ? '#94A3B8' : '#64748B'
                     }
                 },
                 tooltip: {
@@ -760,7 +760,7 @@ function updateCashFlowChart() {
                     site.financials.cashIn || 0,
                     site.financials.cashOut || 0
                 ],
-                backgroundColor: ['#28A745', '#DC3545'],
+                backgroundColor: ['#16A34A', '#DC2626'],
                 borderWidth: 2,
                 borderColor: appState.darkMode ? '#1E1E1E' : '#FFFFFF'
             }]
@@ -772,7 +772,7 @@ function updateCashFlowChart() {
                 legend: {
                     position: 'bottom',
                     labels: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         padding: 15
                     }
                 },
@@ -830,7 +830,7 @@ function updateAccountSummaryChart() {
             datasets: [{
                 label: appState.currentLanguage === 'en' ? 'Amount ($)' : 'Valor ($)',
                 data: data,
-                backgroundColor: ['#13B5EA', '#28A745', '#FFC107', '#DC3545'],
+                backgroundColor: ['#0EA5E9', '#16A34A', '#F59E0B', '#DC2626'],
                 borderRadius: 8
             }]
         },
@@ -841,18 +841,18 @@ function updateAccountSummaryChart() {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D',
+                        color: appState.darkMode ? '#94A3B8' : '#64748B',
                         callback: function(value) {
                             return '$' + value.toFixed(2);
                         }
                     },
                     grid: {
-                        color: appState.darkMode ? '#3A3F47' : '#DEE2E6'
+                        color: appState.darkMode ? '#1E293B' : '#CBD5E1'
                     }
                 },
                 x: {
                     ticks: {
-                        color: appState.darkMode ? '#9AA0A6' : '#6C757D'
+                        color: appState.darkMode ? '#94A3B8' : '#64748B'
                     },
                     grid: {
                         display: false

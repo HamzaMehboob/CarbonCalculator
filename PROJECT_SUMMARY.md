@@ -22,7 +22,7 @@
 - ✅ `js/app.js` - Core application logic
 - ✅ `js/calculations.js` - Emissions calculation engine
 - ✅ `js/dashboard.js` - Real-time charts and analytics
-- ✅ `js/export.js` - PDF and Excel export functionality
+- ✅ `js/export.js` - PDF, Excel, and final Word (DOCX) export
 
 ### ✅ Backend (Streamlit & Flask)
 - ✅ `backend/app.py` - Streamlit API for conversion factors
@@ -76,6 +76,7 @@
 ### ✅ 5. Export Functionality
 - ✅ PDF export - One click, professional report
 - ✅ Excel export - Multiple sheets with data
+- ✅ Final Word report (DOCX) - From Selby ECO AUDIT template + live totals
 - ✅ Includes all categories
 - ✅ Formatted and ready to share
 
@@ -97,6 +98,7 @@
 - ✅ Smooth transitions
 - ✅ Professional appearance
 - ✅ Preference saved
+- ✅ Updated ocean/slate color palette applied across the tool
 
 ### ✅ 9. User Authentication (Secure)
 - ✅ Email + Password signup and login
@@ -104,10 +106,10 @@
 - ✅ JWT (JSON Web Tokens) session management
 - ✅ Password hashing with Bcrypt
 - ✅ Multi-user isolation (One email per user)
-- ✅ Auto-sync with cloud database每 60 秒
+- ✅ Auto-sync with cloud database every 5 seconds when logged in (with local save)
 
 ### ✅ 10. Additional Features (Bonus)
-- ✅ Auto-save every 30 seconds
+- ✅ Auto-save every 5 seconds (localStorage + backend when logged in)
 - ✅ LocalStorage persistence
 - ✅ Responsive design
 - ✅ Browser compatibility
@@ -297,7 +299,7 @@ Password: admin123
 - **Dashboard Render:** < 500ms
 - **PDF Export:** < 2 seconds
 - **Excel Export:** < 1 second
-- **Data Persistence:** Auto-save every 30s
+- **Data Persistence:** Auto-save every 5s (logged-in users also sync to the API)
 
 ---
 
@@ -314,20 +316,41 @@ Password: admin123
 | Year comparison | ✅ Complete | 2024 vs 2025 |
 | PDF export | ✅ Complete | One-click professional |
 | Excel export | ✅ Complete | Multi-sheet workbook |
+| Final Word report (DOCX) | ✅ Complete | Selby-style template; file in `requirements/` |
 | Multi-site support | ✅ Complete | Unlimited sites |
 | Language toggle | ✅ Complete | EN ↔️ PT |
 | Dark mode | ✅ Complete | Smooth transition |
 | User login | ✅ Complete | Email + password |
 | Company branding | ✅ Complete | Name + notes |
 
-**Success Rate: 14/14 = 100%** ✅
+**Success Rate: 15/15 = 100%** ✅
+
+---
+
+## 📌 Requirements Checklist (ThingsToDo.txt)
+
+| Requirement | Status | Detail |
+|-------------|--------|--------|
+| Login/password for organisations | ✅ Complete | Organization signup/login with JWT |
+| Update colours + logo use | ✅ Complete | Specific palette applied; logo upload/use supported in reports |
+| Print conversion factors report | ✅ Complete | Conversion Factors report export is available |
+| General Info button/tab | ✅ Complete | Implemented and persisted |
+| Assessment Scope button/tab | ✅ Complete | Implemented and persisted |
+| Dashboard aligned to "2024 Results Graphs" | ✅ Complete | Year comparison and charting behavior aligned to requested results view |
+| CONVERSION FACTOR options by section | ✅ Complete | Category-level factor options + reporting |
+| DATA INPUT raw report | ✅ Complete | Input Data Summary output available |
+| INPUT EMISSIONS report | ✅ Complete | Carbon Emissions report output available |
+| Company logo in dashboard/final report | ✅ Complete | Logo flows into print/export and DOCX final report |
+| Final report from Word template w/ mappings | ✅ Complete* | Yellow-index mapping + narrative overrides in backend |
+
+`*` Runtime dependency: requires template file at `requirements/Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx`.
 
 ---
 
 ## 💡 Innovation Highlights
 
 ### Beyond Requirements:
-1. **Auto-save** - Data never lost
+1. **Auto-save** - Frequent local + cloud sync when logged in
 2. **LocalStorage** - Works offline
 3. **Notifications** - User feedback
 4. **GHG Scopes** - Protocol classification
@@ -420,7 +443,7 @@ All requested features have been implemented:
 - ✅ Monthly tables with automatic calculations
 - ✅ Official UK & Brazil conversion factors
 - ✅ Live dashboard with charts
-- ✅ PDF and Excel export
+- ✅ PDF, Excel, and final Word (DOCX) export
 - ✅ Multi-site support
 - ✅ Language toggle (EN/PT)
 - ✅ Dark mode
@@ -442,7 +465,7 @@ All requested features have been implemented:
 | Conversion Factors | 50+ |
 | Countries Supported | 2 |
 | Languages Supported | 2 |
-| Export Formats | 2 |
+| Export Formats | 3 (PDF, Excel, DOCX) |
 | Chart Types | 6 |
 | Development Time | 2 phases |
 | Requirements Met | 100% |
