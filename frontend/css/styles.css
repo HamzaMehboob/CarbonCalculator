@@ -212,11 +212,6 @@ body {
     text-align: center;
 }
 
-.site-item.active {
-    background: rgba(19, 181, 234, 0.1);
-    color: var(--primary-color);
-}
-
 .site-main-item {
     display: flex;
     align-items: center;
@@ -267,6 +262,22 @@ body {
 .sub-nav-btn.active {
     color: white;
     background: var(--primary-color);
+    font-weight: 600;
+}
+
+/* Active building uses primary as row background — sub-nav must stay readable */
+.site-item.active .sub-nav-btn {
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.site-item.active .sub-nav-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.site-item.active .sub-nav-btn.active {
+    color: #ffffff;
+    background: rgba(0, 0, 0, 0.28);
     font-weight: 600;
 }
 

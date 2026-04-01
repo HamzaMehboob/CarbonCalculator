@@ -4,6 +4,10 @@
 (function () {
     const STORAGE_KEY = 'carbonColorPalette';
     const DEFAULT_ID = 'ocean';
+    /** Display order: Ocean first (default selection for new users). */
+    const PALETTE_ORDER = [
+        'ocean', 'forest', 'sunset', 'royal', 'graphite', 'midnight', 'aurora'
+    ];
 
     function chartDefaults(primary, secondary, success, danger, warning, pieBorderLight, pieBorderDark, tickL, tickD, gridL, gridD, legL, legD) {
         return {
@@ -233,7 +237,7 @@
                 '--bg-sidebar': '#1E293B',
                 '--bg-header': '#FFFFFF',
                 '--text-primary': '#0F172A',
-                '--text-secondary': '#475569',
+                '--text-secondary': '#64748B',
                 '--text-light': '#94A3B8',
                 '--text-sidebar': '#F8FAFC',
                 '--border-color': '#CBD5E1',
@@ -262,16 +266,112 @@
                 '#FFFFFF', '#1E293B',
                 '#64748B', '#94A3B8', '#CBD5E1', '#334155', '#0F172A', '#F1F5F9'
             )
+        },
+        /** Dark-first: deep blue / cyan (use with dark mode). */
+        midnight: {
+            label: { en: 'Midnight', pt: 'Meia-noite' },
+            light: {
+                '--primary-color': '#0F766E',
+                '--primary-dark': '#115E59',
+                '--secondary-color': '#64748B',
+                '--success-color': '#059669',
+                '--danger-color': '#DC2626',
+                '--warning-color': '#F59E0B',
+                '--bg-main': '#F8FAFC',
+                '--bg-card': '#FFFFFF',
+                '--bg-sidebar': '#134E4A',
+                '--bg-header': '#FFFFFF',
+                '--text-primary': '#0F172A',
+                '--text-secondary': '#475569',
+                '--text-light': '#94A3B8',
+                '--text-sidebar': '#ECFEFF',
+                '--border-color': '#CBD5E1',
+                '--login-gradient': 'linear-gradient(135deg, #0D9488 0%, #134E4A 100%)'
+            },
+            dark: {
+                '--primary-color': '#2DD4BF',
+                '--primary-dark': '#14B8A6',
+                '--secondary-color': '#94A3B8',
+                '--success-color': '#34D399',
+                '--danger-color': '#F87171',
+                '--warning-color': '#FBBF24',
+                '--bg-main': '#020617',
+                '--bg-card': '#0F172A',
+                '--bg-sidebar': '#020617',
+                '--bg-header': '#0B1220',
+                '--text-primary': '#F1F5F9',
+                '--text-secondary': '#94A3B8',
+                '--text-light': '#64748B',
+                '--text-sidebar': '#ECFEFF',
+                '--border-color': '#1E293B',
+                '--login-gradient': 'linear-gradient(135deg, #0F766E 0%, #020617 100%)'
+            },
+            charts: chartDefaults(
+                '#2DD4BF', '#64748B', '#34D399', '#F87171', '#FBBF24',
+                '#FFFFFF', '#0F172A',
+                '#64748B', '#94A3B8', '#334155', '#1E293B', '#F1F5F9', '#E2E8F0'
+            )
+        },
+        /** Dark-first: violet / pink glow (use with dark mode). */
+        aurora: {
+            label: { en: 'Aurora', pt: 'Aurora' },
+            light: {
+                '--primary-color': '#7C3AED',
+                '--primary-dark': '#5B21B6',
+                '--secondary-color': '#64748B',
+                '--success-color': '#10B981',
+                '--danger-color': '#E11D48',
+                '--warning-color': '#F59E0B',
+                '--bg-main': '#FAF5FF',
+                '--bg-card': '#FFFFFF',
+                '--bg-sidebar': '#4C1D95',
+                '--bg-header': '#FFFFFF',
+                '--text-primary': '#1E1B4B',
+                '--text-secondary': '#5B21B6',
+                '--text-light': '#A78BFA',
+                '--text-sidebar': '#F5F3FF',
+                '--border-color': '#DDD6FE',
+                '--login-gradient': 'linear-gradient(135deg, #7C3AED 0%, #DB2777 100%)'
+            },
+            dark: {
+                '--primary-color': '#C084FC',
+                '--primary-dark': '#A855F7',
+                '--secondary-color': '#94A3B8',
+                '--success-color': '#34D399',
+                '--danger-color': '#FB7185',
+                '--warning-color': '#FBBF24',
+                '--bg-main': '#0F0720',
+                '--bg-card': '#1E1033',
+                '--bg-sidebar': '#0B0414',
+                '--bg-header': '#1E1033',
+                '--text-primary': '#F3E8FF',
+                '--text-secondary': '#D8B4FE',
+                '--text-light': '#A78BFA',
+                '--text-sidebar': '#FAF5FF',
+                '--border-color': '#4C1D95',
+                '--login-gradient': 'linear-gradient(135deg, #6B21A8 0%, #0F0720 100%)'
+            },
+            charts: chartDefaults(
+                '#C084FC', '#94A3B8', '#34D399', '#FB7185', '#FBBF24',
+                '#FFFFFF', '#1E1033',
+                '#94A3B8', '#CBD5E1', '#4C1D95', '#581C87', '#1E1033', '#F3E8FF'
+            )
         }
     };
+
+    function normalizePaletteId(id) {
+        const raw = (id || '').trim();
+        if (raw && PALETTES[raw]) return raw;
+        return DEFAULT_ID;
+    }
 
     function isDarkModeForPalette() {
         return document.documentElement.getAttribute('data-theme') === 'dark';
     }
 
     function getCarbonChartColors() {
-        const id = localStorage.getItem(STORAGE_KEY) || DEFAULT_ID;
-        const pal = PALETTES[id] || PALETTES[DEFAULT_ID];
+        const id = normalizePaletteId(localStorage.getItem(STORAGE_KEY));
+        const pal = PALETTES[id];
         const c = pal.charts;
         const dark = isDarkModeForPalette();
         return {
@@ -294,8 +394,8 @@
     }
 
     function applyCarbonPalette(paletteId) {
-        const id = paletteId || localStorage.getItem(STORAGE_KEY) || DEFAULT_ID;
-        const pal = PALETTES[id] || PALETTES[DEFAULT_ID];
+        const id = normalizePaletteId(paletteId || localStorage.getItem(STORAGE_KEY));
+        const pal = PALETTES[id];
         localStorage.setItem(STORAGE_KEY, id);
 
         const vars = isDarkModeForPalette() ? pal.dark : pal.light;
@@ -347,7 +447,8 @@
         if (!sel || paletteUiInitialized) return;
         paletteUiInitialized = true;
 
-        Object.keys(PALETTES).forEach(function (key) {
+        PALETTE_ORDER.forEach(function (key) {
+            if (!PALETTES[key]) return;
             const opt = document.createElement('option');
             opt.value = key;
             const lang = (typeof appState !== 'undefined' && appState.currentLanguage) ? appState.currentLanguage : 'en';
@@ -355,7 +456,9 @@
             sel.appendChild(opt);
         });
 
-        sel.value = localStorage.getItem(STORAGE_KEY) || DEFAULT_ID;
+        const stored = normalizePaletteId(localStorage.getItem(STORAGE_KEY));
+        localStorage.setItem(STORAGE_KEY, stored);
+        sel.value = stored;
         sel.addEventListener('change', function () {
             applyCarbonPalette(sel.value);
         });

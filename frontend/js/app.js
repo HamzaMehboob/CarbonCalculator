@@ -264,6 +264,7 @@ async function loadUserDataFromBackend() {
                     }
                 };
                 saveSitesToLocalStorage(); // Sync with local cache
+                rebuildSitesUIFromState();
             }
         }
     } catch (err) {
@@ -321,18 +322,25 @@ async function saveUserDataToBackend() {
 }
 
 // LOGOUT
-document.getElementById('logoutBtn')?.addEventListener('click', function() {
-    if (confirm(appState.currentLanguage === 'en' ? 'Are you sure you want to logout?' : 'Tem certeza que deseja sair?')) {
-        clearAuthSession();
-        
-        document.getElementById('loginScreen').style.display = 'flex';
-        document.getElementById('mainApp').style.display = 'none';
-        
-        // Reset inputs
-        document.getElementById('loginPassword').value = '';
-        if (document.getElementById('signupPassword')) document.getElementById('signupPassword').value = '';
-        if (document.getElementById('signupConfirmPassword')) document.getElementById('signupConfirmPassword').value = '';
+document.getElementById('logoutBtn')?.addEventListener('click', async function() {
+    if (!confirm(appState.currentLanguage === 'en' ? 'Are you sure you want to logout?' : 'Tem certeza que deseja sair?')) {
+        return;
     }
+    try {
+        if (appState.loggedIn) {
+            await saveUserDataToBackend();
+        }
+    } catch (err) {
+        console.error('Final sync before logout failed:', err);
+    }
+    clearAuthSession();
+
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'none';
+
+    document.getElementById('loginPassword').value = '';
+    if (document.getElementById('signupPassword')) document.getElementById('signupPassword').value = '';
+    if (document.getElementById('signupConfirmPassword')) document.getElementById('signupConfirmPassword').value = '';
 });
 
 // ============================================
@@ -494,6 +502,7 @@ document.getElementById('addSiteBtn')?.addEventListener('click', function() {
         addSiteToList(siteId, siteName.trim());
         switchSite(siteId);
         saveSitesToLocalStorage();
+        saveUserDataToBackend();
     }
 });
 
@@ -601,7 +610,8 @@ function deleteSite(siteId, element) {
         delete appState.sites[siteId];
         element.remove();
         saveSitesToLocalStorage();
-        
+        saveUserDataToBackend();
+
         if (appState.currentSite === siteId) {
             const firstSiteId = Object.keys(appState.sites)[0];
             switchSite(firstSiteId);
@@ -828,24 +838,50 @@ function saveSitesToLocalStorage() {
     localStorage.setItem(`carbonCalcSites_${orgId}`, JSON.stringify(appState.sites));
 }
 
+/** Rebuild sidebar sites list from `appState.sites` (e.g. after Mongo load). */
+function rebuildSitesUIFromState() {
+    const sitesList = document.getElementById('sitesList');
+    if (!sitesList || !appState.sites) return;
+
+    const previousCurrent = appState.currentSite;
+    sitesList.innerHTML = '';
+
+    Object.keys(appState.sites).forEach(siteId => {
+        const site = appState.sites[siteId];
+        if (!site) return;
+        addSiteToList(siteId, site.name || 'Site');
+    });
+
+    const keys = Object.keys(appState.sites);
+    if (keys.length === 0) return;
+
+    const next = previousCurrent && appState.sites[previousCurrent]
+        ? previousCurrent
+        : keys[0];
+    appState.currentSite = next;
+
+    document.querySelectorAll('.site-item').forEach(item => {
+        const id = item.getAttribute('data-site-id');
+        item.classList.toggle('active', id === next);
+    });
+
+    loadSiteData(next);
+    if (typeof calculateAllTotals === 'function') {
+        setTimeout(() => calculateAllTotals(), 100);
+    }
+}
+
 function loadSitesFromLocalStorage() {
     const orgId = localStorage.getItem('organizationId') || 'default';
     const saved = localStorage.getItem(`carbonCalcSites_${orgId}`) || localStorage.getItem('carbonCalcSites');
     if (saved) {
-        appState.sites = JSON.parse(saved);
-        
-        const sitesList = document.getElementById('sitesList');
-        sitesList.innerHTML = '';
-        
-        Object.keys(appState.sites).forEach(siteId => {
-            addSiteToList(siteId, appState.sites[siteId].name);
-        });
-        
-        if (Object.keys(appState.sites).length > 0) {
-            const firstSite = Object.keys(appState.sites)[0];
-            switchSite(firstSite);
+        try {
+            appState.sites = JSON.parse(saved);
+        } catch (e) {
+            console.error('loadSitesFromLocalStorage:', e);
         }
     }
+    rebuildSitesUIFromState();
 }
 
 function loadSiteData(siteId) {
