@@ -27,6 +27,7 @@
     --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.15);
     
+    --login-gradient: linear-gradient(135deg, #0EA5E9 0%, #1D4ED8 100%);
     --transition: all 0.3s ease;
 }
 
@@ -52,6 +53,8 @@
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+
+    --login-gradient: linear-gradient(135deg, #0369A1 0%, #020617 100%);
 }
 
 /* ============================================
@@ -81,7 +84,7 @@ body {
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #0EA5E9 0%, #1D4ED8 100%);
+    background: var(--login-gradient);
     padding: 10px; /* Reduced from 20px */
 }
 
@@ -337,6 +340,36 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+.header-palette-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.header-palette-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.header-palette-select {
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 2px solid var(--border-color);
+    background: var(--bg-main);
+    color: var(--text-primary);
+    cursor: pointer;
+    min-width: 118px;
+    max-width: 170px;
+}
+
+.header-palette-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
 }
 
 .btn-icon {

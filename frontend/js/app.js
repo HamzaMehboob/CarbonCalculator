@@ -1631,7 +1631,11 @@ function initializeApp() {
             saveUserDataToBackend();
         }
     }, 5000);
-    
+
+    if (typeof window.initCarbonPaletteUI === 'function') {
+        window.initCarbonPaletteUI();
+    }
+
     console.log('✅ Carbon Calculator Phase 1 initialized successfully!');
 }
 
@@ -1644,8 +1648,10 @@ window.addEventListener('DOMContentLoaded', function() {
     if (localStorage.getItem('darkMode') === 'true') {
         appState.darkMode = false; // toggleDarkMode will flip this to true
         toggleDarkMode();
+    } else if (typeof window.applyCarbonPalette === 'function') {
+        window.applyCarbonPalette();
     }
-    
+
     updateLanguage();
     
     // Check if user was previously logged in
@@ -1700,6 +1706,10 @@ function toggleDarkMode() {
     if (icon) {
         icon.className = appState.darkMode ? 'fas fa-sun' : 'fas fa-moon';
     }
+
+    if (typeof window.applyCarbonPalette === 'function') {
+        window.applyCarbonPalette();
+    }
 }
 
 function updateLanguage() {
@@ -1721,6 +1731,10 @@ function updateLanguage() {
     
     const langBtnTextLogin = document.getElementById('langTextLogin');
     if (langBtnTextLogin) langBtnTextLogin.textContent = lang === 'en' ? 'PT' : 'EN';
+
+    if (typeof window.refreshCarbonPaletteLabels === 'function') {
+        window.refreshCarbonPaletteLabels();
+    }
 }
 
 function toggleLanguage() {

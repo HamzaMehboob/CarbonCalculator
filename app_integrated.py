@@ -122,6 +122,7 @@ def inject_css_and_js(html_content):
     css_file = Path(__file__).parent / "frontend" / "css" / "styles.css"
     
     js_files = [
+        "js/theme-palettes.js",
         "js/app.js",
         "js/calculations.js",
         "js/dashboard.js",
