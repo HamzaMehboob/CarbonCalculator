@@ -239,6 +239,13 @@
                                 <i class="fas fa-file-alt"></i> <span data-en="Print Input Summary" data-pt="Imprimir Resumo">Print Input Summary</span>
                             </button>
                         </div>
+                        <div class="card p-4" style="margin-top: 12px;">
+                            <h3 data-en="Additional questions for this tab" data-pt="Perguntas adicionais desta aba">Additional questions for this tab</h3>
+                            <p id="tabQuestionPromptText" style="margin: 6px 0 10px; color: var(--text-secondary);">
+                                Add supporting notes and answers for this tab.
+                            </p>
+                            <textarea id="tabQuestionNotesInput" rows="4" placeholder="Add notes/answers for this category..."></textarea>
+                        </div>
                     </div>
 
                     <!-- General Info Section -->
@@ -410,6 +417,28 @@
                             <p data-en="This report prints the raw input-derived emissions in kg CO2e." data-pt="Este relatório imprime as emissões calculadas a partir das entradas em kg CO2e.">
                                 This report prints the raw input-derived emissions in kg CO2e.
                             </p>
+                            <div class="table-wrapper" style="margin-top: 12px;">
+                                <table class="data-table" id="inputEmissionsPreviewTable">
+                                    <thead>
+                                        <tr>
+                                            <th data-en="Category" data-pt="Categoria">Category</th>
+                                            <th data-en="Emission type" data-pt="Tipo de emissão">Emission type</th>
+                                            <th data-en="Description" data-pt="Descrição">Description</th>
+                                            <th data-en="Year" data-pt="Ano">Year</th>
+                                            <th data-en="Input total" data-pt="Total de entrada">Input total</th>
+                                            <th data-en="Factor" data-pt="Fator">Factor</th>
+                                            <th data-en="Emissions (kgCO2e)" data-pt="Emissões (kgCO2e)">Emissions (kgCO2e)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inputEmissionsPreviewBody">
+                                        <tr>
+                                            <td colspan="7" style="text-align: center; color: var(--text-secondary);">
+                                                No emissions rows yet.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>

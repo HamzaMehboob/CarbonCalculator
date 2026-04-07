@@ -73,3 +73,6 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Project requirements artifacts
+requirements/
+

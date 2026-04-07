@@ -28,7 +28,8 @@ const appState = {
                 cashOut: 0,
                 invoicesOwed: 0,
                 billsToPay: 0
-            }
+            },
+            tabQuestions: {}
         }
     },
     hiddenWidgets: []
@@ -43,10 +44,17 @@ const API_BASE_URL =
     (typeof window !== 'undefined' && window.__CARBON_API_BASE__) ||
     'https://carbon-calculator-api-fe1o.onrender.com/api';
 
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_EXPIRES_AT_KEY = 'sessionExpiresAt';
 const SESSION_LAST_ACTIVITY_KEY = 'sessionLastActivity';
 let sessionMonitorStarted = false;
+const TAB_QUESTION_PROMPTS = {
+    water: 'Water tab: include meter source, estimated readings, and any anomalies.',
+    energy: 'Energy tab: include billing period type (calendar/financial), tariff notes, and kWh data source.',
+    waste: 'Waste tab: include weighing source, uplift frequency, and conversion assumptions.',
+    transport: 'Transport tab: include business/staff travel assumptions and mileage evidence source.',
+    refrigerants: 'Refrigerants tab: include top-up records, service sheets, and gas type evidence.'
+};
 
 function clearAuthSession() {
     appState.loggedIn = false;
@@ -86,7 +94,7 @@ function forceLogoutForExpiredSession(showMessage = true) {
     if (loginScreen) loginScreen.style.display = 'flex';
     if (mainApp) mainApp.style.display = 'none';
     if (showMessage) {
-        alert('Your session has expired after 30 minutes. Please login again.');
+        alert('Your session has expired. Please login again.');
     }
 }
 
@@ -260,7 +268,8 @@ async function loadUserDataFromBackend() {
                         companyName: localStorage.getItem('companyName') || 'My Company',
                         notes: '',
                         data: { water: [], energy: [], waste: [], transport: [], refrigerants: [] },
-                        financials: { bankBalance: 0, savingsBalance: 0, cashIn: 0, cashOut: 0, invoicesOwed: 0, billsToPay: 0 }
+                        financials: { bankBalance: 0, savingsBalance: 0, cashIn: 0, cashOut: 0, invoicesOwed: 0, billsToPay: 0 },
+                        tabQuestions: {}
                     }
                 };
                 saveSitesToLocalStorage(); // Sync with local cache
@@ -398,6 +407,8 @@ function setActiveTab(tabName) {
         if (window.renderInvoicesTable) {
             window.renderInvoicesTable();
         }
+    } else if (['water', 'energy', 'waste', 'transport', 'refrigerants'].includes(tabName)) {
+        updateTabQuestionUI(tabName);
     }
 }
 
@@ -428,8 +439,13 @@ function setActiveSubNav(subName) {
         const tabsContent = document.getElementById('tabsContent');
         if (subName === 'data-input') {
             tabsContent.style.display = 'block';
+            const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab') || 'water';
+            updateTabQuestionUI(activeTab);
         } else {
             tabsContent.style.display = 'none';
+        }
+        if (subName === 'input-emissions') {
+            updateInputEmissionsPreview();
         }
     }
 }
@@ -496,7 +512,8 @@ document.getElementById('addSiteBtn')?.addEventListener('click', function() {
                 cashIn: [],
                 cashOut: []
             },
-            monthlyCashFlow: {}
+            monthlyCashFlow: {},
+            tabQuestions: {}
         };
         
         addSiteToList(siteId, siteName.trim());
@@ -926,6 +943,13 @@ function loadSiteData(siteId) {
             updateFinancialDisplay(key, value);
         });
     }
+
+    // Ensure per-tab question notes are available and synced to the active category.
+    if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
+        site.tabQuestions = {};
+    }
+    const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab') || 'water';
+    updateTabQuestionUI(activeTab);
     
     // Recalculate totals after loading
     setTimeout(() => {
@@ -936,6 +960,9 @@ function loadSiteData(siteId) {
     setTimeout(() => {
         if (document.querySelector('[data-content="dashboard"]')?.classList.contains('active')) {
             updateDashboard();
+        }
+        if (document.getElementById('section-input-emissions')?.classList.contains('active')) {
+            updateInputEmissionsPreview();
         }
     }, 200);
 }
@@ -1005,6 +1032,16 @@ function saveCurrentSiteData() {
             });
         }
     });
+
+    // Save per-tab additional question notes.
+    if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
+        site.tabQuestions = {};
+    }
+    const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+    const notesInput = document.getElementById('tabQuestionNotesInput');
+    if (activeTab && notesInput) {
+        site.tabQuestions[activeTab] = notesInput.value || '';
+    }
     
     // Save financial data (already saved by updateFinancialWidget, but ensure consistency)
     if (site.financials) {
@@ -1022,6 +1059,82 @@ function saveCurrentSiteData() {
     }
     
     saveSitesToLocalStorage();
+}
+
+function updateTabQuestionUI(category) {
+    const site = appState.sites[appState.currentSite];
+    if (!site) return;
+    if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
+        site.tabQuestions = {};
+    }
+    const promptEl = document.getElementById('tabQuestionPromptText');
+    const notesEl = document.getElementById('tabQuestionNotesInput');
+    if (promptEl) {
+        promptEl.textContent = TAB_QUESTION_PROMPTS[category] || 'Add supporting notes and answers for this tab.';
+    }
+    if (notesEl) {
+        notesEl.value = site.tabQuestions[category] || '';
+    }
+}
+
+function updateInputEmissionsPreview() {
+    const body = document.getElementById('inputEmissionsPreviewBody');
+    if (!body || !window.carbonCalc || !window.carbonCalc.getConversionFactors || !window.carbonCalc.getCountry) return;
+
+    const factorsDb = window.carbonCalc.getConversionFactors();
+    const countryKey = window.carbonCalc.getCountry();
+    const factors = factorsDb[countryKey] || {};
+    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    const categoryLabel = {
+        water: 'Water',
+        energy: 'Energy',
+        waste: 'Waste',
+        transport: 'Transport',
+        refrigerants: 'Refrigerants'
+    };
+
+    const lines = [];
+    categories.forEach((category) => {
+        const table = document.getElementById(`${category}Table`);
+        if (!table) return;
+        table.querySelectorAll('.data-row').forEach((row) => {
+            const emissionSelect = row.querySelector('.emission-select');
+            const emissionType = emissionSelect?.selectedOptions?.[0]?.textContent?.trim() || emissionSelect?.value || '';
+            const emissionKey = emissionSelect?.value || '';
+            const desc = row.querySelector('input[type="text"]')?.value?.trim() || emissionType;
+            const year = row.querySelector('input[type="number"]:not(.month-input)')?.value || '';
+            const monthInputs = Array.from(row.querySelectorAll('.month-input'));
+            const inputTotal = monthInputs.reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
+            const factor = factors[emissionKey] || 0;
+            const kg = inputTotal * factor;
+            lines.push({
+                category: categoryLabel[category] || category,
+                emissionType,
+                desc,
+                year,
+                inputTotal,
+                factor,
+                kg
+            });
+        });
+    });
+
+    if (lines.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary);">No emissions rows yet.</td></tr>';
+        return;
+    }
+
+    body.innerHTML = lines.map((line) => `
+        <tr>
+            <td>${line.category}</td>
+            <td>${line.emissionType}</td>
+            <td>${line.desc}</td>
+            <td>${line.year}</td>
+            <td>${line.inputTotal.toFixed(2)}</td>
+            <td>${line.factor.toFixed(6).replace(/\.?0+$/, '')}</td>
+            <td>${line.kg.toFixed(2)}</td>
+        </tr>
+    `).join('');
 }
 
 // Open cash transaction modal
@@ -1603,6 +1716,22 @@ function initializeApp() {
     bindTextInput(assessmentGeneralNotesEl, 'assessmentGeneralNotes');
     bindTextInput(assessmentExtraNote1El, 'assessmentExtraNote1');
     bindTextInput(assessmentExtraNote2El, 'assessmentExtraNote2');
+
+    const tabQuestionNotesInput = document.getElementById('tabQuestionNotesInput');
+    if (tabQuestionNotesInput && tabQuestionNotesInput.dataset.bound !== '1') {
+        tabQuestionNotesInput.dataset.bound = '1';
+        tabQuestionNotesInput.addEventListener('input', () => {
+            const site = appState.sites[appState.currentSite];
+            const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+            if (!site || !activeTab) return;
+            if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
+                site.tabQuestions = {};
+            }
+            site.tabQuestions[activeTab] = tabQuestionNotesInput.value || '';
+            saveSitesToLocalStorage();
+        });
+        tabQuestionNotesInput.addEventListener('blur', () => saveCurrentSiteData());
+    }
     
     // Load local data first for fast UI responsiveness
     loadSitesFromLocalStorage();
@@ -1619,6 +1748,7 @@ function initializeApp() {
     setTimeout(() => {
         if (appState.currentSite && appState.sites[appState.currentSite]) {
             loadSiteData(appState.currentSite);
+            updateInputEmissionsPreview();
         }
     }, 100);
     
