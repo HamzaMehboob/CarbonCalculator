@@ -1038,9 +1038,9 @@ function saveCurrentSiteData() {
         site.tabQuestions = {};
     }
     const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
-    const notesInput = document.getElementById('tabQuestionNotesInput');
-    if (activeTab && notesInput) {
-        site.tabQuestions[activeTab] = notesInput.value || '';
+    const tabNotesInput = document.getElementById('tabQuestionNotesInput');
+    if (activeTab && tabNotesInput) {
+        site.tabQuestions[activeTab] = tabNotesInput.value || '';
     }
     
     // Save financial data (already saved by updateFinancialWidget, but ensure consistency)
