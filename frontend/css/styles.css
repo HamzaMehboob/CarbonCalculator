@@ -207,6 +207,10 @@ body {
     text-align: center;
 }
 
+#loginError:not(:empty) {
+    margin-bottom: 10px;
+}
+
 .login-footer {
     margin-top: 24px;
     text-align: center;

@@ -141,6 +141,29 @@ document.getElementById('showLogin')?.addEventListener('click', function(e) {
     document.getElementById('signupFormContainer').style.display = 'none';
 });
 
+function parseJsonResponse(raw) {
+    if (!raw || !String(raw).trim()) return {};
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return {};
+    }
+}
+
+function loginFailureMessage(status, payload) {
+    const msg =
+        (payload && (payload.msg || payload.message || payload.error)) || '';
+    if (msg) return String(msg);
+    if (status === 401 || status === 403) {
+        return appState.currentLanguage === 'pt'
+            ? 'E-mail ou senha inválidos.'
+            : 'Invalid email or password.';
+    }
+    return appState.currentLanguage === 'pt'
+        ? 'Não foi possível entrar. Tente novamente.'
+        : 'Could not sign in. Please try again.';
+}
+
 // LOGIN FORM SUBMIT
 document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -149,7 +172,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
     const password = document.getElementById('loginPassword').value;
     const loginError = document.getElementById('loginError');
     
-    loginError.textContent = '';
+    if (loginError) loginError.textContent = '';
     
     try {
         const response = await fetch(`${API_BASE_URL}/login`, {
@@ -158,9 +181,19 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             body: JSON.stringify({ email, password })
         });
         
-        const data = await response.json();
+        const raw = await response.text();
+        const data = parseJsonResponse(raw);
         
         if (response.ok) {
+            if (!data.access_token) {
+                if (loginError) {
+                    loginError.textContent =
+                        appState.currentLanguage === 'pt'
+                            ? 'Resposta inválida do servidor.'
+                            : 'Invalid response from server.';
+                }
+                return;
+            }
             appState.loggedIn = true;
             localStorage.setItem('loggedIn', 'true');
             localStorage.setItem('loginEmail', email);
@@ -183,11 +216,18 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             
             initializeApp();
         } else {
-            loginError.textContent = data.msg || 'Invalid email or password';
+            if (loginError) {
+                loginError.textContent = loginFailureMessage(response.status, data);
+            }
         }
     } catch (err) {
         console.error('Login error:', err);
-        loginError.textContent = 'Connection error. Is the backend running?';
+        if (loginError) {
+            loginError.textContent =
+                appState.currentLanguage === 'pt'
+                    ? 'Erro de conexão. O servidor está disponível?'
+                    : 'Connection error. Is the backend running?';
+        }
     }
 });
 

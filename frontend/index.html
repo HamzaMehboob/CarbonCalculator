@@ -27,13 +27,13 @@
                     </div>
                     <div class="form-group">
                         <label data-en="Password" data-pt="Senha">Password</label>
-                        <input type="password" id="loginPassword" required placeholder="••••••••">
+                        <input type="password" id="loginPassword" required placeholder="••••••••" autocomplete="current-password">
                     </div>
+                    <div id="loginError" class="error-message" role="alert" aria-live="polite"></div>
                     <button type="submit" class="btn-primary" data-en="Login" data-pt="Entrar">Login</button>
                     <div class="login-extra" style="text-align: center; margin-top: 15px;">
                         <p><span data-en="Don't have an account?" data-pt="Não tem uma conta?">Don't have an account?</span> <a href="#" id="showSignup"><span data-en="Sign Up" data-pt="Inscrever-se">Sign Up</span></a></p>
                     </div>
-                    <div id="loginError" class="error-message"></div>
                 </form>
             </div>
 
