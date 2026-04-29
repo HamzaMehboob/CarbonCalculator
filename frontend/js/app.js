@@ -315,7 +315,8 @@ document.getElementById('signupForm')?.addEventListener('submit', async function
             })
         });
         
-        const data = await response.json();
+        const raw = await response.text();
+        const data = parseJsonResponse(raw);
         
         if (response.ok) {
             signupSuccess.textContent =
@@ -327,7 +328,12 @@ document.getElementById('signupForm')?.addEventListener('submit', async function
                 showVerifyPanel(email.trim(), data.dev_verification_code || '');
             }, 800);
         } else {
-            signupError.textContent = data.msg || 'Signup failed';
+            const backendMsg =
+                data.msg ||
+                data.message ||
+                data.error ||
+                (raw && raw.length < 500 ? raw : '');
+            signupError.textContent = backendMsg || 'Signup failed';
         }
     } catch (err) {
         console.error('Signup error:', err);

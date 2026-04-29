@@ -202,6 +202,7 @@ def send_verification_email(to_addr: str, code: str) -> None:
     password = os.environ.get('MAIL_PASSWORD', '')
     sender = os.environ.get('MAIL_DEFAULT_SENDER', '')
     use_ssl = os.environ.get('MAIL_USE_SSL', '').lower() in ('1', 'true', 'yes')
+    smtp_timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
 
     msg = EmailMessage()
     msg['Subject'] = 'Your SQ Impact verification code'
@@ -213,11 +214,11 @@ def send_verification_email(to_addr: str, code: str) -> None:
     )
 
     if use_ssl:
-        with smtplib.SMTP_SSL(server, port, timeout=30) as smtp:
+        with smtplib.SMTP_SSL(server, port, timeout=smtp_timeout_sec) as smtp:
             smtp.login(user, password)
             smtp.send_message(msg)
     else:
-        with smtplib.SMTP(server, port, timeout=30) as smtp:
+        with smtplib.SMTP(server, port, timeout=smtp_timeout_sec) as smtp:
             smtp.starttls()
             smtp.login(user, password)
             smtp.send_message(msg)
