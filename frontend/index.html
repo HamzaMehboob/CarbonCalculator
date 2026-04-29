@@ -13,7 +13,7 @@
     <div id="loginScreen" class="login-container">
         <div class="login-box">
             <div class="login-header">
-                <img src="assets/SQImpact_v2.png" alt="SQ Impact" style="width: 320px; max-width: 100%; margin-bottom: 8px;">
+                <img id="loginBrandWordmark" src="assets/SQImpact_v2.png" alt="SQ Impact" style="width: 320px; max-width: 100%; margin-bottom: 8px;">
                 <p data-en="GHG Protocol Carbon Platform" data-pt="Plataforma de Carbono Protocolo GEE">GHG Protocol Carbon Platform</p>
             </div>
             
@@ -111,7 +111,7 @@
         <header class="top-header">
             <div class="header-left">
                 <div class="company-logo">
-                    <img src="assets/SQ_logo.png" alt="SQ Impact" style="height: 32px; margin-right: 10px;">
+                    <img src="assets/SQ_logo.png" alt="SQ Impact" onerror="this.onerror=null;this.src='assets/logo.png';" style="height: 32px; margin-right: 10px;">
                     <span id="companyName" style="font-weight: 700; font-size: 1.4rem;">SQ Impact</span>
                 </div>
             </div>
@@ -1285,6 +1285,22 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        (async function applyEmbeddedWordmark() {
+            const img = document.getElementById('loginBrandWordmark');
+            if (!img) return;
+            try {
+                const response = await fetch('assets/SQImpact_v2_b64.txt', { cache: 'no-store' });
+                if (!response.ok) throw new Error('Could not load SQImpact_v2_b64.txt');
+                const b64 = (await response.text()).trim();
+                if (!b64) throw new Error('SQImpact_v2_b64.txt is empty');
+                img.src = `data:image/png;base64,${b64}`;
+            } catch (err) {
+                console.warn('Embedded logo load failed:', err);
+                img.src = 'assets/SQImpact_v2.png';
+            }
+        })();
+    </script>
     <script src="js/theme-palettes.js"></script>
     <script src="js/app.js"></script>
     <script src="js/calculations.js"></script>

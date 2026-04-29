@@ -11,7 +11,7 @@
     <div id="loginScreen" class="login-container" style="display: flex;">
         <div class="login-box">
             <div class="login-header">
-                <img src="assets/SQImpact_v2.png" alt="SQ Impact" style="width: 320px; max-width: 100%; margin-bottom: 8px;">
+                <img id="verifyBrandWordmark" src="assets/SQImpact_v2.png" alt="SQ Impact" style="width: 320px; max-width: 100%; margin-bottom: 8px;">
                 <h1>Verify your email</h1>
                 <p>Enter the 6-digit code we sent to your inbox (valid for 15 minutes).</p>
             </div>
@@ -39,6 +39,22 @@
             </p>
         </div>
     </div>
+    <script>
+        (async function applyEmbeddedWordmark() {
+            const img = document.getElementById('verifyBrandWordmark');
+            if (!img) return;
+            try {
+                const response = await fetch('assets/SQImpact_v2_b64.txt', { cache: 'no-store' });
+                if (!response.ok) throw new Error('Could not load SQImpact_v2_b64.txt');
+                const b64 = (await response.text()).trim();
+                if (!b64) throw new Error('SQImpact_v2_b64.txt is empty');
+                img.src = `data:image/png;base64,${b64}`;
+            } catch (err) {
+                console.warn('Embedded logo load failed:', err);
+                img.src = 'assets/SQImpact_v2.png';
+            }
+        })();
+    </script>
     <script src="js/verify.js"></script>
 </body>
 </html>
