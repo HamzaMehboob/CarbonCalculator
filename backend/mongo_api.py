@@ -182,11 +182,15 @@ def _hash_verification_code(code: str) -> str:
 
 
 def _mail_settings_ready() -> bool:
+    server = (os.environ.get('MAIL_SERVER') or '').strip()
+    sender = (os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
+    user = (os.environ.get('MAIL_USERNAME') or '').strip()
+    password = (os.environ.get('MAIL_PASSWORD') or '').strip()
     return bool(
-        os.environ.get('MAIL_SERVER')
-        and os.environ.get('MAIL_DEFAULT_SENDER')
-        and os.environ.get('MAIL_USERNAME')
-        and os.environ.get('MAIL_PASSWORD')
+        server
+        and sender
+        and user
+        and password
     )
 
 
@@ -196,11 +200,11 @@ def _dev_return_code_enabled() -> bool:
 
 def send_verification_email(to_addr: str, code: str) -> None:
     """Send a plain-text verification email via SMTP (configure MAIL_* env vars)."""
-    server = os.environ.get('MAIL_SERVER', '')
+    server = (os.environ.get('MAIL_SERVER', '') or '').strip()
     port = int(os.environ.get('MAIL_PORT', '587'))
-    user = os.environ.get('MAIL_USERNAME', '')
-    password = os.environ.get('MAIL_PASSWORD', '')
-    sender = os.environ.get('MAIL_DEFAULT_SENDER', '')
+    user = (os.environ.get('MAIL_USERNAME', '') or '').strip()
+    password = (os.environ.get('MAIL_PASSWORD', '') or '').strip()
+    sender = (os.environ.get('MAIL_DEFAULT_SENDER', '') or '').strip()
     use_ssl = os.environ.get('MAIL_USE_SSL', '').lower() in ('1', 'true', 'yes')
     smtp_timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
 
@@ -230,15 +234,15 @@ def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
     If plain_code is None, caller should not persist user without resolving error.
     """
     code = _generate_verification_code()
+    if _dev_return_code_enabled():
+        print(f'DEV verification code for {email}: {code}', file=sys.stderr)
+        return code, None
     if _mail_settings_ready():
         try:
             send_verification_email(email, code)
         except Exception as e:
             print(f'ERROR: send_verification_email: {e}', file=sys.stderr)
             return None, 'Could not send verification email. Please try again later.'
-    elif _dev_return_code_enabled():
-        print(f'DEV verification code for {email}: {code}', file=sys.stderr)
-        return code, None
     else:
         return None, (
             'Email delivery is not configured. Set MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, '
