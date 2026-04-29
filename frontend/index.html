@@ -1285,21 +1285,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script>
-        (async function applyEmbeddedWordmark() {
-            const img = document.getElementById('loginBrandWordmark');
-            if (!img) return;
-            try {
-                const response = await fetch('assets/SQImpact_v2_b64.txt', { cache: 'no-store' });
-                if (!response.ok) throw new Error('Could not load SQImpact_v2_b64.txt');
-                const b64 = (await response.text()).trim();
-                if (!b64) throw new Error('SQImpact_v2_b64.txt is empty');
-                img.src = `data:image/png;base64,${b64}`;
-            } catch (err) {
-                console.warn('Embedded logo load failed:', err);
-            }
-        })();
-    </script>
     <script src="js/theme-palettes.js"></script>
     <script src="js/app.js"></script>
     <script src="js/calculations.js"></script>

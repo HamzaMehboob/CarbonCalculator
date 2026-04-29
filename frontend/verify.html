@@ -39,21 +39,6 @@
             </p>
         </div>
     </div>
-    <script>
-        (async function applyEmbeddedWordmark() {
-            const img = document.getElementById('verifyBrandWordmark');
-            if (!img) return;
-            try {
-                const response = await fetch('assets/SQImpact_v2_b64.txt', { cache: 'no-store' });
-                if (!response.ok) throw new Error('Could not load SQImpact_v2_b64.txt');
-                const b64 = (await response.text()).trim();
-                if (!b64) throw new Error('SQImpact_v2_b64.txt is empty');
-                img.src = `data:image/png;base64,${b64}`;
-            } catch (err) {
-                console.warn('Embedded logo load failed:', err);
-            }
-        })();
-    </script>
     <script src="js/verify.js"></script>
 </body>
 </html>
