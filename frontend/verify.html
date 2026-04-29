@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify email — SQ Impact</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="loginScreen" class="login-container" style="display: flex;">
+        <div class="login-box">
+            <div class="login-header">
+                <img src="assets/SQImpact%20v2.png" alt="SQ Impact" style="width: 320px; max-width: 100%; margin-bottom: 8px;">
+                <h1>Verify your email</h1>
+                <p>Enter the 6-digit code we sent to your inbox (valid for 15 minutes).</p>
+            </div>
+
+            <form id="verifyForm">
+                <div class="form-group">
+                    <label for="verifyEmail">Email</label>
+                    <input type="email" id="verifyEmail" required autocomplete="email" placeholder="you@company.com">
+                </div>
+                <div class="form-group">
+                    <label for="verifyCode">6-digit code</label>
+                    <input type="text" id="verifyCode" required inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="000000" autocomplete="one-time-code">
+                </div>
+                <div id="verifyError" class="error-message" role="alert"></div>
+                <div id="verifySuccess" class="success-message" style="color: var(--success-color); margin-bottom: 12px;"></div>
+                <div id="verifyDevHint" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 12px;"></div>
+                <button type="submit" class="btn-primary">Verify &amp; continue</button>
+            </form>
+
+            <p style="text-align: center; margin-top: 16px;">
+                <button type="button" id="resendCode" class="btn-link">Resend code</button>
+            </p>
+            <p style="text-align: center; margin-top: 8px;">
+                <a href="index.html">Back to login</a>
+            </p>
+        </div>
+    </div>
+    <script src="js/verify.js"></script>
+</body>
+</html>

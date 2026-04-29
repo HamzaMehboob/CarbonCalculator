@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EcoAudit - Carbon Emissions Management</title>
+    <title>SQ Impact - Carbon Emissions Management</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -13,8 +13,7 @@
     <div id="loginScreen" class="login-container">
         <div class="login-box">
             <div class="login-header">
-                <img src="assets/logo.png" alt="EcoAudit Logo" style="width: 80px; margin-bottom: 15px;">
-                <h1 data-en="EcoAudit" data-pt="EcoAudit">EcoAudit</h1>
+                <img src="assets/SQImpact%20v2.png" alt="SQ Impact" style="width: 320px; max-width: 100%; margin-bottom: 8px;">
                 <p data-en="GHG Protocol Carbon Platform" data-pt="Plataforma de Carbono Protocolo GEE">GHG Protocol Carbon Platform</p>
             </div>
             
@@ -69,6 +68,35 @@
                 </form>
             </div>
 
+            <!-- Email verification (same box; shown after signup or from login) -->
+            <div id="verifyFormContainer" style="display: none;">
+                <form id="verifyForm">
+                    <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;"
+                       data-en="Enter the 6-digit code we emailed you. It expires in 15 minutes."
+                       data-pt="Digite o código de 6 dígitos enviado por e-mail. Expira em 15 minutos.">
+                        Enter the 6-digit code we emailed you. It expires in 15 minutes.
+                    </p>
+                    <div class="form-group">
+                        <label data-en="Email" data-pt="E-mail">Email</label>
+                        <input type="email" id="verifyEmail" required autocomplete="email" placeholder="you@company.com">
+                    </div>
+                    <div class="form-group">
+                        <label data-en="6-digit code" data-pt="Código de 6 dígitos">6-digit code</label>
+                        <input type="text" id="verifyCode" required inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="000000" autocomplete="one-time-code">
+                    </div>
+                    <div id="verifyError" class="error-message" role="alert"></div>
+                    <div id="verifySuccess" class="success-message" style="color: var(--success-color); text-align: center; margin-top: 8px;"></div>
+                    <div id="verifyDevHint" style="font-size: 0.9rem; color: var(--text-secondary); text-align: center; margin-top: 8px;"></div>
+                    <button type="submit" class="btn-primary" data-en="Verify" data-pt="Verificar">Verify</button>
+                    <div class="login-extra" style="text-align: center; margin-top: 12px;">
+                        <button type="button" id="resendVerificationBtn" class="btn-link" data-en="Resend code" data-pt="Reenviar código">Resend code</button>
+                    </div>
+                    <div class="login-extra" style="text-align: center; margin-top: 8px;">
+                        <a href="#" id="backToLoginFromVerify"><span data-en="Back to login" data-pt="Voltar ao login">Back to login</span></a>
+                    </div>
+                </form>
+            </div>
+
             <div class="login-footer">
                 <button id="langToggleLogin" class="btn-link">
                     <i class="fas fa-globe"></i> <span id="langTextLogin">PT</span>
@@ -83,8 +111,8 @@
         <header class="top-header">
             <div class="header-left">
                 <div class="company-logo">
-                    <img src="assets/logo.png" alt="EcoAudit" style="height: 32px; margin-right: 10px;">
-                    <span id="companyName" style="font-weight: 700; font-size: 1.4rem;">EcoAudit</span>
+                    <img src="assets/SQ_logo.png" alt="SQ Impact" style="height: 32px; margin-right: 10px;">
+                    <span id="companyName" style="font-weight: 700; font-size: 1.4rem;">SQ Impact</span>
                 </div>
             </div>
             <div class="header-center">
@@ -162,7 +190,7 @@
                 <!-- Company Info Section -->
                 <section class="company-info-section">
                     <div class="company-logo-upload">
-                        <img id="companyLogoImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Crect fill='%2313B5EA' width='80' height='80' rx='12'/%3E%3Ctext x='40' y='50' font-size='40' fill='white' text-anchor='middle' font-family='Arial'%3E🌱%3C/text%3E%3C/svg%3E" alt="Company Logo">
+                        <img id="companyLogoImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Crect fill='%23004A99' width='80' height='80' rx='12'/%3E%3Ctext x='40' y='50' font-size='30' fill='white' text-anchor='middle' font-family='Arial'%3ESQ%3C/text%3E%3C/svg%3E" alt="SQ Impact Logo">
                         <input type="file" id="logoUpload" accept="image/*" style="display: none;">
                         <button class="btn-upload" onclick="document.getElementById('logoUpload').click()">
                             <i class="fas fa-upload"></i>

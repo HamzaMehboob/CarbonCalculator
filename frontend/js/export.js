@@ -698,7 +698,7 @@ function _getReportLogoDataUrl() {
     // Prefer the uploaded company logo (if any). It is typically stored as a data: URL.
     const logoImg =
         document.getElementById('companyLogoImg') ||
-        document.querySelector('img[alt="EcoAudit Logo"]') ||
+        document.querySelector('img[alt="SQ Impact Logo"]') ||
         document.querySelector('img[src^="data:image"]');
 
     if (logoImg && logoImg.src && typeof logoImg.src === 'string' && logoImg.src.startsWith('data:image')) {

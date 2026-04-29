@@ -133,12 +133,16 @@ document.getElementById('showSignup')?.addEventListener('click', function(e) {
     e.preventDefault();
     document.getElementById('loginFormContainer').style.display = 'none';
     document.getElementById('signupFormContainer').style.display = 'block';
+    const v = document.getElementById('verifyFormContainer');
+    if (v) v.style.display = 'none';
 });
 
 document.getElementById('showLogin')?.addEventListener('click', function(e) {
     e.preventDefault();
     document.getElementById('loginFormContainer').style.display = 'block';
     document.getElementById('signupFormContainer').style.display = 'none';
+    const v = document.getElementById('verifyFormContainer');
+    if (v) v.style.display = 'none';
 });
 
 function parseJsonResponse(raw) {
@@ -154,14 +158,40 @@ function loginFailureMessage(status, payload) {
     const msg =
         (payload && (payload.msg || payload.message || payload.error)) || '';
     if (msg) return String(msg);
-    if (status === 401 || status === 403) {
+    if (status === 401) {
         return appState.currentLanguage === 'pt'
             ? 'E-mail ou senha inválidos.'
             : 'Invalid email or password.';
     }
+    if (status === 403) {
+        return appState.currentLanguage === 'pt'
+            ? 'Verifique seu e-mail antes de entrar.'
+            : 'Please verify your email before logging in.';
+    }
     return appState.currentLanguage === 'pt'
         ? 'Não foi possível entrar. Tente novamente.'
         : 'Could not sign in. Please try again.';
+}
+
+function showVerifyPanel(prefillEmail, devCode) {
+    const loginFormContainer = document.getElementById('loginFormContainer');
+    const signupFormContainer = document.getElementById('signupFormContainer');
+    const verifyFormContainer = document.getElementById('verifyFormContainer');
+    if (loginFormContainer) loginFormContainer.style.display = 'none';
+    if (signupFormContainer) signupFormContainer.style.display = 'none';
+    if (verifyFormContainer) verifyFormContainer.style.display = 'block';
+    const ve = document.getElementById('verifyEmail');
+    if (ve && prefillEmail) ve.value = prefillEmail;
+    const verr = document.getElementById('verifyError');
+    const vok = document.getElementById('verifySuccess');
+    const vdev = document.getElementById('verifyDevHint');
+    if (verr) verr.textContent = '';
+    if (vok) vok.textContent = '';
+    if (vdev) {
+        vdev.textContent = devCode
+            ? (appState.currentLanguage === 'pt' ? 'Código (dev): ' : 'Dev code: ') + devCode
+            : '';
+    }
 }
 
 // LOGIN FORM SUBMIT
@@ -217,7 +247,28 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             initializeApp();
         } else {
             if (loginError) {
-                loginError.textContent = loginFailureMessage(response.status, data);
+                loginError.textContent = '';
+                if (response.status === 403 && data.needs_verification) {
+                    const msg =
+                        data.msg ||
+                        (appState.currentLanguage === 'pt'
+                            ? 'Verifique seu e-mail antes de entrar.'
+                            : 'Please verify your email before logging in.');
+                    loginError.appendChild(document.createTextNode(msg + ' '));
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent =
+                        appState.currentLanguage === 'pt'
+                            ? 'Abrir verificação'
+                            : 'Open verification';
+                    link.addEventListener('click', (ev) => {
+                        ev.preventDefault();
+                        showVerifyPanel(data.email || email);
+                    });
+                    loginError.appendChild(link);
+                } else {
+                    loginError.textContent = loginFailureMessage(response.status, data);
+                }
             }
         }
     } catch (err) {
@@ -267,11 +318,14 @@ document.getElementById('signupForm')?.addEventListener('submit', async function
         const data = await response.json();
         
         if (response.ok) {
-            signupSuccess.textContent = 'Registration successful! You can now login.';
+            signupSuccess.textContent =
+                data.msg ||
+                (appState.currentLanguage === 'pt'
+                    ? 'Conta criada. Verifique seu e-mail.'
+                    : 'Account created. Check your email for the verification code.');
             setTimeout(() => {
-                document.getElementById('showLogin').click();
-                document.getElementById('loginEmail').value = email;
-            }, 2000);
+                showVerifyPanel(email.trim(), data.dev_verification_code || '');
+            }, 800);
         } else {
             signupError.textContent = data.msg || 'Signup failed';
         }
@@ -279,6 +333,117 @@ document.getElementById('signupForm')?.addEventListener('submit', async function
         console.error('Signup error:', err);
         signupError.textContent = 'Connection error. Is the backend running?';
     }
+});
+
+document.getElementById('verifyForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const email = (document.getElementById('verifyEmail')?.value || '').trim();
+    const codeInput = document.getElementById('verifyCode');
+    let code = (codeInput?.value || '').replace(/\D/g, '').slice(0, 6);
+    if (codeInput) codeInput.value = code;
+    const verr = document.getElementById('verifyError');
+    const vok = document.getElementById('verifySuccess');
+    if (verr) verr.textContent = '';
+    if (vok) vok.textContent = '';
+
+    if (!email || code.length !== 6) {
+        if (verr) {
+            verr.textContent =
+                appState.currentLanguage === 'pt'
+                    ? 'Informe o e-mail e o código de 6 dígitos.'
+                    : 'Enter your email and the 6-digit code.';
+        }
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/verify-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code }),
+        });
+        const raw = await response.text();
+        const data = parseJsonResponse(raw);
+        if (response.ok) {
+            if (vok) {
+                vok.textContent =
+                    data.msg ||
+                    (appState.currentLanguage === 'pt'
+                        ? 'Verificado. Você já pode entrar.'
+                        : 'Verified. You can log in.');
+            }
+            setTimeout(() => {
+                document.getElementById('verifyFormContainer').style.display = 'none';
+                document.getElementById('loginFormContainer').style.display = 'block';
+                document.getElementById('loginEmail').value = email;
+                if (codeInput) codeInput.value = '';
+            }, 1200);
+        } else if (verr) {
+            verr.textContent = data.msg || 'Verification failed.';
+        }
+    } catch (err) {
+        console.error(err);
+        if (verr) {
+            verr.textContent =
+                appState.currentLanguage === 'pt'
+                    ? 'Erro de conexão.'
+                    : 'Connection error.';
+        }
+    }
+});
+
+document.getElementById('resendVerificationBtn')?.addEventListener('click', async function() {
+    const email = (document.getElementById('verifyEmail')?.value || '').trim();
+    const verr = document.getElementById('verifyError');
+    const vok = document.getElementById('verifySuccess');
+    const vdev = document.getElementById('verifyDevHint');
+    if (verr) verr.textContent = '';
+    if (vok) vok.textContent = '';
+    if (!email) {
+        if (verr) {
+            verr.textContent =
+                appState.currentLanguage === 'pt'
+                    ? 'Informe seu e-mail.'
+                    : 'Enter your email first.';
+        }
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE_URL}/resend-verification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        const data = parseJsonResponse(await response.text());
+        if (response.ok) {
+            if (vok) vok.textContent = data.msg || '';
+            if (vdev && data.dev_verification_code) {
+                vdev.textContent =
+                    (appState.currentLanguage === 'pt' ? 'Código (dev): ' : 'Dev code: ') +
+                    data.dev_verification_code;
+            }
+        } else if (response.status === 429 && verr) {
+            verr.textContent = data.msg || '';
+        } else if (verr) {
+            verr.textContent = data.msg || 'Could not resend.';
+        }
+    } catch (err) {
+        console.error(err);
+        if (verr) {
+            verr.textContent =
+                appState.currentLanguage === 'pt' ? 'Erro de conexão.' : 'Connection error.';
+        }
+    }
+});
+
+document.getElementById('backToLoginFromVerify')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('verifyFormContainer').style.display = 'none';
+    document.getElementById('loginFormContainer').style.display = 'block';
+    const verr = document.getElementById('verifyError');
+    const vok = document.getElementById('verifySuccess');
+    if (verr) verr.textContent = '';
+    if (vok) vok.textContent = '';
 });
 
 // BACKEND DATA PERSISTENCE

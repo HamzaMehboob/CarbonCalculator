@@ -26,6 +26,24 @@ In the Render dashboard for your new service, go to the **Environment** tab and 
 | `MONGODB_URI` | `mongodb+srv://hamzamehboob103_db_user:Yf2m6xtao73allOJ@cluster0.yl1fnm7.mongodb.net/carbon_calculator?retryWrites=true&w=majority` |
 | `JWT_SECRET_KEY` | `your-secret-key-make-it-long-and-random` |
 
+### Email verification (signup)
+New accounts must verify a 6-digit code sent by email (expires in 15 minutes).
+
+**Production:** set SMTP variables (example values shown; use your provider’s host and credentials):
+
+| Key | Example |
+| :--- | :--- |
+| `MAIL_SERVER` | `smtp.sendgrid.net` or your SMTP host |
+| `MAIL_PORT` | `587` (STARTTLS) or `465` (SSL) |
+| `MAIL_USE_SSL` | Set to `true` only if you use port **465** (direct SSL). Leave unset for 587 + STARTTLS. |
+| `MAIL_USERNAME` | SMTP username (often `apikey` for SendGrid) |
+| `MAIL_PASSWORD` | SMTP password or API key |
+| `MAIL_DEFAULT_SENDER` | The **From** address (must be allowed by your provider), e.g. `EcoAudit <noreply@yourdomain.com>` |
+
+Optional: `VERIFICATION_CODE_PEPPER` — extra secret used to hash verification codes (defaults to `JWT_SECRET_KEY` if omitted).
+
+**Local dev without SMTP:** set `DEV_RETURN_VERIFICATION_CODE=true`. The API will log the code to the server console and include `dev_verification_code` in the JSON response (never enable this in production).
+
 > [!IMPORTANT]
 > This is where you safely store your MongoDB credentials. Render will inject them into the app at runtime, and they will NOT be visible on GitHub.
 
