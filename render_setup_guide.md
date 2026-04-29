@@ -29,7 +29,14 @@ In the Render dashboard for your new service, go to the **Environment** tab and 
 ### Email verification (signup)
 New accounts must verify a 6-digit code sent by email (expires in 15 minutes).
 
-**Production:** set SMTP variables (example values shown; use your provider’s host and credentials):
+**Production (recommended):** use Resend API over HTTPS (more reliable than SMTP on Render):
+
+| Key | Example |
+| :--- | :--- |
+| `RESEND_API_KEY` | `re_...` |
+| `RESEND_FROM` | `SQ Audit <noreply@yourdomain.com>` (must be verified in Resend) |
+
+Fallback option: SMTP variables (example values shown; use your provider’s host and credentials):
 
 | Key | Example |
 | :--- | :--- |

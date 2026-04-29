@@ -11,6 +11,8 @@ import hmac
 import hashlib
 import smtplib
 from email.message import EmailMessage
+import urllib.request
+import urllib.error
 import io
 import json
 import re
@@ -194,12 +196,71 @@ def _mail_settings_ready() -> bool:
     )
 
 
+def _resend_settings_ready() -> bool:
+    return bool(
+        (os.environ.get('RESEND_API_KEY') or '').strip()
+        and (
+            (os.environ.get('RESEND_FROM') or '').strip()
+            or (os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
+        )
+    )
+
+
+def _send_verification_email_via_resend(to_addr: str, code: str) -> None:
+    """
+    Send verification email using Resend HTTPS API.
+    Required env:
+      - RESEND_API_KEY
+      - RESEND_FROM (or MAIL_DEFAULT_SENDER fallback)
+    Optional:
+      - RESEND_API_URL (defaults to https://api.resend.com/emails)
+      - MAIL_TIMEOUT_SECONDS
+    """
+    api_key = (os.environ.get('RESEND_API_KEY') or '').strip()
+    from_addr = (os.environ.get('RESEND_FROM') or os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
+    api_url = (os.environ.get('RESEND_API_URL') or 'https://api.resend.com/emails').strip()
+    timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
+
+    payload = {
+        'from': from_addr,
+        'to': [to_addr],
+        'subject': 'Your SQ Impact verification code',
+        'text': (
+            f'Your verification code is: {code}\n\n'
+            f'This code expires in 15 minutes. If you did not sign up, you can ignore this email.\n'
+        ),
+    }
+    raw = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(
+        api_url,
+        data=raw,
+        method='POST',
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+        status = getattr(resp, 'status', 200)
+        if status >= 400:
+            raise RuntimeError(f'Resend API error: HTTP {status}')
+
+
 def _dev_return_code_enabled() -> bool:
     return (os.environ.get('DEV_RETURN_VERIFICATION_CODE', '') or '').strip().lower() in ('1', 'true', 'yes')
 
 
 def send_verification_email(to_addr: str, code: str) -> None:
-    """Send a plain-text verification email via SMTP (configure MAIL_* env vars)."""
+    """
+    Send verification email.
+    Priority:
+      1) Resend HTTP API when configured (RESEND_API_KEY + RESEND_FROM/MAIL_DEFAULT_SENDER)
+      2) SMTP fallback (MAIL_*)
+    """
+    if _resend_settings_ready():
+        _send_verification_email_via_resend(to_addr, code)
+        return
+
     server = (os.environ.get('MAIL_SERVER', '') or '').strip()
     port = int(os.environ.get('MAIL_PORT', '587'))
     user = (os.environ.get('MAIL_USERNAME', '') or '').strip()
@@ -237,7 +298,7 @@ def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
     if _dev_return_code_enabled():
         print(f'DEV verification code for {email}: {code}', file=sys.stderr)
         return code, None
-    if _mail_settings_ready():
+    if _resend_settings_ready() or _mail_settings_ready():
         try:
             send_verification_email(email, code)
         except Exception as e:
@@ -245,8 +306,9 @@ def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
             return None, 'Could not send verification email. Please try again later.'
     else:
         return None, (
-            'Email delivery is not configured. Set MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, '
-            'MAIL_PASSWORD, MAIL_DEFAULT_SENDER on the server, or for local testing only set '
+            'Email delivery is not configured. Set RESEND_API_KEY + RESEND_FROM (recommended), '
+            'or MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER for SMTP. '
+            'For local testing only set '
             'DEV_RETURN_VERIFICATION_CODE=true (code will be printed in server logs).'
         )
     return code, None
