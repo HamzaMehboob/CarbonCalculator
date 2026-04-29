@@ -195,7 +195,7 @@ def _mail_settings_ready() -> bool:
 
 
 def _dev_return_code_enabled() -> bool:
-    return os.environ.get('DEV_RETURN_VERIFICATION_CODE', '').lower() in ('1', 'true', 'yes')
+    return (os.environ.get('DEV_RETURN_VERIFICATION_CODE', '') or '').strip().lower() in ('1', 'true', 'yes')
 
 
 def send_verification_email(to_addr: str, code: str) -> None:
