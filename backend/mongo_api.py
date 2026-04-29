@@ -136,7 +136,7 @@ def init_org_factors(organization_id: str):
     Note: Frontend stores factors per company/org for report generation.
     """
     col = get_factors_col()
-    if not col:
+    if col is None:
         return []
     inserted_factors = []
     for key, data in DEFAULT_CONVERSION_FACTORS.items():
@@ -484,7 +484,7 @@ def get_user_data():
     
     current_user_email = get_jwt_identity()
     users_col = get_users_col()
-    user = users_col.find_one({"email": current_user_email}) if users_col else None
+    user = users_col.find_one({"email": current_user_email}) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
 
     user_data = data_col.find_one({"organization_id": org_id}) if org_id else None
@@ -508,7 +508,7 @@ def save_user_data():
     data = request.get_json()
 
     users_col = get_users_col()
-    user = users_col.find_one({"email": current_user_email}) if users_col else None
+    user = users_col.find_one({"email": current_user_email}) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
 
     data['email'] = current_user_email  # keep for backwards compatibility
@@ -529,7 +529,7 @@ def handle_factors():
     
     current_user_email = get_jwt_identity()
     users_col = get_users_col()
-    user = users_col.find_one({"email": current_user_email}) if users_col else None
+    user = users_col.find_one({"email": current_user_email}) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
     
     if request.method == 'GET':
