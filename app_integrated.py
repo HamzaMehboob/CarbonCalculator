@@ -157,25 +157,30 @@ def inject_css_and_js(html_content):
             st.warning(f"⚠️ JavaScript file not found: {js_file_path}")
     
     # Streamlit components don't automatically serve repo "assets/" files.
-    # Inline the logo so it always renders in production.
+    # Inline brand images so they always render in production.
     try:
-        logo_path = Path(__file__).parent / "frontend" / "assets" / "logo.png"
-        if logo_path.exists():
-            import base64
+        import base64
+
+        assets_dir = Path(__file__).parent / "frontend" / "assets"
+        brand_files = ["logo.png", "SQImpact_v2.png", "SQ_logo.png"]
+        for brand_file in brand_files:
+            logo_path = assets_dir / brand_file
+            if not logo_path.exists():
+                continue
 
             logo_b64 = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
             data_uri = f"data:image/png;base64,{logo_b64}"
 
             html_content = html_content.replace(
-                'src="assets/logo.png"',
+                f'src="assets/{brand_file}"',
                 f'src="{data_uri}"'
             )
             html_content = html_content.replace(
-                "src='assets/logo.png'",
+                f"src='assets/{brand_file}'",
                 f"src='{data_uri}'"
             )
     except Exception as e:
-        st.warning(f"⚠️ Failed to inline logo.png: {e}")
+        st.warning(f"⚠️ Failed to inline branding assets: {e}")
 
     return html_content
 
