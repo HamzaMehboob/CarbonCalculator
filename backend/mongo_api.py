@@ -224,11 +224,23 @@ def _send_verification_email_via_resend(to_addr: str, code: str) -> None:
     payload = {
         'from': from_addr,
         'to': [to_addr],
-        'subject': 'Your SQ Impact verification code',
+        'subject': 'Welcome to SQ Inspect - Your Verification Code',
         'text': (
-            f'Your verification code is: {code}\n\n'
-            f'This code expires in 15 minutes. If you did not sign up, you can ignore this email.\n'
+            f'Welcome to SQ Inspect!\n\n'
+            f'We are thrilled to have you on board. To complete your signup and get started, please use the following verification code:\n\n'
+            f'{code}\n\n'
+            f'This code expires in 15 minutes. If you did not sign up for SQ Inspect, you can safely ignore this email.\n'
         ),
+        'html': (
+            f'<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">'
+            f'<h2 style="color: #2E7D32;">Welcome to SQ Inspect!</h2>'
+            f'<p>We are thrilled to have you on board. To complete your signup and get started, please use the verification code below:</p>'
+            f'<div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 5px; border-radius: 8px; margin: 20px 0; color: #111;">{code}</div>'
+            f'<p style="color: #555; font-size: 14px;">This code expires in <strong>15 minutes</strong>.</p>'
+            f'<hr style="border: none; border-top: 1px solid #eaeaea; margin: 30px 0;" />'
+            f'<p style="color: #999; font-size: 12px;">If you did not sign up for SQ Inspect, you can safely ignore this email.</p>'
+            f'</div>'
+        )
     }
     raw = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
