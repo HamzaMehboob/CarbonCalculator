@@ -1778,6 +1778,11 @@ document.getElementById('logoUpload')?.addEventListener('change', function(e) {
 // ============================================
 
 function initializeApp() {
+    // Initialize theme palette UI first so it's ready for toggleDarkMode calls
+    if (typeof window.initCarbonPaletteUI === 'function') {
+        window.initCarbonPaletteUI();
+    }
+
     // Load saved preferences
     const savedLanguage = localStorage.getItem('language');
     if (savedLanguage) {
@@ -2009,10 +2014,6 @@ function initializeApp() {
         }
     }, 5000);
 
-    if (typeof window.initCarbonPaletteUI === 'function') {
-        window.initCarbonPaletteUI();
-    }
-
     console.log('✅ Carbon Calculator Phase 1 initialized successfully!');
 }
 
@@ -2021,6 +2022,11 @@ function initializeApp() {
 // ============================================
 
 window.addEventListener('DOMContentLoaded', function() {
+    // Initialize theme palette UI as early as possible
+    if (typeof window.initCarbonPaletteUI === 'function') {
+        window.initCarbonPaletteUI();
+    }
+
     // Restore dark mode state first
     if (localStorage.getItem('darkMode') === 'true') {
         appState.darkMode = false; // toggleDarkMode will flip this to true
