@@ -238,6 +238,7 @@ def _send_verification_email_via_resend(to_addr: str, code: str) -> None:
         headers={
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
     )
     with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
