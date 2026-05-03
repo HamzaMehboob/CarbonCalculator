@@ -2,8 +2,9 @@
  * Preset color palettes (GUI-selectable). Applies CSS variables on :root and feeds chart colors.
  */
 (function () {
-    const STORAGE_KEY = 'carbonColorPalette';
-    const DEFAULT_ID = 'ocean';
+    const STORAGE_KEY_PREFIX = 'carbonColorPalette';
+    const DEFAULT_ID_LIGHT = 'ocean';
+    const DEFAULT_ID_DARK = 'midnight';
     /** Display order: Ocean first (default selection for new users). */
     const PALETTE_ORDER = [
         'ocean', 'forest', 'sunset', 'royal', 'graphite', 'midnight', 'aurora'
@@ -359,10 +360,18 @@
         }
     };
 
+    function getStorageKey() {
+        return isDarkModeForPalette() ? (STORAGE_KEY_PREFIX + '_dark') : (STORAGE_KEY_PREFIX + '_light');
+    }
+
+    function getDefaultId() {
+        return isDarkModeForPalette() ? DEFAULT_ID_DARK : DEFAULT_ID_LIGHT;
+    }
+
     function normalizePaletteId(id) {
         const raw = (id || '').trim();
         if (raw && PALETTES[raw]) return raw;
-        return DEFAULT_ID;
+        return getDefaultId();
     }
 
     function isDarkModeForPalette() {
@@ -370,7 +379,7 @@
     }
 
     function getCarbonChartColors() {
-        const id = normalizePaletteId(localStorage.getItem(STORAGE_KEY));
+        const id = normalizePaletteId(localStorage.getItem(getStorageKey()));
         const pal = PALETTES[id];
         const c = pal.charts;
         const dark = isDarkModeForPalette();
@@ -394,9 +403,10 @@
     }
 
     function applyCarbonPalette(paletteId) {
-        const id = normalizePaletteId(paletteId || localStorage.getItem(STORAGE_KEY));
+        const key = getStorageKey();
+        const id = normalizePaletteId(paletteId || localStorage.getItem(key));
         const pal = PALETTES[id];
-        localStorage.setItem(STORAGE_KEY, id);
+        localStorage.setItem(key, id);
 
         const vars = isDarkModeForPalette() ? pal.dark : pal.light;
         const root = document.documentElement;
@@ -456,8 +466,9 @@
             sel.appendChild(opt);
         });
 
-        const stored = normalizePaletteId(localStorage.getItem(STORAGE_KEY));
-        localStorage.setItem(STORAGE_KEY, stored);
+        const key = getStorageKey();
+        const stored = normalizePaletteId(localStorage.getItem(key));
+        localStorage.setItem(key, stored);
         sel.value = stored;
         sel.addEventListener('change', function () {
             applyCarbonPalette(sel.value);

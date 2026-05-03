@@ -32,29 +32,10 @@
 }
 
 [data-theme="dark"] {
-    /* Dark mode: slate + cyan accents */
-    --primary-color: #38BDF8;
-    --primary-dark: #0EA5E9;
-    --secondary-color: #94A3B8;
-    --success-color: #22C55E;
-    --danger-color: #F87171;
-    --warning-color: #FBBF24;
-
-    --bg-main: #020617;
-    --bg-card: #0F172A;
-    --bg-sidebar: #020617;
-    --bg-header: #0B1220;
-    
-    --text-primary: #E2E8F0;
-    --text-secondary: #94A3B8;
-    --text-light: #64748B;
-    
-    --border-color: #1E293B;
+    /* Dynamic variables are handled by theme-palettes.js */
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
-
-    --login-gradient: linear-gradient(135deg, #0369A1 0%, #020617 100%);
 }
 
 /* ============================================
