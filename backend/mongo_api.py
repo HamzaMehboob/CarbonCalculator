@@ -253,10 +253,20 @@ def _send_verification_email_via_resend(to_addr: str, code: str) -> None:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-        status = getattr(resp, 'status', 200)
-        if status >= 400:
-            raise RuntimeError(f'Resend API error: HTTP {status}')
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+            status = getattr(resp, 'status', 200)
+            if status >= 400:
+                raise RuntimeError(f'Resend API error: HTTP {status}')
+    except urllib.error.HTTPError as http_err:
+        # Preserve upstream response details (e.g., sender/domain verification errors).
+        body = ''
+        try:
+            body = (http_err.read() or b'').decode('utf-8', errors='ignore').strip()
+        except Exception:
+            body = ''
+        detail = f' ({body})' if body else ''
+        raise RuntimeError(f'Resend API error: HTTP {http_err.code}{detail}') from http_err
 
 
 def _dev_return_code_enabled() -> bool:
@@ -270,9 +280,13 @@ def send_verification_email(to_addr: str, code: str) -> None:
       1) Resend HTTP API when configured (RESEND_API_KEY + RESEND_FROM/MAIL_DEFAULT_SENDER)
       2) SMTP fallback (MAIL_*)
     """
+    resend_err = None
     if _resend_settings_ready():
-        _send_verification_email_via_resend(to_addr, code)
-        return
+        try:
+            _send_verification_email_via_resend(to_addr, code)
+            return
+        except Exception as e:
+            resend_err = e
 
     server = (os.environ.get('MAIL_SERVER', '') or '').strip()
     port = int(os.environ.get('MAIL_PORT', '587'))
@@ -291,15 +305,24 @@ def send_verification_email(to_addr: str, code: str) -> None:
         f'This code expires in 15 minutes. If you did not sign up, you can ignore this email.\n'
     )
 
-    if use_ssl:
-        with smtplib.SMTP_SSL(server, port, timeout=smtp_timeout_sec) as smtp:
-            smtp.login(user, password)
-            smtp.send_message(msg)
-    else:
-        with smtplib.SMTP(server, port, timeout=smtp_timeout_sec) as smtp:
-            smtp.starttls()
-            smtp.login(user, password)
-            smtp.send_message(msg)
+    if _mail_settings_ready():
+        if use_ssl:
+            with smtplib.SMTP_SSL(server, port, timeout=smtp_timeout_sec) as smtp:
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(server, port, timeout=smtp_timeout_sec) as smtp:
+                smtp.starttls()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        return
+
+    if resend_err is not None:
+        raise RuntimeError(
+            'Email delivery failed via Resend and SMTP is not configured. '
+            f'Resend error: {resend_err}'
+        )
+    raise RuntimeError('Email delivery is not configured for either Resend or SMTP.')
 
 
 def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
