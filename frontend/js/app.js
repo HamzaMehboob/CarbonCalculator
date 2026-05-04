@@ -40,9 +40,7 @@ const appState = {
 // ============================================
 
 // Render / local API. Streamlit sets window.__CARBON_API_BASE__ in app_integrated.py when embedded.
-const API_BASE_URL =
-    (typeof window !== 'undefined' && window.__CARBON_API_BASE__) ||
-    'https://carbon-calculator-api-fe1o.onrender.com/api';
+const API_BASE_URL = 'https://carbon-calculator-api-fe1o.onrender.com/api';
 
 const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_EXPIRES_AT_KEY = 'sessionExpiresAt';
