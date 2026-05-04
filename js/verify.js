@@ -81,8 +81,9 @@ function initVerifyPage() {
             const data = parseJsonResponse(await response.text());
             if (response.ok) {
                 if (okEl) okEl.textContent = data.msg || 'Code sent.';
-                if (devEl && data.dev_verification_code) {
-                    devEl.textContent = `Dev code: ${data.dev_verification_code}`;
+                const codeToShow = data.verification_code || data.dev_verification_code;
+                if (devEl && codeToShow) {
+                    devEl.textContent = `Verification code: ${codeToShow}`;
                 }
             } else if (response.status === 429) {
                 if (errEl) errEl.textContent = data.msg || 'Please wait before resending.';

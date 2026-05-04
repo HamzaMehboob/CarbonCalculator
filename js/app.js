@@ -171,7 +171,7 @@ function loginFailureMessage(status, payload) {
         : 'Could not sign in. Please try again.';
 }
 
-function showVerifyPanel(prefillEmail, devCode) {
+function showVerifyPanel(prefillEmail, verificationCode) {
     const loginFormContainer = document.getElementById('loginFormContainer');
     const signupFormContainer = document.getElementById('signupFormContainer');
     const verifyFormContainer = document.getElementById('verifyFormContainer');
@@ -186,8 +186,8 @@ function showVerifyPanel(prefillEmail, devCode) {
     if (verr) verr.textContent = '';
     if (vok) vok.textContent = '';
     if (vdev) {
-        vdev.textContent = devCode
-            ? (appState.currentLanguage === 'pt' ? 'Código (dev): ' : 'Dev code: ') + devCode
+        vdev.textContent = verificationCode
+            ? (appState.currentLanguage === 'pt' ? 'Código de verificação: ' : 'Verification code: ') + verificationCode
             : '';
     }
 }
@@ -323,7 +323,8 @@ document.getElementById('signupForm')?.addEventListener('submit', async function
                     ? 'Conta criada. Verifique seu e-mail.'
                     : 'Account created. Check your email for the verification code.');
             setTimeout(() => {
-                showVerifyPanel(email.trim(), data.dev_verification_code || '');
+                const codeToShow = data.verification_code || data.dev_verification_code || '';
+                showVerifyPanel(email.trim(), codeToShow);
             }, 800);
         } else {
             const backendMsg =
@@ -421,10 +422,11 @@ document.getElementById('resendVerificationBtn')?.addEventListener('click', asyn
         const data = parseJsonResponse(await response.text());
         if (response.ok) {
             if (vok) vok.textContent = data.msg || '';
-            if (vdev && data.dev_verification_code) {
+            const codeToShow = data.verification_code || data.dev_verification_code;
+            if (vdev && codeToShow) {
                 vdev.textContent =
-                    (appState.currentLanguage === 'pt' ? 'Código (dev): ' : 'Dev code: ') +
-                    data.dev_verification_code;
+                    (appState.currentLanguage === 'pt' ? 'Código de verificação: ' : 'Verification code: ') +
+                    codeToShow;
             }
         } else if (response.status === 429 && verr) {
             verr.textContent = data.msg || '';
