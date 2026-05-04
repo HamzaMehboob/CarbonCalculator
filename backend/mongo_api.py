@@ -306,16 +306,24 @@ def send_verification_email(to_addr: str, code: str) -> None:
     )
 
     if _mail_settings_ready():
-        if use_ssl:
-            with smtplib.SMTP_SSL(server, port, timeout=smtp_timeout_sec) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(server, port, timeout=smtp_timeout_sec) as smtp:
-                smtp.starttls()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        return
+        try:
+            if use_ssl:
+                with smtplib.SMTP_SSL(server, port, timeout=smtp_timeout_sec) as smtp:
+                    smtp.login(user, password)
+                    smtp.send_message(msg)
+            else:
+                with smtplib.SMTP(server, port, timeout=smtp_timeout_sec) as smtp:
+                    smtp.starttls()
+                    smtp.login(user, password)
+                    smtp.send_message(msg)
+            return
+        except Exception as smtp_err:
+            if resend_err is not None:
+                raise RuntimeError(
+                    'Email delivery failed via both Resend and SMTP. '
+                    f'Resend error: {resend_err}. SMTP error: {smtp_err}'
+                ) from smtp_err
+            raise RuntimeError(f'Email delivery failed via SMTP: {smtp_err}') from smtp_err
 
     if resend_err is not None:
         raise RuntimeError(
