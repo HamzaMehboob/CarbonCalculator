@@ -173,6 +173,10 @@ def _normalize_email(email: str | None) -> str:
     return (email or '').strip().lower()
 
 
+def _normalize_username(username: str | None) -> str:
+    return (username or '').strip().lower()
+
+
 def _generate_verification_code() -> str:
     return f'{secrets.randbelow(1_000_000):06d}'
 
@@ -335,8 +339,10 @@ def send_verification_email(to_addr: str, code: str) -> None:
 
 def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
     """
-    Generate a new code, return (plain_code, error_message).
-    If plain_code is None, caller should not persist user without resolving error.
+    Generate a new code, return (plain_code, warning_message_or_none).
+
+    Temporary behavior: always return a code so signup/resend can continue even when
+    mail delivery is unavailable in deployment.
     """
     code = _generate_verification_code()
     if _dev_return_code_enabled():
@@ -347,14 +353,9 @@ def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
             send_verification_email(email, code)
         except Exception as e:
             print(f'ERROR: send_verification_email: {e}', file=sys.stderr)
-            return None, 'Could not send verification email. Please try again later.'
+            return code, 'Could not send verification email. Showing code directly for now.'
     else:
-        return None, (
-            'Email delivery is not configured. Set RESEND_API_KEY + RESEND_FROM (recommended), '
-            'or MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER for SMTP. '
-            'For local testing only set '
-            'DEV_RETURN_VERIFICATION_CODE=true (code will be printed in server logs).'
-        )
+        return code, 'Email delivery is not configured. Showing code directly for now.'
     return code, None
 
 
@@ -367,6 +368,30 @@ def _find_user_by_email(users_col, email: str):
     if user:
         return user
     return users_col.find_one({'email': email.strip()})
+
+
+def _find_user_by_username(users_col, username: str):
+    if not username or users_col is None:
+        return None
+    uname = _normalize_username(username)
+    if not uname:
+        return None
+    user = users_col.find_one({'username': uname})
+    if user:
+        return user
+    return users_col.find_one({'username': username.strip()})
+
+
+def _find_user_by_login(users_col, identifier: str):
+    if not identifier or users_col is None:
+        return None
+    ident = (identifier or '').strip()
+    if '@' in ident:
+        return _find_user_by_email(users_col, ident)
+    user = _find_user_by_username(users_col, ident)
+    if user:
+        return user
+    return _find_user_by_email(users_col, ident)
 
 
 @app.route('/', methods=['GET'])
@@ -387,6 +412,7 @@ def signup():
     if not data: return jsonify({"msg": "Missing JSON"}), 400
         
     email = data.get('email')
+    username = _normalize_username(data.get('username'))
     password = data.get('password')
     confirm_password = data.get('confirm_password')
     company_name = data.get('company_name') or data.get('organization_name') or ''
@@ -403,13 +429,13 @@ def signup():
 
     if _find_user_by_email(users_col, em):
         return jsonify({"msg": "User already exists"}), 400
+    if username and _find_user_by_username(users_col, username):
+        return jsonify({"msg": "Username already exists"}), 400
 
     if not company_name or not str(company_name).strip():
         return jsonify({"msg": "Missing organization/company name"}), 400
 
     plain_code, v_err = _issue_and_send_verification(em)
-    if plain_code is None:
-        return jsonify({'msg': v_err or 'Could not send verification email'}), 503
 
     # Create (or reuse) organization record
     existing_org = orgs_col.find_one({"name": company_name})
@@ -426,10 +452,12 @@ def signup():
     now = datetime.datetime.utcnow()
     users_col.insert_one({
         "email": em,
+        "username": username or em.split('@')[0],
         "password": hashed_password,
         "full_name": data.get('full_name'),
         "organization_id": org_id,
         "organization_name": company_name,
+        "is_org_admin": True,
         "created_at": now,
         "email_verified": False,
         "verification_code_hash": _hash_verification_code(plain_code),
@@ -445,11 +473,10 @@ def signup():
         pass
 
     body = {
-        "msg": "Account created. Check your email for a 6-digit code to verify your address.",
+        "msg": v_err or "Account created. Check your email for a 6-digit code to verify your address.",
         "email": em,
+        "verification_code": plain_code,
     }
-    if _dev_return_code_enabled():
-        body["dev_verification_code"] = plain_code
     return jsonify(body), 201
 
 @app.route('/api/login', methods=['POST'])
@@ -461,11 +488,13 @@ def login():
     if orgs_col is None:
         return jsonify({"msg": "Database connection error (organizations)."}), 503
         
-    data = request.get_json()
-    email = data.get('email')
+    data = request.get_json() or {}
+    identifier = data.get('email') or data.get('username') or data.get('login')
     password = data.get('password')
+    if not identifier or not password:
+        return jsonify({"msg": "Missing login or password"}), 400
 
-    user = _find_user_by_email(users_col, email) if email else None
+    user = _find_user_by_login(users_col, identifier)
     if user and bcrypt.check_password_hash(user['password'], password):
         if user.get('email_verified') is False:
             return jsonify({
@@ -474,7 +503,8 @@ def login():
                 'email': user.get('email'),
             }), 403
 
-        access_token = create_access_token(identity=user['email'])
+        identity = user.get('email') or user.get('username')
+        access_token = create_access_token(identity=identity)
 
         org_id = user.get("organization_id")
         org_name = user.get("organization_name") or user.get("company_name")
@@ -486,15 +516,17 @@ def login():
         return jsonify({
             "access_token": access_token,
             "user": {
-                "email": user['email'],
+                "email": user.get('email'),
+                "username": user.get('username'),
                 "full_name": user.get('full_name'),
                 "company_name": org_name,
                 "organization_id": org_id,
-                "organization_name": org_name
+                "organization_name": org_name,
+                "is_org_admin": bool(user.get('is_org_admin')),
             }
         }), 200
     
-    return jsonify({"msg": "Invalid email or password"}), 401
+    return jsonify({"msg": "Invalid credentials"}), 401
 
 
 @app.route('/api/verify-email', methods=['POST'])
@@ -564,8 +596,6 @@ def resend_verification():
             return jsonify({'msg': f'Please wait {wait} seconds before requesting another code.'}), 429
 
     plain_code, v_err = _issue_and_send_verification(em)
-    if plain_code is None:
-        return jsonify({'msg': v_err or 'Could not send email'}), 503
 
     now = datetime.datetime.utcnow()
     users_col.update_one(
@@ -576,10 +606,71 @@ def resend_verification():
             'verification_sent_at': now,
         }},
     )
-    out = {'msg': 'A new verification code was sent to your email.'}
-    if _dev_return_code_enabled():
-        out['dev_verification_code'] = plain_code
+    out = {
+        'msg': v_err or 'A new verification code was sent to your email.',
+        'verification_code': plain_code,
+    }
     return jsonify(out), 200
+
+
+@app.route('/api/users', methods=['POST'])
+@jwt_required()
+def add_org_user():
+    users_col = get_users_col()
+    if users_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+
+    current_identity = get_jwt_identity()
+    current_user = _find_user_by_login(users_col, current_identity) if current_identity else None
+    if not current_user:
+        return jsonify({"msg": "Invalid auth user"}), 401
+    if not current_user.get('is_org_admin'):
+        return jsonify({"msg": "Only organization admin can add users"}), 403
+
+    payload = request.get_json() or {}
+    username = _normalize_username(payload.get('username'))
+    password = payload.get('password')
+    confirm_password = payload.get('confirm_password')
+    full_name = payload.get('full_name')
+    email = _normalize_email(payload.get('email'))
+
+    if not username or not re.match(r'^[a-z0-9._-]{3,32}$', username):
+        return jsonify({"msg": "Username must be 3-32 chars (a-z, 0-9, ., _, -)"}), 400
+    if not password or not confirm_password:
+        return jsonify({"msg": "Missing password fields"}), 400
+    if password != confirm_password:
+        return jsonify({"msg": "Passwords do not match"}), 400
+    if _find_user_by_username(users_col, username):
+        return jsonify({"msg": "Username already exists"}), 400
+    if email and _find_user_by_email(users_col, email):
+        return jsonify({"msg": "Email already exists"}), 400
+
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+    now = datetime.datetime.utcnow()
+    users_col.insert_one({
+        "email": email or None,
+        "username": username,
+        "password": hashed_password,
+        "full_name": full_name,
+        "organization_id": current_user.get("organization_id"),
+        "organization_name": current_user.get("organization_name"),
+        "is_org_admin": False,
+        "created_at": now,
+        # Child users are managed by org admin; no verification step required.
+        "email_verified": True,
+    })
+
+    return jsonify({
+        "msg": "User added successfully",
+        "user": {
+            "username": username,
+            "email": email or None,
+            "full_name": full_name,
+            "organization_id": current_user.get("organization_id"),
+            "organization_name": current_user.get("organization_name"),
+            "is_org_admin": False,
+        }
+    }), 201
 
 
 @app.route('/api/data', methods=['GET'])
@@ -588,21 +679,21 @@ def get_user_data():
     data_col = get_data_col()
     if data_col is None: return jsonify({"msg": "DB Error"}), 503
     
-    current_user_email = get_jwt_identity()
+    current_identity = get_jwt_identity()
     users_col = get_users_col()
-    user = users_col.find_one({"email": current_user_email}) if users_col is not None else None
+    user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
 
     user_data = data_col.find_one({"organization_id": org_id}) if org_id else None
     if not user_data:
         # Backwards compatibility for existing deployments
-        user_data = data_col.find_one({"email": current_user_email})
+        user_data = data_col.find_one({"email": current_identity})
     
     if user_data:
         user_data['_id'] = str(user_data['_id'])
         user_data['organization_id'] = user_data.get('organization_id', org_id)
         return jsonify(user_data), 200
-    return jsonify({"email": current_user_email, "organization_id": org_id, "sites": {}}), 200
+    return jsonify({"email": user.get("email") if user else None, "organization_id": org_id, "sites": {}}), 200
 
 @app.route('/api/data', methods=['POST'])
 @jwt_required()
@@ -610,21 +701,22 @@ def save_user_data():
     data_col = get_data_col()
     if data_col is None: return jsonify({"msg": "DB Error"}), 503
     
-    current_user_email = get_jwt_identity()
+    current_identity = get_jwt_identity()
     data = request.get_json()
 
     users_col = get_users_col()
-    user = users_col.find_one({"email": current_user_email}) if users_col is not None else None
+    user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
+    user_email = user.get("email") if user else None
 
-    data['email'] = current_user_email  # keep for backwards compatibility
+    data['email'] = user_email or current_identity  # keep for backwards compatibility
     data['organization_id'] = org_id
     data['updated_at'] = datetime.datetime.utcnow()
     
     if org_id:
         data_col.update_one({"organization_id": org_id}, {"$set": data}, upsert=True)
     else:
-        data_col.update_one({"email": current_user_email}, {"$set": data}, upsert=True)
+        data_col.update_one({"email": user_email or current_identity}, {"$set": data}, upsert=True)
     return jsonify({"msg": "Data saved"}), 200
 
 @app.route('/api/factors', methods=['GET', 'POST'])
@@ -633,20 +725,21 @@ def handle_factors():
     factors_col = get_factors_col()
     if factors_col is None: return jsonify({"msg": "DB Error"}), 503
     
-    current_user_email = get_jwt_identity()
+    current_identity = get_jwt_identity()
     users_col = get_users_col()
-    user = users_col.find_one({"email": current_user_email}) if users_col is not None else None
+    user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
+    user_email = user.get("email") if user else None
     
     if request.method == 'GET':
-        query = {"organization_id": org_id} if org_id else {"email": current_user_email}
+        query = {"organization_id": org_id} if org_id else {"email": user_email or current_identity}
         factors = list(factors_col.find(query, {"_id": 0}))
         if not factors:
             if org_id:
                 factors = init_org_factors(org_id)
             else:
                 # Backwards compatibility fallback
-                factors = init_org_factors(current_user_email)
+                factors = init_org_factors(user_email or current_identity)
         return jsonify(factors), 200
         
     if request.method == 'POST':
@@ -669,7 +762,7 @@ def handle_factors():
         }
         
         factors_col.update_one(
-            {"organization_id": org_id, "country_key": country_key} if org_id else {"email": current_user_email, "country_key": country_key},
+            {"organization_id": org_id, "country_key": country_key} if org_id else {"email": user_email or current_identity, "country_key": country_key},
             {"$set": doc},
             upsert=True
         )
