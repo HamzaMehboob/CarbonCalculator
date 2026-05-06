@@ -238,10 +238,12 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
                 localStorage.setItem('isOrgAdmin', data.user.is_org_admin ? 'true' : 'false');
             }
 
-            if (data.user && data.user.is_org_admin) {
+            const allowOrgMainApp = localStorage.getItem('orgOpenMainApp') === 'true';
+            if (data.user && data.user.is_org_admin && !allowOrgMainApp) {
                 window.location.href = 'organization-users.html';
                 return;
             }
+            localStorage.removeItem('orgOpenMainApp');
             
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'flex';
@@ -2041,10 +2043,12 @@ window.addEventListener('DOMContentLoaded', function() {
             return;
         }
         const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
-        if (isOrgAdmin) {
+        const allowOrgMainApp = localStorage.getItem('orgOpenMainApp') === 'true';
+        if (isOrgAdmin && !allowOrgMainApp) {
             window.location.href = 'organization-users.html';
             return;
         }
+        localStorage.removeItem('orgOpenMainApp');
         // Auto-login: set state and sync
         appState.loggedIn = true;
         touchSession();

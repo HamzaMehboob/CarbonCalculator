@@ -210,6 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
         clearAuthSession();
         window.location.href = 'index.html';
     });
+    document.getElementById('backToSigninBtn')?.addEventListener('click', () => {
+        clearAuthSession();
+        window.location.href = 'index.html';
+    });
+    document.getElementById('openOrgDataBtn')?.addEventListener('click', () => {
+        // Let org admin access the main app without being immediately redirected back.
+        localStorage.setItem('orgOpenMainApp', 'true');
+        window.location.href = 'index.html';
+    });
 
     loadUsers();
 });
