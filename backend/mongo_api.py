@@ -177,6 +177,20 @@ def _normalize_username(username: str | None) -> str:
     return (username or '').strip().lower()
 
 
+def _is_valid_username(username: str) -> bool:
+    return bool(re.match(r'^[a-z0-9._-]{3,32}$', username or ''))
+
+
+def _is_strong_password(password: str) -> bool:
+    if not password:
+        return False
+    return bool(
+        re.search(r'[a-z]', password)
+        and re.search(r'[A-Z]', password)
+        and re.search(r'\d', password)
+    )
+
+
 def _generate_verification_code() -> str:
     return f'{secrets.randbelow(1_000_000):06d}'
 
@@ -422,6 +436,8 @@ def signup():
         
     if password != confirm_password:
         return jsonify({"msg": "Passwords do not match"}), 400
+    if not _is_strong_password(password):
+        return jsonify({"msg": "Password must include at least one lowercase letter, one uppercase letter, and one number."}), 400
 
     em = _normalize_email(email)
     if not em:
@@ -568,12 +584,14 @@ def org_users():
     full_name = payload.get('full_name')
     email = _normalize_email(payload.get('email'))
 
-    if not username or not re.match(r'^[a-z0-9._-]{3,32}$', username):
+    if not username or not _is_valid_username(username):
         return jsonify({"msg": "Username must be 3-32 chars (a-z, 0-9, ., _, -)"}), 400
     if not password or not confirm_password:
         return jsonify({"msg": "Missing password fields"}), 400
     if password != confirm_password:
         return jsonify({"msg": "Passwords do not match"}), 400
+    if not _is_strong_password(password):
+        return jsonify({"msg": "Password must include at least one lowercase letter, one uppercase letter, and one number."}), 400
     if _find_user_by_username(users_col, username):
         return jsonify({"msg": "Username already exists"}), 400
     if email and _find_user_by_email(users_col, email):
@@ -652,7 +670,7 @@ def org_user_update_delete(username: str):
 
     if "username" in payload:
         new_username = _normalize_username(payload.get("username"))
-        if not new_username or not re.match(r'^[a-z0-9._-]{3,32}$', new_username):
+        if not new_username or not _is_valid_username(new_username):
             return jsonify({"msg": "Username must be 3-32 chars (a-z, 0-9, ., _, -)"}), 400
         existing = _find_user_by_username(users_col, new_username)
         if existing and existing.get("_id") != target_user.get("_id"):
@@ -666,6 +684,8 @@ def org_user_update_delete(username: str):
             return jsonify({"msg": "Password cannot be empty"}), 400
         if new_password != confirm_password:
             return jsonify({"msg": "Passwords do not match"}), 400
+        if not _is_strong_password(new_password):
+            return jsonify({"msg": "Password must include at least one lowercase letter, one uppercase letter, and one number."}), 400
         updates["password"] = bcrypt.generate_password_hash(new_password).decode('utf-8')
 
     if not updates:
