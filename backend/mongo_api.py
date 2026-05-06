@@ -435,8 +435,6 @@ def signup():
     if not company_name or not str(company_name).strip():
         return jsonify({"msg": "Missing organization/company name"}), 400
 
-    plain_code, v_err = _issue_and_send_verification(em)
-
     # Create (or reuse) organization record
     existing_org = orgs_col.find_one({"name": company_name})
     if existing_org and existing_org.get('_id') is not None:
@@ -459,10 +457,7 @@ def signup():
         "organization_name": company_name,
         "is_org_admin": True,
         "created_at": now,
-        "email_verified": False,
-        "verification_code_hash": _hash_verification_code(plain_code),
-        "verification_expires_at": now + VERIFICATION_TTL,
-        "verification_sent_at": now,
+        "email_verified": True,
     })
 
     # Initialize factors at org level
@@ -472,12 +467,10 @@ def signup():
         # Don't block signup if factors init fails; factors can be lazily initialized later.
         pass
 
-    body = {
-        "msg": v_err or "Account created. Check your email for a 6-digit code to verify your address.",
+    return jsonify({
+        "msg": "Organization account created successfully. Please log in.",
         "email": em,
-        "verification_code": plain_code,
-    }
-    return jsonify(body), 201
+    }), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -496,13 +489,6 @@ def login():
 
     user = _find_user_by_login(users_col, identifier)
     if user and bcrypt.check_password_hash(user['password'], password):
-        if user.get('email_verified') is False:
-            return jsonify({
-                'msg': 'Please verify your email before logging in.',
-                'needs_verification': True,
-                'email': user.get('email'),
-            }), 403
-
         identity = user.get('email') or user.get('username')
         access_token = create_access_token(identity=identity)
 
@@ -531,86 +517,12 @@ def login():
 
 @app.route('/api/verify-email', methods=['POST'])
 def verify_email():
-    users_col = get_users_col()
-    if users_col is None:
-        return jsonify({'msg': 'Database connection error'}), 503
-
-    payload = request.get_json() or {}
-    em = _normalize_email(payload.get('email'))
-    code = (payload.get('code') or '').strip()
-    if not em or not code:
-        return jsonify({'msg': 'Email and code are required'}), 400
-    if not re.match(r'^\d{6}$', code):
-        return jsonify({'msg': 'Code must be 6 digits'}), 400
-
-    user = _find_user_by_email(users_col, em)
-    if not user or user.get('email_verified') is not False:
-        return jsonify({'msg': 'Invalid or expired code'}), 400
-
-    exp = user.get('verification_expires_at')
-    if exp and datetime.datetime.utcnow() > exp:
-        return jsonify({'msg': 'This code has expired. Request a new one.'}), 400
-
-    if user.get('verification_code_hash') != _hash_verification_code(code):
-        return jsonify({'msg': 'Invalid or expired code'}), 400
-
-    users_col.update_one(
-        {'_id': user['_id']},
-        {
-            '$set': {'email_verified': True},
-            '$unset': {
-                'verification_code_hash': '',
-                'verification_expires_at': '',
-                'verification_sent_at': '',
-            },
-        },
-    )
-    return jsonify({'msg': 'Email verified. You can log in.'}), 200
+    return jsonify({'msg': 'Email verification is currently disabled.'}), 410
 
 
 @app.route('/api/resend-verification', methods=['POST'])
 def resend_verification():
-    users_col = get_users_col()
-    if users_col is None:
-        return jsonify({'msg': 'Database connection error'}), 503
-
-    payload = request.get_json() or {}
-    em = _normalize_email(payload.get('email'))
-    if not em:
-        return jsonify({'msg': 'Email is required'}), 400
-
-    user = _find_user_by_email(users_col, em)
-    if not user:
-        return jsonify({
-            'msg': 'If that email is registered and not yet verified, a new code was sent.',
-        }), 200
-
-    if user.get('email_verified') is not False:
-        return jsonify({'msg': 'This account is already verified. You can log in.'}), 400
-
-    sent_at = user.get('verification_sent_at')
-    if sent_at:
-        elapsed = (datetime.datetime.utcnow() - sent_at).total_seconds()
-        if elapsed < RESEND_COOLDOWN_SEC:
-            wait = int(RESEND_COOLDOWN_SEC - elapsed)
-            return jsonify({'msg': f'Please wait {wait} seconds before requesting another code.'}), 429
-
-    plain_code, v_err = _issue_and_send_verification(em)
-
-    now = datetime.datetime.utcnow()
-    users_col.update_one(
-        {'_id': user['_id']},
-        {'$set': {
-            'verification_code_hash': _hash_verification_code(plain_code),
-            'verification_expires_at': now + VERIFICATION_TTL,
-            'verification_sent_at': now,
-        }},
-    )
-    out = {
-        'msg': v_err or 'A new verification code was sent to your email.',
-        'verification_code': plain_code,
-    }
-    return jsonify(out), 200
+    return jsonify({'msg': 'Email verification is currently disabled.'}), 410
 
 
 @app.route('/api/users', methods=['POST'])

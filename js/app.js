@@ -68,6 +68,7 @@ function clearAuthSession() {
     localStorage.removeItem('organizationId');
     localStorage.removeItem('organizationName');
     localStorage.removeItem('userName');
+    localStorage.removeItem('isOrgAdmin');
 }
 
 function touchSession() {
@@ -163,8 +164,8 @@ function loginFailureMessage(status, payload) {
     }
     if (status === 403) {
         return appState.currentLanguage === 'pt'
-            ? 'Verifique seu e-mail antes de entrar.'
-            : 'Please verify your email before logging in.';
+            ? 'Você não tem permissão para esta ação.'
+            : 'You are not authorized for this action.';
     }
     return appState.currentLanguage === 'pt'
         ? 'Não foi possível entrar. Tente novamente.'
@@ -196,7 +197,7 @@ function showVerifyPanel(prefillEmail, verificationCode) {
 document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    const email = document.getElementById('loginEmail').value;
+    const identifier = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     const loginError = document.getElementById('loginError');
     
@@ -206,7 +207,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
         const response = await fetch(`${API_BASE_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ login: identifier, password })
         });
         
         const raw = await response.text();
@@ -224,7 +225,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             }
             appState.loggedIn = true;
             localStorage.setItem('loggedIn', 'true');
-            localStorage.setItem('loginEmail', email);
+            localStorage.setItem('loginEmail', identifier);
             localStorage.setItem('authToken', data.access_token);
             touchSession();
             startSessionMonitor();
@@ -234,6 +235,12 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
                 localStorage.setItem('companyName', data.user.company_name || 'My Company');
                 localStorage.setItem('organizationId', data.user.organization_id || '');
                 localStorage.setItem('organizationName', data.user.organization_name || '');
+                localStorage.setItem('isOrgAdmin', data.user.is_org_admin ? 'true' : 'false');
+            }
+
+            if (data.user && data.user.is_org_admin) {
+                window.location.href = 'organization-users.html';
+                return;
             }
             
             document.getElementById('loginScreen').style.display = 'none';
@@ -245,28 +252,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             initializeApp();
         } else {
             if (loginError) {
-                loginError.textContent = '';
-                if (response.status === 403 && data.needs_verification) {
-                    const msg =
-                        data.msg ||
-                        (appState.currentLanguage === 'pt'
-                            ? 'Verifique seu e-mail antes de entrar.'
-                            : 'Please verify your email before logging in.');
-                    loginError.appendChild(document.createTextNode(msg + ' '));
-                    const link = document.createElement('a');
-                    link.href = '#';
-                    link.textContent =
-                        appState.currentLanguage === 'pt'
-                            ? 'Abrir verificação'
-                            : 'Open verification';
-                    link.addEventListener('click', (ev) => {
-                        ev.preventDefault();
-                        showVerifyPanel(data.email || email);
-                    });
-                    loginError.appendChild(link);
-                } else {
-                    loginError.textContent = loginFailureMessage(response.status, data);
-                }
+                loginError.textContent = loginFailureMessage(response.status, data);
             }
         }
     } catch (err) {
@@ -320,11 +306,18 @@ document.getElementById('signupForm')?.addEventListener('submit', async function
             signupSuccess.textContent =
                 data.msg ||
                 (appState.currentLanguage === 'pt'
-                    ? 'Conta criada. Verifique seu e-mail.'
-                    : 'Account created. Check your email for the verification code.');
+                    ? 'Conta da organização criada. Faça login.'
+                    : 'Organization account created. Please log in.');
             setTimeout(() => {
-                const codeToShow = data.verification_code || data.dev_verification_code || '';
-                showVerifyPanel(email.trim(), codeToShow);
+                const loginFormContainer = document.getElementById('loginFormContainer');
+                const signupFormContainer = document.getElementById('signupFormContainer');
+                const verifyFormContainer = document.getElementById('verifyFormContainer');
+                if (loginFormContainer) loginFormContainer.style.display = 'block';
+                if (signupFormContainer) signupFormContainer.style.display = 'none';
+                if (verifyFormContainer) verifyFormContainer.style.display = 'none';
+                if (document.getElementById('loginEmail')) {
+                    document.getElementById('loginEmail').value = email.trim();
+                }
             }, 800);
         } else {
             const backendMsg =
@@ -2045,6 +2038,11 @@ window.addEventListener('DOMContentLoaded', function() {
     if (wasLoggedIn && savedEmail && token) {
         if (isSessionExpired()) {
             forceLogoutForExpiredSession(false);
+            return;
+        }
+        const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
+        if (isOrgAdmin) {
+            window.location.href = 'organization-users.html';
             return;
         }
         // Auto-login: set state and sync
