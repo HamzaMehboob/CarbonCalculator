@@ -558,6 +558,10 @@ document.getElementById('logoutBtn')?.addEventListener('click', async function()
     if (document.getElementById('signupConfirmPassword')) document.getElementById('signupConfirmPassword').value = '';
 });
 
+document.getElementById('orgUserSettingsBtn')?.addEventListener('click', function() {
+    window.location.href = 'organization-users.html';
+});
+
 // ============================================
 // TABS NAVIGATION
 // ============================================
@@ -1795,6 +1799,12 @@ function initializeApp() {
     if (savedCompanyName) {
         document.getElementById('companyNameInput').value = savedCompanyName;
         document.getElementById('companyName').textContent = savedCompanyName;
+    }
+
+    const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
+    const orgUserSettingsBtn = document.getElementById('orgUserSettingsBtn');
+    if (orgUserSettingsBtn) {
+        orgUserSettingsBtn.style.display = isOrgAdmin ? 'inline-flex' : 'none';
     }
     
     // Load company notes

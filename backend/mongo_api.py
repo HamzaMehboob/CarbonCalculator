@@ -695,11 +695,10 @@ def get_user_data():
     users_col = get_users_col()
     user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
+    if not org_id:
+        return jsonify({"msg": "Organization is not linked to this account."}), 400
 
-    user_data = data_col.find_one({"organization_id": org_id}) if org_id else None
-    if not user_data:
-        # Backwards compatibility for existing deployments
-        user_data = data_col.find_one({"email": current_identity})
+    user_data = data_col.find_one({"organization_id": org_id})
     
     if user_data:
         user_data['_id'] = str(user_data['_id'])
@@ -720,15 +719,14 @@ def save_user_data():
     user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
     user_email = user.get("email") if user else None
+    if not org_id:
+        return jsonify({"msg": "Organization is not linked to this account."}), 400
 
     data['email'] = user_email or current_identity  # keep for backwards compatibility
     data['organization_id'] = org_id
     data['updated_at'] = datetime.datetime.utcnow()
     
-    if org_id:
-        data_col.update_one({"organization_id": org_id}, {"$set": data}, upsert=True)
-    else:
-        data_col.update_one({"email": user_email or current_identity}, {"$set": data}, upsert=True)
+    data_col.update_one({"organization_id": org_id}, {"$set": data}, upsert=True)
     return jsonify({"msg": "Data saved"}), 200
 
 @app.route('/api/factors', methods=['GET', 'POST'])
@@ -742,16 +740,14 @@ def handle_factors():
     user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
     org_id = user.get("organization_id") if user else None
     user_email = user.get("email") if user else None
+    if not org_id:
+        return jsonify({"msg": "Organization is not linked to this account."}), 400
     
     if request.method == 'GET':
-        query = {"organization_id": org_id} if org_id else {"email": user_email or current_identity}
+        query = {"organization_id": org_id}
         factors = list(factors_col.find(query, {"_id": 0}))
         if not factors:
-            if org_id:
-                factors = init_org_factors(org_id)
-            else:
-                # Backwards compatibility fallback
-                factors = init_org_factors(user_email or current_identity)
+            factors = init_org_factors(org_id)
         return jsonify(factors), 200
         
     if request.method == 'POST':
@@ -774,7 +770,7 @@ def handle_factors():
         }
         
         factors_col.update_one(
-            {"organization_id": org_id, "country_key": country_key} if org_id else {"email": user_email or current_identity, "country_key": country_key},
+            {"organization_id": org_id, "country_key": country_key},
             {"$set": doc},
             upsert=True
         )
