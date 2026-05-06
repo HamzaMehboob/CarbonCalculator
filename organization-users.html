@@ -42,6 +42,28 @@
                 <button type="submit" class="btn-primary">Add organization user</button>
             </form>
 
+            <div class="card p-4" style="margin-top: 20px;">
+                <h3 style="margin-bottom: 10px;">Organization users</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 10px;">
+                    Existing passwords are securely hashed and cannot be viewed. You can reset a password via Edit.
+                </p>
+                <div id="usersError" class="error-message" role="alert"></div>
+                <div class="table-wrapper" style="max-height: 320px; overflow: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; margin-top: 16px;">
                 <a href="index.html" class="btn-link">Back to sign in</a>
                 <button id="orgLogoutBtn" type="button" class="btn-link">Logout</button>

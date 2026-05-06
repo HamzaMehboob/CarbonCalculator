@@ -525,19 +525,41 @@ def resend_verification():
     return jsonify({'msg': 'Email verification is currently disabled.'}), 410
 
 
-@app.route('/api/users', methods=['POST'])
+def _require_org_admin(users_col):
+    current_identity = get_jwt_identity()
+    current_user = _find_user_by_login(users_col, current_identity) if current_identity else None
+    if not current_user:
+        return None, (jsonify({"msg": "Invalid auth user"}), 401)
+    if not current_user.get('is_org_admin'):
+        return None, (jsonify({"msg": "Only organization admin can perform this action"}), 403)
+    return current_user, None
+
+
+@app.route('/api/users', methods=['GET', 'POST'])
 @jwt_required()
-def add_org_user():
+def org_users():
     users_col = get_users_col()
     if users_col is None:
         return jsonify({"msg": "Database connection error"}), 503
 
-    current_identity = get_jwt_identity()
-    current_user = _find_user_by_login(users_col, current_identity) if current_identity else None
-    if not current_user:
-        return jsonify({"msg": "Invalid auth user"}), 401
-    if not current_user.get('is_org_admin'):
-        return jsonify({"msg": "Only organization admin can add users"}), 403
+    current_user, err = _require_org_admin(users_col)
+    if err:
+        return err
+
+    if request.method == 'GET':
+        org_id = current_user.get("organization_id")
+        query = {"organization_id": org_id}
+        docs = list(users_col.find(query, {
+            "_id": 0,
+            "email": 1,
+            "username": 1,
+            "full_name": 1,
+            "organization_id": 1,
+            "organization_name": 1,
+            "is_org_admin": 1,
+            "created_at": 1,
+        }).sort("created_at", 1))
+        return jsonify({"users": docs}), 200
 
     payload = request.get_json() or {}
     username = _normalize_username(payload.get('username'))
@@ -583,6 +605,84 @@ def add_org_user():
             "is_org_admin": False,
         }
     }), 201
+
+
+@app.route('/api/users/<username>', methods=['PATCH', 'DELETE'])
+@jwt_required()
+def org_user_update_delete(username: str):
+    users_col = get_users_col()
+    if users_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+
+    current_user, err = _require_org_admin(users_col)
+    if err:
+        return err
+
+    target_username = _normalize_username(username)
+    if not target_username:
+        return jsonify({"msg": "Invalid username"}), 400
+
+    target_user = _find_user_by_username(users_col, target_username)
+    if not target_user:
+        return jsonify({"msg": "User not found"}), 404
+    if target_user.get("organization_id") != current_user.get("organization_id"):
+        return jsonify({"msg": "User does not belong to your organization"}), 403
+    if target_user.get("is_org_admin"):
+        return jsonify({"msg": "Organization admin account cannot be edited or removed here"}), 400
+
+    if request.method == 'DELETE':
+        users_col.delete_one({"_id": target_user["_id"]})
+        return jsonify({"msg": "User removed successfully"}), 200
+
+    payload = request.get_json() or {}
+    updates = {}
+
+    if "full_name" in payload:
+        updates["full_name"] = (payload.get("full_name") or '').strip() or None
+
+    if "email" in payload:
+        new_email = _normalize_email(payload.get("email"))
+        if new_email:
+            existing = _find_user_by_email(users_col, new_email)
+            if existing and existing.get("_id") != target_user.get("_id"):
+                return jsonify({"msg": "Email already exists"}), 400
+            updates["email"] = new_email
+        else:
+            updates["email"] = None
+
+    if "username" in payload:
+        new_username = _normalize_username(payload.get("username"))
+        if not new_username or not re.match(r'^[a-z0-9._-]{3,32}$', new_username):
+            return jsonify({"msg": "Username must be 3-32 chars (a-z, 0-9, ., _, -)"}), 400
+        existing = _find_user_by_username(users_col, new_username)
+        if existing and existing.get("_id") != target_user.get("_id"):
+            return jsonify({"msg": "Username already exists"}), 400
+        updates["username"] = new_username
+
+    new_password = payload.get("password")
+    if new_password is not None:
+        confirm_password = payload.get("confirm_password")
+        if not new_password:
+            return jsonify({"msg": "Password cannot be empty"}), 400
+        if new_password != confirm_password:
+            return jsonify({"msg": "Passwords do not match"}), 400
+        updates["password"] = bcrypt.generate_password_hash(new_password).decode('utf-8')
+
+    if not updates:
+        return jsonify({"msg": "No changes provided"}), 400
+
+    users_col.update_one({"_id": target_user["_id"]}, {"$set": updates})
+    updated = users_col.find_one({"_id": target_user["_id"]}, {
+        "_id": 0,
+        "email": 1,
+        "username": 1,
+        "full_name": 1,
+        "organization_id": 1,
+        "organization_name": 1,
+        "is_org_admin": 1,
+        "created_at": 1,
+    })
+    return jsonify({"msg": "User updated successfully", "user": updated}), 200
 
 
 @app.route('/api/data', methods=['GET'])
