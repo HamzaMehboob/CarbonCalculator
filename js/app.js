@@ -247,10 +247,8 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'flex';
-            
-            // Load user data from MongoDB
-            await loadUserDataFromBackend();
-            
+
+            // Show the app immediately; initializeApp loads local state then syncs MongoDB in the background.
             initializeApp();
         } else {
             if (loginError) {
@@ -451,18 +449,31 @@ document.getElementById('backToLoginFromVerify')?.addEventListener('click', func
 async function loadUserDataFromBackend() {
     const token = getActiveAuthToken();
     if (!token) return;
-    
+
+    let dataResponse;
+    let factorsResponse;
     try {
-        const response = await fetch(`${API_BASE_URL}/data`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.status === 401) {
-            forceLogoutForExpiredSession(true);
-            return;
-        }
-        
-        if (response.ok) {
-            const data = await response.json();
+        [dataResponse, factorsResponse] = await Promise.all([
+            fetch(`${API_BASE_URL}/data`, {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`${API_BASE_URL}/factors`, {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+        ]);
+    } catch (err) {
+        console.error('Error loading data from backend:', err);
+        return;
+    }
+
+    if (dataResponse.status === 401 || factorsResponse.status === 401) {
+        forceLogoutForExpiredSession(true);
+        return;
+    }
+
+    try {
+        if (dataResponse.ok) {
+            const data = await dataResponse.json();
             if (data.organization_id) {
                 localStorage.setItem('organizationId', data.organization_id);
             }
@@ -483,20 +494,12 @@ async function loadUserDataFromBackend() {
             }
         }
     } catch (err) {
-        console.error('Error loading data from backend:', err);
+        console.error('Error parsing sites data from backend:', err);
     }
 
     try {
-        // Also load custom factors
-        const factorsRes = await fetch(`${API_BASE_URL}/factors`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (factorsRes.status === 401) {
-            forceLogoutForExpiredSession(true);
-            return;
-        }
-        if (factorsRes.ok) {
-            const factorsData = await factorsRes.json();
+        if (factorsResponse.ok) {
+            const factorsData = await factorsResponse.json();
             if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiOrganizationFactors) {
                 window.carbonCalc.mergeApiOrganizationFactors(factorsData);
                 if (window.carbonCalc.calculateAllTotals) {
@@ -505,7 +508,7 @@ async function loadUserDataFromBackend() {
             }
         }
     } catch (err) {
-        console.error('Error loading factors from backend:', err);
+        console.error('Error parsing factors from backend:', err);
     }
 }
 
@@ -1955,9 +1958,17 @@ function initializeApp() {
     
     // Sync with MongoDB backend in the background
     loadUserDataFromBackend().then(() => {
-        // Refresh UI from newly synced data if backend data arrived
         if (appState.currentSite) {
             loadSiteData(appState.currentSite);
+        }
+        if (window.carbonCalc && window.carbonCalc.calculateAllTotals) {
+            window.carbonCalc.calculateAllTotals();
+        }
+        if (typeof updateInputEmissionsPreview === 'function') {
+            updateInputEmissionsPreview();
+        }
+        if (typeof updateDashboard === 'function') {
+            updateDashboard();
         }
     });
     
@@ -2064,11 +2075,9 @@ window.addEventListener('DOMContentLoaded', function() {
         if (document.getElementById('loginEmail')) {
             document.getElementById('loginEmail').value = savedEmail;
         }
-        
-        // Load latest from backend then init
-        loadUserDataFromBackend().then(() => {
-            initializeApp();
-        });
+
+        // Same as manual login: paint the UI from cache, then sync in the background (see initializeApp).
+        initializeApp();
     } else {
         // Show login screen
         document.getElementById('loginScreen').style.display = 'flex';
