@@ -40,7 +40,7 @@ const appState = {
 // ============================================
 
 // Render / local API. Streamlit sets window.__CARBON_API_BASE__ in app_integrated.py when embedded.
-const API_BASE_URL = 'https://carbon-calculator-api-fe1o.onrender.com/api';
+const API_BASE_URL = 'https://carboncalculator-2eak.onrender.com/api';
 
 const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_EXPIRES_AT_KEY = 'sessionExpiresAt';
@@ -1004,13 +1004,20 @@ function deleteRow(button) {
 function attachRowListeners(row) {
     const monthInputs = row.querySelectorAll('.month-input');
     const descriptionInput = row.querySelector('input[type="text"]');
-    const yearInput = row.querySelector('input[type="number"]');
+    const yearInput = row.querySelector('input[type="number"]:not(.month-input)');
     const emissionSelect = row.querySelector('.emission-select');
     
     // Save on any input change
     const saveData = () => {
-        calculateRowTotal(row);
-        calculateCategoryTotal(row.closest('table'));
+        if (window.carbonCalc && window.carbonCalc.calculateRowTotal) {
+            window.carbonCalc.calculateRowTotal(row);
+            if (window.carbonCalc.calculateCategoryTotal) {
+                window.carbonCalc.calculateCategoryTotal(row.closest('table'));
+            }
+        } else {
+            calculateRowTotal(row);
+            calculateCategoryTotal(row.closest('table'));
+        }
         saveCurrentSiteData(); // Save immediately on change
     };
     
@@ -1188,12 +1195,16 @@ function loadRowData(row, data) {
         emissionSelect.value = data.emissionType;
     }
     
-    data.months.forEach((value, index) => {
+    (data.months || []).forEach((value, index) => {
         const monthInput = row.querySelector(`.month-input[data-month="${index}"]`);
         if (monthInput) monthInput.value = value || '';
     });
     
-    calculateRowTotal(row);
+    if (window.carbonCalc && window.carbonCalc.calculateRowTotal) {
+        window.carbonCalc.calculateRowTotal(row);
+    } else if (typeof calculateRowTotal === 'function') {
+        calculateRowTotal(row);
+    }
 }
 
 function saveCurrentSiteData() {

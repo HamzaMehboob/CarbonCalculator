@@ -1,7 +1,7 @@
 // Email verification page — same API base as app.js
 const API_BASE_URL =
     (typeof window !== 'undefined' && window.__CARBON_API_BASE__) ||
-    'https://carbon-calculator-api-fe1o.onrender.com/api';
+    'https://carboncalculator-2eak.onrender.com/api';
 
 function parseJsonResponse(raw) {
     if (!raw || !String(raw).trim()) return {};

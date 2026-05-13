@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://carbon-calculator-api-fe1o.onrender.com/api';
+const API_BASE_URL = 'https://carboncalculator-2eak.onrender.com/api';
 
 function clearAuthSession() {
     localStorage.removeItem('loggedIn');

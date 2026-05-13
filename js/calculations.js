@@ -132,14 +132,28 @@ function mergeApiOrganizationFactors(apiDocs) {
         const uiFlat = mapBackendNestedFactorsToUiFlat(rawInner);
         const uiCountry = apiDocCountryKeyToUiCountry(doc.country_key);
         if (uiCountry) {
-            const base = DEFAULT_CONVERSION_FACTORS[uiCountry] || {};
-            merged[uiCountry] = { ...base, ...(merged[uiCountry] || {}), ...uiFlat };
+            const defaults = DEFAULT_CONVERSION_FACTORS[uiCountry] || {};
+            const combined = { ...defaults, ...(merged[uiCountry] || {}), ...uiFlat };
+            merged[uiCountry] = sanitizeMergedCountryFactors(combined, defaults);
         } else {
             const ck = String(doc.country_key || '').trim().toUpperCase();
             if (ck) merged[ck] = { ...(merged[ck] || {}), ...uiFlat };
         }
     });
     CONVERSION_FACTORS = merged;
+}
+
+/** Drop non-positive / non-numeric overrides so bad imports or zeros never wipe calculations. */
+function sanitizeMergedCountryFactors(mergedBucket, defaults) {
+    const out = { ...defaults };
+    if (!mergedBucket || typeof mergedBucket !== 'object') return out;
+    Object.keys(mergedBucket).forEach((k) => {
+        const n = Number(mergedBucket[k]);
+        if (Number.isFinite(n) && n > 0) {
+            out[k] = n;
+        }
+    });
+    return out;
 }
 
 // Current country selection (default UK)
@@ -149,36 +163,61 @@ let currentCountry = 'UK';
 // CALCULATION FUNCTIONS
 // ============================================
 
-function getRowConversionFactor(row, tableId) {
-    const factors =
+function resolveUiFactorBucket() {
+    let bucket =
         CONVERSION_FACTORS[currentCountry] ||
         CONVERSION_FACTORS['UK'] ||
         DEFAULT_CONVERSION_FACTORS['UK'];
-    if (!factors || typeof factors !== 'object') {
-        return 0;
+    if (!bucket || typeof bucket !== 'object') {
+        bucket = DEFAULT_CONVERSION_FACTORS['UK'];
     }
+    // Legacy shape: full API doc stored under UK/BRAZIL (nested `factors` with DEFRA keys)
+    if (bucket.factors && typeof bucket.factors === 'object') {
+        const inner = mapBackendNestedFactorsToUiFlat(bucket.factors);
+        const defaults = DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'];
+        bucket = sanitizeMergedCountryFactors({ ...defaults, ...inner }, defaults);
+    }
+    return bucket;
+}
+
+function factorWithDefaults(bucket, key, defaults) {
+    const n = Number(bucket[key]);
+    if (Number.isFinite(n) && n > 0) {
+        return n;
+    }
+    const d = Number(defaults[key]);
+    if (Number.isFinite(d) && d > 0) {
+        return d;
+    }
+    return 0;
+}
+
+function getRowConversionFactor(row, tableId) {
+    const bucket = resolveUiFactorBucket();
+    const defaults =
+        DEFAULT_CONVERSION_FACTORS[currentCountry] ||
+        DEFAULT_CONVERSION_FACTORS['UK'];
+
     const emissionSelect = row.querySelector('.emission-select');
 
-    if (
-        emissionSelect &&
-        emissionSelect.value &&
-        factors[emissionSelect.value] !== undefined
-    ) {
-        return factors[emissionSelect.value];
+    if (emissionSelect && emissionSelect.value) {
+        const v = factorWithDefaults(bucket, emissionSelect.value, defaults);
+        if (v > 0) {
+            return v;
+        }
     }
 
-    // Fallback to category defaults (backwards compatibility)
     switch (tableId) {
         case 'waterTable':
-            return factors.water;
+            return factorWithDefaults(bucket, 'water', defaults);
         case 'energyTable':
-            return factors.electricity;
+            return factorWithDefaults(bucket, 'electricity', defaults);
         case 'wasteTable':
-            return factors.waste;
+            return factorWithDefaults(bucket, 'waste', defaults);
         case 'transportTable':
-            return factors.transport_petrol;
+            return factorWithDefaults(bucket, 'transport_petrol', defaults);
         case 'refrigerantsTable':
-            return factors.refrigerant_R410A;
+            return factorWithDefaults(bucket, 'refrigerant_R410A', defaults);
         default:
             return 0;
     }
@@ -512,7 +551,14 @@ window.carbonCalc = {
     // Allow external code (e.g. import/export tools) to replace factors database
     setConversionFactors: function (newDb) {
         if (!newDb || typeof newDb !== 'object') return;
-        CONVERSION_FACTORS = newDb;
+        const sanitized = { ...newDb };
+        ['UK', 'BRAZIL'].forEach((cc) => {
+            const def = DEFAULT_CONVERSION_FACTORS[cc];
+            if (def && sanitized[cc] && typeof sanitized[cc] === 'object') {
+                sanitized[cc] = sanitizeMergedCountryFactors(sanitized[cc], def);
+            }
+        });
+        CONVERSION_FACTORS = sanitized;
     },
     mergeApiOrganizationFactors,
     getConversionFactors: function () {
