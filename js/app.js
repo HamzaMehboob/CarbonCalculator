@@ -497,14 +497,10 @@ async function loadUserDataFromBackend() {
         }
         if (factorsRes.ok) {
             const factorsData = await factorsRes.json();
-            if (Array.isArray(factorsData) && factorsData.length > 0) {
-                // Reconstruct dictionary
-                const db = {};
-                factorsData.forEach(item => {
-                    db[item.country_key] = item;
-                });
-                if (window.carbonCalc && window.carbonCalc.setConversionFactors) {
-                    window.carbonCalc.setConversionFactors(db);
+            if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiOrganizationFactors) {
+                window.carbonCalc.mergeApiOrganizationFactors(factorsData);
+                if (window.carbonCalc.calculateAllTotals) {
+                    window.carbonCalc.calculateAllTotals();
                 }
             }
         }

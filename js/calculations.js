@@ -4,8 +4,8 @@
 // ============================================
 
 // Conversion Factors Database (kg CO2e per unit)
-// This object can be extended/overwritten via import in the frontend.
-let CONVERSION_FACTORS = {
+// Immutable defaults; CONVERSION_FACTORS may be extended (e.g. Excel import) or merged from the API.
+const DEFAULT_CONVERSION_FACTORS = {
     // UK 2025 Factors (official government data)
     UK: {
         water: 0.344,           // per m³
@@ -28,7 +28,7 @@ let CONVERSION_FACTORS = {
         refrigerant_R134a: 1430, // per kg
         refrigerant_R32: 675,    // per kg
     },
-    
+
     // Brazil Factors (latest available)
     BRAZIL: {
         water: 0.421,           // per m³
@@ -53,6 +53,95 @@ let CONVERSION_FACTORS = {
     }
 };
 
+let CONVERSION_FACTORS = JSON.parse(JSON.stringify(DEFAULT_CONVERSION_FACTORS));
+
+function _finiteNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Flatten Mongo/API factor docs (DEFRA-style keys under `factors`) into the shape used by the UI
+ * (`electricity`, `water`, …). Already-flat UI keys are passed through.
+ */
+function mapBackendNestedFactorsToUiFlat(raw) {
+    if (!raw || typeof raw !== 'object') return {};
+    const looksDefra = 'electricity_grid' in raw || 'water_supply' in raw;
+    if (!looksDefra) {
+        const out = {};
+        Object.keys(raw).forEach((k) => {
+            const n = _finiteNumber(raw[k]);
+            if (n !== undefined) out[k] = n;
+        });
+        return out;
+    }
+    const f = raw;
+    const out = {};
+    const set = (uiKey, val) => {
+        const n = _finiteNumber(val);
+        if (n !== undefined) out[uiKey] = n;
+    };
+    set('water', f.water_supply);
+    set('wastewater', f.water_treatment);
+    set('electricity', f.electricity_grid);
+    set('naturalGas', f.natural_gas);
+    set('diesel', f.heating_oil);
+    set('waste', f.waste_landfill);
+    set('wasteRecycled', f.waste_recycled);
+    set('waste_composted', f.waste_composted);
+    set('transport_petrol', f.car_petrol_medium);
+    set('transport_diesel', f.car_diesel_medium);
+    set('transport_electric', f.car_electric);
+    if (_finiteNumber(f.flight_short_intl) !== undefined) {
+        out.flights_short = _finiteNumber(f.flight_short_intl);
+    } else if (_finiteNumber(f.flight_domestic) !== undefined) {
+        out.flights_short = _finiteNumber(f.flight_domestic);
+    }
+    if (_finiteNumber(f.flight_domestic) !== undefined) {
+        out.flights_medium = _finiteNumber(f.flight_domestic);
+    } else {
+        const a = _finiteNumber(f.flight_short_intl);
+        const b = _finiteNumber(f.flight_long_intl);
+        if (a !== undefined && b !== undefined) {
+            out.flights_medium = (a + b) / 2;
+        }
+    }
+    set('flights_long', f.flight_long_intl);
+    set('refrigerant_R410A', f.refrigerant_R410A);
+    set('refrigerant_R134a', f.refrigerant_R134a);
+    set('refrigerant_R32', f.refrigerant_R32);
+    return out;
+}
+
+function apiDocCountryKeyToUiCountry(countryKey) {
+    const u = String(countryKey || '').toUpperCase();
+    if (u === 'UK' || u.startsWith('UK_')) return 'UK';
+    if (u === 'BRAZIL' || u.startsWith('BRAZIL')) return 'BRAZIL';
+    return null;
+}
+
+/**
+ * Merge GET /api/factors payload into CONVERSION_FACTORS without breaking UK/BRAZIL keys expected by the UI.
+ */
+function mergeApiOrganizationFactors(apiDocs) {
+    if (!Array.isArray(apiDocs) || apiDocs.length === 0) return;
+    const merged = { ...CONVERSION_FACTORS };
+    apiDocs.forEach((doc) => {
+        if (!doc || typeof doc !== 'object') return;
+        const rawInner = doc.factors && typeof doc.factors === 'object' ? doc.factors : {};
+        const uiFlat = mapBackendNestedFactorsToUiFlat(rawInner);
+        const uiCountry = apiDocCountryKeyToUiCountry(doc.country_key);
+        if (uiCountry) {
+            const base = DEFAULT_CONVERSION_FACTORS[uiCountry] || {};
+            merged[uiCountry] = { ...base, ...(merged[uiCountry] || {}), ...uiFlat };
+        } else {
+            const ck = String(doc.country_key || '').trim().toUpperCase();
+            if (ck) merged[ck] = { ...(merged[ck] || {}), ...uiFlat };
+        }
+    });
+    CONVERSION_FACTORS = merged;
+}
+
 // Current country selection (default UK)
 let currentCountry = 'UK';
 
@@ -61,11 +150,20 @@ let currentCountry = 'UK';
 // ============================================
 
 function getRowConversionFactor(row, tableId) {
-    const category = tableId.replace('Table', '');
-    const factors = CONVERSION_FACTORS[currentCountry] || CONVERSION_FACTORS['UK'];
+    const factors =
+        CONVERSION_FACTORS[currentCountry] ||
+        CONVERSION_FACTORS['UK'] ||
+        DEFAULT_CONVERSION_FACTORS['UK'];
+    if (!factors || typeof factors !== 'object') {
+        return 0;
+    }
     const emissionSelect = row.querySelector('.emission-select');
 
-    if (emissionSelect && emissionSelect.value && factors[emissionSelect.value] !== undefined) {
+    if (
+        emissionSelect &&
+        emissionSelect.value &&
+        factors[emissionSelect.value] !== undefined
+    ) {
         return factors[emissionSelect.value];
     }
 
@@ -416,6 +514,7 @@ window.carbonCalc = {
         if (!newDb || typeof newDb !== 'object') return;
         CONVERSION_FACTORS = newDb;
     },
+    mergeApiOrganizationFactors,
     getConversionFactors: function () {
         return CONVERSION_FACTORS;
     }

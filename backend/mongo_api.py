@@ -68,19 +68,39 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 # MongoDB Configuration
 CONNECTION_STRING = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/carbon_calculator')
 
+# Reuse one client per process so each HTTP request does not pay for a new TLS handshake (critical for Atlas latency).
+_mongo_client = None
+_mongo_db = None
+
+
 def get_db():
+    global _mongo_client, _mongo_db
     try:
+        if _mongo_client is not None and _mongo_db is not None:
+            return _mongo_db
+
         # Added tlsAllowInvalidCertificates=True to bypass common SSL issues on cloud providers
-        client = MongoClient(CONNECTION_STRING, serverSelectionTimeoutMS=5000, tlsAllowInvalidCertificates=True)
-        # Check connection
-        client.admin.command('ping')
-        
-        db = client.get_default_database() if '?' not in CONNECTION_STRING else client[CONNECTION_STRING.split('/')[-1].split('?')[0] or 'carbon_calculator']
+        _mongo_client = MongoClient(
+            CONNECTION_STRING,
+            serverSelectionTimeoutMS=20000,
+            tlsAllowInvalidCertificates=True,
+            maxPoolSize=50,
+        )
+        _mongo_client.admin.command('ping')
+
+        db = (
+            _mongo_client.get_default_database()
+            if '?' not in CONNECTION_STRING
+            else _mongo_client[CONNECTION_STRING.split('/')[-1].split('?')[0] or 'carbon_calculator']
+        )
         if not db.name or db.name == 'admin':
-            db = client['carbon_calculator']
-        return db
+            db = _mongo_client['carbon_calculator']
+        _mongo_db = db
+        return _mongo_db
     except Exception as e:
         print(f"ERROR: Could not connect to MongoDB: {e}", file=sys.stderr)
+        _mongo_client = None
+        _mongo_db = None
         return None
 
 # Lazy collection access helpers
