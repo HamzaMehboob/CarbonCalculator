@@ -69,6 +69,36 @@ const QA_ALLOWED_EMAIL = 'rd.hamza@isys.sa';
 const LAST_LOADED_ORG_KEY = 'lastLoadedOrganizationId';
 const LEGACY_SITES_CACHE_KEY = 'carbonCalcSites';
 
+let knownUserProfile = null;
+
+function getKnownUserProfile() {
+    return knownUserProfile;
+}
+
+function setKnownUserProfile(profile) {
+    if (!profile || typeof profile !== 'object') return;
+    knownUserProfile = {
+        full_name: profile.full_name || profile.fullName || '',
+        email: profile.email || '',
+    };
+    if (knownUserProfile.full_name) {
+        localStorage.setItem('userName', knownUserProfile.full_name);
+    }
+    if (knownUserProfile.email) {
+        localStorage.setItem('userEmail', knownUserProfile.email);
+    }
+    if (window.GeneralInfo?.applyLoginDetailsFromKnownUser) {
+        window.GeneralInfo.applyLoginDetailsFromKnownUser(
+            knownUserProfile,
+            getOrgLocalItem,
+            setOrgLocalItem
+        );
+    }
+}
+
+window.getKnownUserProfile = getKnownUserProfile;
+window.setKnownUserProfile = setKnownUserProfile;
+
 const ORG_SCOPED_PREF_KEYS = [
     'companyName', 'companyNotes', 'companyLogo', 'hiddenWidgets',
     'projectNumber', 'reportingPeriod', 'issueDate', 'reportVersion', 'reportStatus',
@@ -103,19 +133,49 @@ function orgStorageKey(baseKey) {
 }
 
 function getOrgLocalItem(baseKey, fallback = '') {
+    if (window.OrgPreferences?.getOrgLocalItem) {
+        return window.OrgPreferences.getOrgLocalItem(baseKey, fallback);
+    }
     const scoped = localStorage.getItem(orgStorageKey(baseKey));
     if (scoped !== null) return scoped;
     return fallback;
 }
 
 function setOrgLocalItem(baseKey, value) {
+    if (window.OrgPreferences?.setOrgLocalItem) {
+        window.OrgPreferences.setOrgLocalItem(baseKey, value);
+        return;
+    }
     localStorage.setItem(orgStorageKey(baseKey), value == null ? '' : String(value));
 }
 
 function clearLegacyGlobalFormCache() {
-    ORG_SCOPED_PREF_KEYS.forEach((key) => localStorage.removeItem(key));
+    ORG_SCOPED_PREF_KEYS.forEach((key) => localStorage.removeItem(orgStorageKey(key)));
     localStorage.removeItem(LEGACY_SITES_CACHE_KEY);
+    if (window.OrgPreferences?.clearOrgPreferencesCache) {
+        window.OrgPreferences.clearOrgPreferencesCache();
+    }
 }
+
+function collectLegacyOrgPreferencesFromLocalStorage() {
+    const out = {};
+    ORG_SCOPED_PREF_KEYS.forEach((key) => {
+        const scoped = localStorage.getItem(orgStorageKey(key));
+        if (scoped !== null && scoped !== '') out[key] = scoped;
+    });
+    return out;
+}
+
+let orgPreferencesSaveTimer = null;
+function scheduleOrgPreferencesSave() {
+    if (!appState.loggedIn) return;
+    if (orgPreferencesSaveTimer) clearTimeout(orgPreferencesSaveTimer);
+    orgPreferencesSaveTimer = setTimeout(() => {
+        orgPreferencesSaveTimer = null;
+        saveUserDataToBackend();
+    }, 800);
+}
+window.scheduleOrgPreferencesSave = scheduleOrgPreferencesSave;
 
 function createDefaultSitesState(companyName) {
     const name = companyName || 'My Company';
@@ -164,9 +224,6 @@ function ensureOrganizationSession(orgId, companyName) {
     }
     refreshAssessmentScopeForm();
 }
-
-window.getOrgLocalItem = getOrgLocalItem;
-window.setOrgLocalItem = setOrgLocalItem;
 
 function normalizeAccountEmail(value) {
     return String(value || '').trim().toLowerCase();
@@ -331,6 +388,10 @@ const CATEGORY_DEFAULT_UNITS = {
 
 function clearAuthSession() {
     appState.loggedIn = false;
+    knownUserProfile = null;
+    if (window.OrgPreferences?.clearOrgPreferencesCache) {
+        window.OrgPreferences.clearOrgPreferencesCache();
+    }
     localStorage.removeItem('loggedIn');
     localStorage.removeItem('loginEmail');
     localStorage.removeItem('userEmail');
@@ -530,6 +591,10 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
                 if (data.user.email) {
                     localStorage.setItem('userEmail', data.user.email);
                 }
+                setKnownUserProfile({
+                    full_name: data.user.full_name,
+                    email: data.user.email,
+                });
                 ensureOrganizationSession(
                     data.user.organization_id || '',
                     data.user.company_name || 'My Company'
@@ -804,14 +869,45 @@ async function loadUserDataFromBackend() {
             if (data.organization_id) {
                 localStorage.setItem('organizationId', data.organization_id);
             }
-            // ALWAYS overwrite local state with backend state (source of truth per organization)
-            const companyName = localStorage.getItem('companyName') || 'My Company';
+            const companyName =
+                data.org_preferences?.companyName ||
+                localStorage.getItem('companyName') ||
+                'My Company';
             appState.sites = (data.sites && Object.keys(data.sites).length > 0)
                 ? data.sites
                 : createDefaultSitesState(companyName);
             saveSitesToLocalStorage();
             rebuildSitesUIFromState();
             sitesLoaded = true;
+
+            const serverPrefs = data.org_preferences;
+            const hasServerPrefs =
+                serverPrefs && typeof serverPrefs === 'object' && Object.keys(serverPrefs).length > 0;
+            if (data.user_profile) {
+                setKnownUserProfile(data.user_profile);
+            } else {
+                setKnownUserProfile({
+                    full_name: localStorage.getItem('userName') || '',
+                    email:
+                        localStorage.getItem('userEmail') ||
+                        localStorage.getItem('loginEmail') ||
+                        '',
+                });
+            }
+
+            if (window.OrgPreferences?.hydrateFromServer) {
+                if (hasServerPrefs) {
+                    window.OrgPreferences.hydrateFromServer(serverPrefs);
+                } else {
+                    const legacy = collectLegacyOrgPreferencesFromLocalStorage();
+                    if (Object.keys(legacy).length > 0) {
+                        window.OrgPreferences.hydrateFromServer(legacy);
+                        scheduleOrgPreferencesSave();
+                    } else {
+                        window.OrgPreferences.hydrateFromServer({});
+                    }
+                }
+            }
         }
     } catch (err) {
         console.error('Error parsing sites data from backend:', err);
@@ -844,7 +940,12 @@ async function saveUserDataToBackend() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ sites: appState.sites })
+            body: JSON.stringify({
+                sites: appState.sites,
+                org_preferences: window.OrgPreferences?.collectOrgPreferencesFromDOM
+                    ? window.OrgPreferences.collectOrgPreferencesFromDOM()
+                    : {},
+            })
         });
         if (response.status === 401) {
             forceLogoutForExpiredSession(true);
@@ -2258,7 +2359,7 @@ document.getElementById('logoUpload')?.addEventListener('change', function(e) {
 // INITIALIZATION
 // ============================================
 
-function initializeApp() {
+async function initializeApp() {
     // Initialize theme palette UI first so it's ready for toggleDarkMode calls
     if (typeof window.initCarbonPaletteUI === 'function') {
         window.initCarbonPaletteUI();
@@ -2276,68 +2377,66 @@ function initializeApp() {
         toggleDarkMode();
     }
     
-    // Load company name (organization-scoped)
-    const savedCompanyName = getOrgLocalItem('companyName', localStorage.getItem('companyName') || 'My Company');
-    if (savedCompanyName) {
-        document.getElementById('companyNameInput').value = savedCompanyName;
-        document.getElementById('companyName').textContent = savedCompanyName;
-    }
-
     const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
     const orgUserSettingsBtn = document.getElementById('orgUserSettingsBtn');
     if (orgUserSettingsBtn) {
         orgUserSettingsBtn.style.display = isOrgAdmin ? 'inline-flex' : 'none';
     }
-    
-    // Load company notes (organization-scoped)
-    const savedCompanyNotes = getOrgLocalItem('companyNotes', '');
-    document.getElementById('companyNotes').value = savedCompanyNotes;
 
-    // Load General Info fields (drives final report + placeholders)
+    // MongoDB is source of truth for sites + org_preferences (General Info, Assessment Scope)
+    await syncOrganizationDataFromServer();
+
+    const savedCompanyName = getOrgLocalItem('companyName', localStorage.getItem('companyName') || 'My Company');
+    if (savedCompanyName) {
+        const companyInput = document.getElementById('companyNameInput');
+        const companyTitle = document.getElementById('companyName');
+        if (companyInput) companyInput.value = savedCompanyName;
+        if (companyTitle) companyTitle.textContent = savedCompanyName;
+    }
+
+    const companyNotesEl = document.getElementById('companyNotes');
+    if (companyNotesEl) companyNotesEl.value = getOrgLocalItem('companyNotes', '');
+
     const projectNumberEl = document.getElementById('projectNumberInput');
-    if (projectNumberEl) {
-        projectNumberEl.value = getOrgLocalItem('projectNumber', '');
-    }
     const reportingPeriodEl = document.getElementById('reportingPeriodInput');
-    if (reportingPeriodEl) {
-        reportingPeriodEl.value = getOrgLocalItem('reportingPeriod', '');
-    }
     const issueDateEl = document.getElementById('issueDateInput');
-    if (issueDateEl) {
-        issueDateEl.value = getOrgLocalItem('issueDate', '');
-    }
     const reportVersionEl = document.getElementById('reportVersionInput');
-    if (reportVersionEl) {
-        reportVersionEl.value = getOrgLocalItem('reportVersion', '1.0');
-    }
     const reportStatusEl = document.getElementById('reportStatusSelect');
-    if (reportStatusEl) {
-        reportStatusEl.value = getOrgLocalItem('reportStatus', 'Draft');
-    }
-    
+    const organizationProfileEl = document.getElementById('organizationProfileInput');
+
+    if (projectNumberEl) projectNumberEl.value = getOrgLocalItem('projectNumber', '');
+    if (reportingPeriodEl) reportingPeriodEl.value = getOrgLocalItem('reportingPeriod', '');
+    if (issueDateEl) issueDateEl.value = getOrgLocalItem('issueDate', '');
+    if (reportVersionEl) reportVersionEl.value = getOrgLocalItem('reportVersion', '1.0');
+    if (reportStatusEl) reportStatusEl.value = getOrgLocalItem('reportStatus', 'Draft');
+    if (organizationProfileEl) organizationProfileEl.value = getOrgLocalItem('organizationProfile', '');
+
     const savedLogo = getOrgLocalItem('companyLogo', '');
     if (savedLogo) {
-        document.getElementById('companyLogoImg').src = savedLogo;
+        const logoImg = document.getElementById('companyLogoImg');
+        if (logoImg) logoImg.src = savedLogo;
     }
-    
-    // Load hidden widgets
+
     const savedHiddenWidgets = getOrgLocalItem('hiddenWidgets', '');
     if (savedHiddenWidgets) {
-        appState.hiddenWidgets = JSON.parse(savedHiddenWidgets);
-        appState.hiddenWidgets.forEach(widgetId => {
-            const widget = document.querySelector(`[data-widget="${widgetId}"]`);
-            if (widget) widget.classList.add('hidden');
-        });
+        try {
+            appState.hiddenWidgets = JSON.parse(savedHiddenWidgets);
+            appState.hiddenWidgets.forEach((widgetId) => {
+                const widget = document.querySelector(`[data-widget="${widgetId}"]`);
+                if (widget) widget.classList.add('hidden');
+            });
+        } catch (_e) {
+            appState.hiddenWidgets = [];
+        }
     }
-    
-    // Initialize tabs
+
     initializeTabs();
 
     if (window.AssessmentScopeForm?.init) {
         window.AssessmentScopeForm.init();
     }
 
-    // Bind General Info inputs to localStorage
+    // Bind General Info / report metadata (persisted via org_preferences on server)
     const bindTextInput = (el, key) => {
         if (!el || el.dataset.bound === '1') return;
         el.dataset.bound = '1';
@@ -2353,8 +2452,6 @@ function initializeApp() {
         reportStatusEl.addEventListener('change', () => setOrgLocalItem('reportStatus', reportStatusEl.value));
     }
 
-    const organizationProfileEl = document.getElementById('organizationProfileInput');
-    if (organizationProfileEl) organizationProfileEl.value = getOrgLocalItem('organizationProfile', '');
     if (window.GeneralInfo?.initGeneralInfoForm) {
         window.GeneralInfo.initGeneralInfoForm(getOrgLocalItem, setOrgLocalItem);
     }
@@ -2393,22 +2490,19 @@ function initializeApp() {
         renderQaState();
     }
     applyQaVisibility();
-    
-    // Load organization data from MongoDB (fallback to org-scoped cache only if API unavailable)
-    syncOrganizationDataFromServer().then(() => {
-        if (appState.currentSite) {
-            loadSiteData(appState.currentSite);
-        }
-        if (window.carbonCalc && window.carbonCalc.calculateAllTotals) {
-            window.carbonCalc.calculateAllTotals();
-        }
-        if (typeof updateInputEmissionsPreview === 'function') {
-            updateInputEmissionsPreview();
-        }
-        if (typeof updateDashboard === 'function') {
-            updateDashboard();
-        }
-    });
+
+    if (appState.currentSite) {
+        loadSiteData(appState.currentSite);
+    }
+    if (window.carbonCalc?.calculateAllTotals) {
+        window.carbonCalc.calculateAllTotals();
+    }
+    if (typeof updateInputEmissionsPreview === 'function') {
+        updateInputEmissionsPreview();
+    }
+    if (typeof updateDashboard === 'function') {
+        updateDashboard();
+    }
     
     // Ensure current site data is fully loaded after a short delay
     setTimeout(() => {
@@ -2619,6 +2713,9 @@ function toggleLanguage() {
     appState.currentLanguage = appState.currentLanguage === 'en' ? 'pt' : 'en';
     localStorage.setItem('language', appState.currentLanguage);
     updateLanguage();
+    if (window.GeneralInfo?.syncLocationCountryFromLanguage) {
+        window.GeneralInfo.syncLocationCountryFromLanguage(getOrgLocalItem, setOrgLocalItem);
+    }
 }
 
 // Attach UI Toggles

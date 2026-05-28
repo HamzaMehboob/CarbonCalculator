@@ -59,9 +59,10 @@ function giFieldRow(field) {
         </div>`;
     }
     const inputType = field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text';
+    const readOnly = field.readOnly ? ' readonly class="gi-readonly"' : '';
     return `<div class="form-inline-group full-width">
         <label for="${id}">${label}</label>
-        <input type="${inputType}" id="${id}" data-gi-key="${field.key}"${placeholder}${step}${min} />
+        <input type="${inputType}" id="${id}" data-gi-key="${field.key}"${placeholder}${step}${min}${readOnly} />
     </div>`;
 }
 
@@ -121,8 +122,8 @@ const GENERAL_INFO_SECTIONS = [
     {
         title: 'Login details',
         fields: [
-            { key: 'contactName', label: 'Contact Name', type: 'text' },
-            { key: 'contactEmail', label: 'Email', type: 'email' },
+            { key: 'contactName', label: 'Contact Name', type: 'text', readOnly: true },
+            { key: 'contactEmail', label: 'Email', type: 'email', readOnly: true },
             {
                 key: 'locationCountry',
                 label: 'Location (country)',
@@ -380,6 +381,63 @@ function renderGeneralInfoSections(host) {
     host.innerHTML = GENERAL_INFO_SECTIONS.map(giSectionBlock).join('');
 }
 
+function countryForLanguage(lang) {
+    return lang === 'pt' ? 'BRAZIL' : 'UK';
+}
+
+function resolveKnownUserProfile(profile) {
+    const fromArg = profile && typeof profile === 'object' ? profile : null;
+    const fromWindow =
+        typeof window.getKnownUserProfile === 'function' ? window.getKnownUserProfile() : null;
+    const merged = fromArg || fromWindow || {};
+    return {
+        full_name:
+            merged.full_name ||
+            (typeof localStorage !== 'undefined' ? localStorage.getItem('userName') : '') ||
+            '',
+        email:
+            merged.email ||
+            (typeof localStorage !== 'undefined'
+                ? localStorage.getItem('userEmail') || localStorage.getItem('loginEmail')
+                : '') ||
+            '',
+    };
+}
+
+function applyLoginDetailsFromKnownUser(profile, getOrgLocalItem, setOrgLocalItem) {
+    const known = resolveKnownUserProfile(profile);
+    const nameEl = document.getElementById('contactNameInput');
+    const emailEl = document.getElementById('contactEmailInput');
+    if (nameEl) {
+        nameEl.value = known.full_name || '';
+        nameEl.readOnly = true;
+        if (known.full_name) setOrgLocalItem('contactName', known.full_name);
+    }
+    if (emailEl) {
+        emailEl.value = known.email || '';
+        emailEl.readOnly = true;
+        if (known.email) setOrgLocalItem('contactEmail', known.email);
+    }
+    syncLocationCountryFromLanguage(getOrgLocalItem, setOrgLocalItem);
+}
+
+function syncLocationCountryFromLanguage(getOrgLocalItem, setOrgLocalItem) {
+    const lang =
+        (typeof appState !== 'undefined' && appState.currentLanguage) ||
+        (typeof localStorage !== 'undefined' && localStorage.getItem('language')) ||
+        'en';
+    const country = countryForLanguage(lang);
+    setOrgLocalItem('locationCountry', country);
+    setOrgLocalItem('carbonCalcCountry', country);
+    const locEl = document.getElementById('locationCountryInput');
+    if (locEl) locEl.value = country;
+    const countrySelect = document.getElementById('countrySelect');
+    if (countrySelect) countrySelect.value = country;
+    if (window.carbonCalc?.setCountry) {
+        window.carbonCalc.setCountry(country);
+    }
+}
+
 function initGeneralInfoForm(getOrgLocalItem, setOrgLocalItem) {
     const host = document.getElementById('general-info-sections-host');
     renderGeneralInfoSections(host);
@@ -416,6 +474,10 @@ function initGeneralInfoForm(getOrgLocalItem, setOrgLocalItem) {
             el.value = stored;
         } else {
             el.value = stored;
+        }
+
+        if (key === 'contactName' || key === 'contactEmail') {
+            return;
         }
 
         if (el.dataset.giBound === '1') return;
@@ -455,9 +517,14 @@ function initGeneralInfoForm(getOrgLocalItem, setOrgLocalItem) {
         const giVal = getOrgLocalItem('buildingsAssessedCount', '');
         if (giVal) buildingsAssessedEl.value = giVal;
     }
+
+    applyLoginDetailsFromKnownUser(null, getOrgLocalItem, setOrgLocalItem);
 }
 
 window.GeneralInfo = {
     STORAGE_KEYS: GENERAL_INFO_STORAGE_KEYS,
     initGeneralInfoForm,
+    applyLoginDetailsFromKnownUser,
+    syncLocationCountryFromLanguage,
+    countryForLanguage,
 };

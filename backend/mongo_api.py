@@ -606,10 +606,35 @@ _DEFAULT_ROW_UNIT = {
 }
 
 
+_ORG_PREF_VALUE_MAX = 20_000
+_ORG_PREF_LOGO_MAX = 800_000
+_ORG_PREF_MAX_KEYS = 600
+
+
+def _sanitize_org_preferences(raw) -> dict:
+    """General Info + Assessment Scope fields stored on user_data.org_preferences."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for idx, (key, value) in enumerate(raw.items()):
+        if idx >= _ORG_PREF_MAX_KEYS:
+            break
+        if not isinstance(key, str):
+            continue
+        k = key.strip()[:128]
+        if not k or value is None:
+            continue
+        limit = _ORG_PREF_LOGO_MAX if k == 'companyLogo' else _ORG_PREF_VALUE_MAX
+        out[k] = str(value)[:limit]
+    return out
+
+
 def _sanitize_site_data_payload(payload: dict) -> dict:
     """Validate/sanitize site rows and keep backward-compatible shape."""
     if not isinstance(payload, dict):
         return {'sites': {}}
+    if 'org_preferences' in payload:
+        payload['org_preferences'] = _sanitize_org_preferences(payload.get('org_preferences'))
     sites = payload.get('sites')
     if not isinstance(sites, dict):
         payload['sites'] = {}
@@ -1177,13 +1202,27 @@ def get_user_data():
     if not org_id:
         return jsonify({"msg": "Organization is not linked to this account."}), 400
 
+    user_profile = {
+        "full_name": user.get("full_name") if user else None,
+        "email": user.get("email") if user else None,
+    }
+
     user_data = data_col.find_one({"organization_id": org_id})
     
     if user_data:
         user_data['_id'] = str(user_data['_id'])
         user_data['organization_id'] = user_data.get('organization_id', org_id)
+        if 'org_preferences' not in user_data:
+            user_data['org_preferences'] = {}
+        user_data['user_profile'] = user_profile
         return jsonify(user_data), 200
-    return jsonify({"email": user.get("email") if user else None, "organization_id": org_id, "sites": {}}), 200
+    return jsonify({
+        "email": user.get("email") if user else None,
+        "organization_id": org_id,
+        "sites": {},
+        "org_preferences": {},
+        "user_profile": user_profile,
+    }), 200
 
 @app.route('/api/data', methods=['POST'])
 @jwt_required()
@@ -1202,12 +1241,25 @@ def save_user_data():
         return jsonify({"msg": "Organization is not linked to this account."}), 400
 
     data = _sanitize_site_data_payload(data)
+    existing = data_col.find_one({'organization_id': org_id}) or {}
+
+    if 'sites' not in data and isinstance(existing.get('sites'), dict):
+        data['sites'] = existing['sites']
+
+    incoming_prefs = data.get('org_preferences')
+    if incoming_prefs is None:
+        if isinstance(existing.get('org_preferences'), dict):
+            data['org_preferences'] = existing['org_preferences']
+    else:
+        merged_prefs = {**(existing.get('org_preferences') or {}), **incoming_prefs}
+        data['org_preferences'] = _sanitize_org_preferences(merged_prefs)
+
     data['email'] = user_email or current_identity  # keep for backwards compatibility
     data['organization_id'] = org_id
     data['updated_at'] = utc_now()
-    
-    data_col.update_one({"organization_id": org_id}, {"$set": data}, upsert=True)
-    return jsonify({"msg": "Data saved"}), 200
+
+    data_col.update_one({'organization_id': org_id}, {'$set': data}, upsert=True)
+    return jsonify({'msg': 'Data saved'}), 200
 
 @app.route('/api/factors', methods=['GET'])
 @jwt_required()

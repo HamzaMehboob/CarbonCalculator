@@ -602,9 +602,9 @@ function readOrgPref(key, fallback = '') {
 function writeOrgPref(key, value) {
     if (typeof window.setOrgLocalItem === 'function') {
         window.setOrgLocalItem(key, value);
-    } else {
-        localStorage.setItem(key, value);
+        return;
     }
+    localStorage.setItem(key, value);
 }
 
 // Current country selection (default UK)
@@ -642,6 +642,9 @@ function getReportingYear() {
 function setReportingYear(year) {
     currentReportingYear = normalizeRowYear(year);
     writeOrgPref('carbonCalcReportingYear', String(currentReportingYear));
+    if (typeof window.setOrgLocalItem === 'function') {
+        window.setOrgLocalItem('carbonCalcReportingYear', String(currentReportingYear));
+    }
     rebuildConversionFactorCheckboxes();
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
@@ -654,6 +657,9 @@ function getOutputUnit() {
 function setOutputUnit(unit) {
     currentOutputUnit = unit === 'kgCO2e' ? 'kgCO2e' : 'tCO2e';
     writeOrgPref('carbonCalcOutputUnit', currentOutputUnit);
+    if (typeof window.setOrgLocalItem === 'function') {
+        window.setOrgLocalItem('carbonCalcOutputUnit', currentOutputUnit);
+    }
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
 }
@@ -1009,6 +1015,9 @@ function getYearComparison() {
 function setCountry(country) {
     currentCountry = country.toUpperCase();
     writeOrgPref('carbonCalcCountry', currentCountry);
+    if (typeof window.setOrgLocalItem === 'function') {
+        window.setOrgLocalItem('carbonCalcCountry', currentCountry);
+    }
     rebuildConversionFactorCheckboxes();
     calculateAllTotals();
     updateDashboard();
