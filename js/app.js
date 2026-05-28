@@ -54,6 +54,43 @@ const TAB_QUESTION_PROMPTS = {
     refrigerants: 'Refrigerants tab: include top-up records, service sheets, and gas type evidence.'
 };
 const QA_CHECKLIST_KEY = 'qaChecklistState';
+const QA_ALLOWED_EMAIL = 'rd.hamza@isys.sa';
+
+function normalizeAccountEmail(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function isQaAllowedUser() {
+    if (!appState.loggedIn) return false;
+    const email = normalizeAccountEmail(
+        localStorage.getItem('userEmail') || localStorage.getItem('loginEmail')
+    );
+    return email === QA_ALLOWED_EMAIL;
+}
+
+function applyQaVisibility() {
+    const show = isQaAllowedUser();
+    document.querySelectorAll('.sub-nav-btn[data-sub="qa-signoff"]').forEach((btn) => {
+        btn.style.display = show ? '' : 'none';
+    });
+    const qaSection = document.getElementById('section-qa-signoff');
+    if (qaSection && !show) {
+        qaSection.style.display = 'none';
+        qaSection.classList.remove('active');
+        const activeQaBtn = document.querySelector('.sub-nav-btn[data-sub="qa-signoff"].active');
+        if (activeQaBtn) {
+            setActiveSubNav('data-input');
+        }
+    }
+}
+
+function getQaSubNavButtonHtml() {
+    if (!isQaAllowedUser()) return '';
+    return `
+            <button class="sub-nav-btn" data-sub="qa-signoff">
+                <i class="fas fa-check-double"></i> <span data-en="QA & Sign-off" data-pt="QA e Aprovação">QA & Sign-off</span>
+            </button>`;
+}
 
 function getQaChecklistState() {
     try {
@@ -184,6 +221,7 @@ function clearAuthSession() {
     appState.loggedIn = false;
     localStorage.removeItem('loggedIn');
     localStorage.removeItem('loginEmail');
+    localStorage.removeItem('userEmail');
     localStorage.removeItem('authToken');
     localStorage.removeItem(SESSION_EXPIRES_AT_KEY);
     localStorage.removeItem(SESSION_LAST_ACTIVITY_KEY);
@@ -362,6 +400,9 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
                 localStorage.setItem('organizationId', data.user.organization_id || '');
                 localStorage.setItem('organizationName', data.user.organization_name || '');
                 localStorage.setItem('isOrgAdmin', data.user.is_org_admin ? 'true' : 'false');
+                if (data.user.email) {
+                    localStorage.setItem('userEmail', data.user.email);
+                }
             }
 
             const allowOrgMainApp = localStorage.getItem('orgOpenMainApp') === 'true';
@@ -674,6 +715,7 @@ document.getElementById('logoutBtn')?.addEventListener('click', async function()
         console.error('Final sync before logout failed:', err);
     }
     clearAuthSession();
+    applyQaVisibility();
 
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('mainApp').style.display = 'none';
@@ -748,6 +790,9 @@ function setActiveTab(tabName) {
 }
 
 function setActiveSubNav(subName) {
+    if (subName === 'qa-signoff' && !isQaAllowedUser()) {
+        subName = 'data-input';
+    }
     const subNavBtns = document.querySelectorAll('.sub-nav-btn');
     const subContentSections = document.querySelectorAll('.sub-content-section');
 
@@ -891,9 +936,7 @@ function addSiteToList(siteId, siteName) {
             <button class="sub-nav-btn" data-sub="input-emissions">
                 <i class="fas fa-cloud"></i> <span data-en="Input Emissions" data-pt="Emissões de Entrada">Input Emissions</span>
             </button>
-            <button class="sub-nav-btn" data-sub="qa-signoff">
-                <i class="fas fa-check-double"></i> <span data-en="QA & Sign-off" data-pt="QA e Aprovação">QA & Sign-off</span>
-            </button>
+            ${getQaSubNavButtonHtml()}
         </div>
     `;
     
@@ -2317,19 +2360,22 @@ function initializeApp() {
         tabQuestionNotesInput.addEventListener('blur', () => saveCurrentSiteData());
     }
 
-    // QA checklist persistence/sign-off helpers
-    document.querySelectorAll('.qa-check-item').forEach((el) => {
-        if (el.dataset.bound === '1') return;
-        el.dataset.bound = '1';
-        el.addEventListener('change', () => {
-            const key = el.getAttribute('data-key');
-            const state = getQaChecklistState();
-            state[key] = el.checked;
-            localStorage.setItem(QA_CHECKLIST_KEY, JSON.stringify(state));
-            renderQaState();
+    // QA checklist (internal QA user only)
+    if (isQaAllowedUser()) {
+        document.querySelectorAll('.qa-check-item').forEach((el) => {
+            if (el.dataset.bound === '1') return;
+            el.dataset.bound = '1';
+            el.addEventListener('change', () => {
+                const key = el.getAttribute('data-key');
+                const state = getQaChecklistState();
+                state[key] = el.checked;
+                localStorage.setItem(QA_CHECKLIST_KEY, JSON.stringify(state));
+                renderQaState();
+            });
         });
-    });
-    renderQaState();
+        renderQaState();
+    }
+    applyQaVisibility();
     
     // Load local data first for fast UI responsiveness
     loadSitesFromLocalStorage();
