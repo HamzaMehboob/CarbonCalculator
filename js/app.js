@@ -46,55 +46,6 @@ function getApiBaseUrl() {
         : window.__CARBON_API_BASE__ || 'https://carboncalculator-2eak.onrender.com/api';
 }
 
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** fetch with timeout (Render cold start can take 30–60s). */
-async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        return await fetch(url, {
-            credentials: 'omit',
-            mode: 'cors',
-            ...options,
-            signal: controller.signal,
-        });
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-function connectionErrorMessage(err) {
-    const base = getApiBaseUrl();
-    const isPt = appState.currentLanguage === 'pt';
-    const proto = typeof location !== 'undefined' ? location.protocol : '';
-    if (proto === 'file:') {
-        return isPt
-            ? 'Abra a app via um servidor local (ex.: py -m http.server na pasta do projeto) ou use ?api=http://127.0.0.1:5000/api com o backend local.'
-            : 'Open the app through a local web server (e.g. run py -m http.server in the project folder), or use ?api=http://127.0.0.1:5000/api with a local backend.';
-    }
-    if (typeof isGithubPagesHost === 'function' && isGithubPagesHost()) {
-        return isPt
-            ? `Erro de ligação ao servidor (${base}). Aguarde ~1 minuto se o Render estiver a acordar e tente de novo, ou faça logout e login novamente.`
-            : `Connection error (${base}). If Render was sleeping, wait about a minute and try again, or click Logout and sign in again.`;
-    }
-    if (err && err.name === 'AbortError') {
-        return isPt
-            ? `Tempo esgotado ao contactar ${base}. Se usa Render gratuito, aguarde ~1 minuto e tente de novo.`
-            : `Timed out contacting ${base}. On Render free tier, wait about a minute and try again.`;
-    }
-    if (/localhost|127\.0\.0\.1/i.test(base)) {
-        return isPt
-            ? `Sem ligação a ${base}. Inicie o backend: cd backend && py mongo_api.py`
-            : `Cannot reach ${base}. Start the backend: cd backend && py mongo_api.py`;
-    }
-    return isPt
-        ? `Erro de ligação (${base}). Verifique a rede ou use ?api=http://127.0.0.1:5000/api para API local.`
-        : `Connection error (${base}). Check your network, or use ?api=http://127.0.0.1:5000/api for a local backend.`;
-}
-
 const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_EXPIRES_AT_KEY = 'sessionExpiresAt';
 const SESSION_LAST_ACTIVITY_KEY = 'sessionLastActivity';
@@ -641,40 +592,11 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
     if (loginError) loginError.textContent = '';
 
     try {
-        let response = null;
-        let lastErr = null;
-        const apiBases =
-            typeof loginApiBaseCandidates === 'function'
-                ? loginApiBaseCandidates()
-                : [getApiBaseUrl()];
-        outer: for (const base of apiBases) {
-            for (let attempt = 0; attempt < 2; attempt += 1) {
-                if (attempt > 0) {
-                    await sleep(2500);
-                }
-                try {
-                    response = await fetchWithTimeout(`${base}/login`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ login: identifier, password }),
-                    });
-                    if (response) {
-                        if (base !== getApiBaseUrl() && typeof localStorage !== 'undefined') {
-                            localStorage.setItem('carbonApiBase', base);
-                        }
-                        lastErr = null;
-                        break outer;
-                    }
-                } catch (fetchErr) {
-                    lastErr = fetchErr;
-                    console.warn('Login fetch attempt failed:', base, fetchErr);
-                    response = null;
-                }
-            }
-        }
-        if (!response) {
-            throw lastErr || new Error('Network request failed');
-        }
+        const response = await fetch(`${getApiBaseUrl()}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login: identifier, password }),
+        });
 
         const raw = await response.text();
         const data = parseJsonResponse(raw);
@@ -739,7 +661,10 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
     } catch (err) {
         console.error('Login error:', err);
         if (loginError) {
-            loginError.textContent = connectionErrorMessage(err);
+            loginError.textContent =
+                appState.currentLanguage === 'pt'
+                    ? 'Erro de conexão. O servidor está disponível?'
+                    : 'Connection error. Is the backend running?';
         }
     }
 });
@@ -930,42 +855,23 @@ async function loadUserDataFromBackend() {
     const token = getActiveAuthToken();
     if (!token) return false;
 
-    const bases =
-        typeof loginApiBaseCandidates === 'function'
-            ? loginApiBaseCandidates()
-            : [getApiBaseUrl()];
-    let dataResponse = null;
-    let factorsResponse = null;
-    for (const base of bases) {
-        try {
-            [dataResponse, factorsResponse] = await Promise.all([
-                fetch(`${base}/data`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${base}/factors`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-            ]);
-            if (dataResponse.status === 401 || factorsResponse.status === 401) {
-                break;
-            }
-            if (dataResponse.ok) {
-                if (base !== getApiBaseUrl()) {
-                    localStorage.setItem('carbonApiBase', base);
-                }
-                break;
-            }
-        } catch (err) {
-            console.warn('Error loading data from backend:', base, err);
-            dataResponse = null;
-            factorsResponse = null;
-        }
-    }
-    if (!dataResponse) {
+    let dataResponse;
+    let factorsResponse;
+    try {
+        [dataResponse, factorsResponse] = await Promise.all([
+            fetch(`${getApiBaseUrl()}/data`, {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`${getApiBaseUrl()}/factors`, {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+        ]);
+    } catch (err) {
+        console.error('Error loading data from backend:', err);
         return false;
     }
 
-    if (dataResponse.status === 401 || factorsResponse?.status === 401) {
+    if (dataResponse.status === 401 || factorsResponse.status === 401) {
         forceLogoutForExpiredSession(false);
         return false;
     }
@@ -1022,7 +928,7 @@ async function loadUserDataFromBackend() {
     }
 
     try {
-        if (factorsResponse?.ok) {
+        if (factorsResponse.ok) {
             const factorsData = await factorsResponse.json();
             if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiCatalogFactors) {
                 window.carbonCalc.mergeApiCatalogFactors(factorsData);
@@ -1030,8 +936,6 @@ async function loadUserDataFromBackend() {
                     window.carbonCalc.calculateAllTotals();
                 }
             }
-        } else if (factorsResponse && !factorsResponse.ok) {
-            console.warn('Factors API returned', factorsResponse.status, await factorsResponse.text().catch(() => ''));
         }
     } catch (err) {
         console.error('Error parsing factors from backend:', err);

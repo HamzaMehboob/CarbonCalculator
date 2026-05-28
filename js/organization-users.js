@@ -35,31 +35,9 @@ function ensureAdminAccess() {
     return true;
 }
 
-function apiBasesForRequest() {
-    if (typeof loginApiBaseCandidates === 'function') {
-        return loginApiBaseCandidates();
-    }
-    return [getApiBaseUrl()];
-}
-
 async function apiFetch(path, options = {}) {
-    const bases = apiBasesForRequest();
-    const fetchFn = typeof carbonApiFetch === 'function' ? carbonApiFetch : fetch;
-    let lastErr = null;
-    for (const base of bases) {
-        try {
-            const response = await fetchFn(`${base}${path}`, options);
-            if (response) {
-                if (base !== getApiBaseUrl() && typeof localStorage !== 'undefined') {
-                    localStorage.setItem('carbonApiBase', base);
-                }
-                return response;
-            }
-        } catch (err) {
-            lastErr = err;
-        }
-    }
-    throw lastErr || new Error('Network request failed');
+    const base = getApiBaseUrl();
+    return fetch(`${base}${path}`, options);
 }
 
 async function handleAddUser(e) {
