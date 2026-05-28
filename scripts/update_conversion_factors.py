@@ -2,7 +2,7 @@
 """
 Update global conversion factors in MongoDB (Render / Atlas) from the customer datasheet.
 
-No application login required — uses MONGODB_URI only (same as the backend on Render).
+No application login required — uses DEFAULT_MONGODB_URI in upload_conversion_factors_from_datasheet.py.
 
 Sources (edit before upload):
   - backend/data/conversion_factors_catalog.py  — BRAZIL (hardcoded from git)
@@ -15,8 +15,6 @@ By default also removes legacy per-organization rows from conversion_factors
 (deprecated duplicate copies — one set per org caused triple UK_2020 etc.).
 
 Usage:
-  set MONGODB_URI=mongodb+srv://...
-
   py scripts/update_conversion_factors.py
   py scripts/update_conversion_factors.py --dry-run
   py scripts/update_conversion_factors.py --no-prune-legacy-org-factors
@@ -30,6 +28,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+
+DEFAULT_MONGODB_URI = (
+    "mongodb+srv://hamzamehboob103_db_user:z9PCUXhhbz_N94B@cluster123.ep75sge.mongodb.net/?appName=Cluster123"
+)
 
 from upload_conversion_factors_from_datasheet import main  # noqa: E402
 

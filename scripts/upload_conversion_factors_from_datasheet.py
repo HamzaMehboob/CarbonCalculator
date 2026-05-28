@@ -7,15 +7,15 @@ Prefer the operator entry point: scripts/update_conversion_factors.py
 Workbook: requirements/Feedback/00 Datasheet Review v1.xlsx
 Sheet:   1 Conversion Factor UK SQ
 
-Environment:
-  MONGODB_URI — MongoDB connection string (Render / Atlas; no app login)
+Connection:
+  DEFAULT_MONGODB_URI in this file (Atlas / Render; no app login).
+  Override with --mongo-uri if needed.
 """
 from __future__ import annotations
 
 import argparse
 import datetime
 import json
-import os
 import re
 import sys
 import zipfile
@@ -26,26 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
-def _load_env_files() -> None:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(ROOT / ".env")
-        load_dotenv(BACKEND / ".env")
-        return
-    except ImportError:
-        pass
-    for env_path in (ROOT / ".env", BACKEND / ".env"):
-        if not env_path.exists():
-            continue
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, val = line.split("=", 1)
-            os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
-
-
-_load_env_files()
+DEFAULT_MONGODB_URI = (
+    "mongodb+srv://hamzamehboob103_db_user:z9PCUXhhbz_N94B@cluster123.ep75sge.mongodb.net/?appName=Cluster123"
+)
 
 from pymongo import MongoClient  # noqa: E402
 
@@ -408,8 +391,8 @@ def main() -> int:
     parser.add_argument("--country", default=None, help="Country code override (UK/BRAZIL)")
     parser.add_argument(
         "--mongo-uri",
-        default=os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URI") or "",
-        help="MongoDB URI (defaults to MONGODB_URI from .env)",
+        default=DEFAULT_MONGODB_URI,
+        help="MongoDB URI (defaults to DEFAULT_MONGODB_URI in this script)",
     )
     parser.add_argument(
         "--prune-legacy-org-factors",
@@ -463,10 +446,10 @@ def main() -> int:
             print(f"[dry-run] would prune '{LEGACY_ORG_FACTORS_COLLECTION}'")
     else:
         if not args.mongo_uri:
-            print("Error: set MONGODB_URI in .env or pass --mongo-uri for your Atlas cluster.", file=sys.stderr)
+            print("Error: set DEFAULT_MONGODB_URI in this script or pass --mongo-uri.", file=sys.stderr)
             return 1
         if "localhost" in args.mongo_uri or "127.0.0.1" in args.mongo_uri:
-            print("Warning: MONGODB_URI points to localhost. Use your Atlas URI for remote upload.", file=sys.stderr)
+            print("Warning: mongo URI points to localhost. Use your Atlas URI for remote upload.", file=sys.stderr)
         db = get_mongo_db(args.mongo_uri)
         n = upload_catalog(db, docs, dry_run=False)
         print(f"Uploaded {n} catalog documents to '{CATALOG_COLLECTION}'.")
