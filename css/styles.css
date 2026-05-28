@@ -917,6 +917,45 @@ body {
     color: var(--text-secondary);
 }
 
+.assessment-scope-extras,
+.assessment-scope-factors-card {
+    margin-top: 16px;
+}
+
+.assessment-scope-extras-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 12px;
+}
+
+.assessment-scope-factors-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 12px;
+    line-height: 1.45;
+}
+
+.assessment-scope-scope-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.assessment-scope-scope-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.assessment-scope-scope-label input[type="checkbox"] {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
 .tab-btn {
     padding: 12px 24px;
     background: transparent;

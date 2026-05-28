@@ -207,7 +207,33 @@ function refreshAssessmentScopeForm() {
     if (window.AssessmentScopeForm?.init) {
         window.AssessmentScopeForm.init();
     }
+    bindAssessmentScopeExtras();
 }
+
+function bindAssessmentScopeExtras() {
+    const bindScope = (el, key) => {
+        if (!el || el.dataset.bound === '1') return;
+        el.dataset.bound = '1';
+        el.checked = getOrgLocalItem(key, 'true') !== 'false';
+        el.addEventListener('change', () => {
+            setOrgLocalItem(key, el.checked ? 'true' : 'false');
+            if (window.carbonCalc?.calculateAllTotals) {
+                window.carbonCalc.calculateAllTotals();
+            }
+            if (typeof updateDashboard === 'function') {
+                updateDashboard();
+            }
+        });
+    };
+    bindScope(document.getElementById('scope1EnabledInput'), 'scope1Enabled');
+    bindScope(document.getElementById('scope2EnabledInput'), 'scope2Enabled');
+    bindScope(document.getElementById('scope3EnabledInput'), 'scope3Enabled');
+
+    if (window.carbonCalc?.rebuildConversionFactorCheckboxes) {
+        window.carbonCalc.rebuildConversionFactorCheckboxes();
+    }
+}
+window.bindAssessmentScopeExtras = bindAssessmentScopeExtras;
 
 function ensureOrganizationSession(orgId, companyName) {
     if (!orgId) return;
@@ -2435,6 +2461,7 @@ async function initializeApp() {
     if (window.AssessmentScopeForm?.init) {
         window.AssessmentScopeForm.init();
     }
+    bindAssessmentScopeExtras();
 
     // Bind General Info / report metadata (persisted via org_preferences on server)
     const bindTextInput = (el, key) => {

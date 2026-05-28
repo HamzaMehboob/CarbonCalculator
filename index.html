@@ -335,12 +335,51 @@
                         <div class="card p-4" id="general-info-sections-host"></div>
                     </div>
 
-                    <!-- Assessment Scope Section (spreadsheet layout) -->
+                    <!-- Assessment Scope Section (spreadsheet layout + conversion factors) -->
                     <div id="section-assessment-scope" class="sub-content-section" style="display: none;">
                         <div class="tab-header">
                             <h2 data-en="Assessment Scope" data-pt="Escopo da Avaliação">Assessment Scope</h2>
+                            <div class="tab-actions">
+                                <button class="btn-secondary" type="button" onclick="printConversionFactorsReportPDF()"
+                                        title="Print conversion factors report (selected factors)">
+                                    <i class="fas fa-print"></i>
+                                    <span data-en="Print factors report" data-pt="Imprimir fatores">Print factors report</span>
+                                </button>
+                            </div>
                         </div>
                         <div id="assessment-scope-form-host" class="assessment-scope-form-host"></div>
+
+                        <div class="card p-4 assessment-scope-extras">
+                            <h3 class="assessment-scope-extras-title"
+                                data-en="GHG scopes included in totals"
+                                data-pt="Escopos GEE incluídos nos totais">GHG scopes included in totals</h3>
+                            <div class="assessment-scope-scope-toggles">
+                                <label class="assessment-scope-scope-label">
+                                    <input type="checkbox" id="scope1EnabledInput" data-scope-enabled="scope1" checked>
+                                    <span data-en="Include Scope 1 (Direct emissions)" data-pt="Incluir Escopo 1 (Emissões diretas)">Include Scope 1 (Direct emissions)</span>
+                                </label>
+                                <label class="assessment-scope-scope-label">
+                                    <input type="checkbox" id="scope2EnabledInput" data-scope-enabled="scope2" checked>
+                                    <span data-en="Include Scope 2 (Indirect — electricity)" data-pt="Incluir Escopo 2 (Indiretas — eletricidade)">Include Scope 2 (Indirect — electricity)</span>
+                                </label>
+                                <label class="assessment-scope-scope-label">
+                                    <input type="checkbox" id="scope3EnabledInput" data-scope-enabled="scope3" checked>
+                                    <span data-en="Include Scope 3 (Other indirect)" data-pt="Incluir Escopo 3 (Outras indiretas)">Include Scope 3 (Other indirect)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="card p-4 assessment-scope-factors-card">
+                            <h3 class="assessment-scope-extras-title"
+                                data-en="Conversion factors for reports"
+                                data-pt="Fatores de conversão para relatórios">Conversion factors for reports</h3>
+                            <p class="assessment-scope-factors-desc"
+                               data-en="Select which conversion factors to include when printing the factors report. The list reflects your factors database and reporting year."
+                               data-pt="Selecione quais fatores de conversão incluir ao imprimir o relatório de fatores. A lista reflete a base de fatores e o ano de reporte.">
+                                Select which conversion factors to include when printing the factors report. The list reflects your factors database and reporting year.
+                            </p>
+                            <div id="conversion-factor-grid-host" class="conversion-factor-grid"></div>
+                        </div>
                     </div>
 
                     <!-- Input Emissions Section -->

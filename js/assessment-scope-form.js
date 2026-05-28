@@ -647,6 +647,11 @@
         const host = document.getElementById('assessment-scope-form-host');
         if (!host) return;
         renderAssessmentScopeForm(host);
+        if (typeof global.bindAssessmentScopeExtras === 'function') {
+            global.bindAssessmentScopeExtras();
+        } else if (global.carbonCalc?.rebuildConversionFactorCheckboxes) {
+            global.carbonCalc.rebuildConversionFactorCheckboxes();
+        }
     }
 
     global.AssessmentScopeForm = {
