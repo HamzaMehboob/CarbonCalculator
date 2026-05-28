@@ -610,37 +610,97 @@ body {
     padding: 16px 20px;
     border-radius: 12px;
     box-shadow: var(--shadow-sm);
-    display: flex;
-    flex-wrap: wrap;
+}
+
+/* Company toolbar: responsive grid, no overlapping flex shrink */
+.company-toolbar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 16px 20px;
-    align-items: flex-start;
+    align-items: start;
 }
 
-/* Company toolbar: wrap fields instead of clipping off-screen */
-.info-card-inline > .form-inline-group {
-    flex: 1 1 220px;
+.company-toolbar .toolbar-field label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 6px;
+    white-space: nowrap;
+}
+
+.company-toolbar .toolbar-field-inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     min-width: 0;
-    align-items: flex-start;
 }
 
-.info-card-inline .form-inline-group label {
-    min-width: 0;
+.company-toolbar .toolbar-field-inline label {
+    margin-bottom: 0;
+    flex-shrink: 0;
+    min-width: 88px;
 }
 
-.info-card-inline .form-inline-group input,
-.info-card-inline .form-inline-group select {
+.company-toolbar .toolbar-field-inline input,
+.company-toolbar .toolbar-select {
+    flex: 1;
     min-width: 0;
     width: 100%;
-    max-width: 100%;
+    padding: 8px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    background: var(--bg-main);
+    color: var(--text-primary);
 }
 
-.info-card-inline .form-inline-group > div {
-    flex: 1 1 auto;
+.company-toolbar .toolbar-factors-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
     min-width: 0;
 }
 
-.info-card-inline .factors-actions {
+.company-toolbar .toolbar-factors-row .toolbar-select {
+    flex: 1;
+    min-width: 140px;
+}
+
+.company-toolbar .factors-actions {
+    display: flex;
     flex-shrink: 0;
+    gap: 6px;
+}
+
+.company-toolbar .factors-actions .btn-sm {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 8px;
+    white-space: nowrap;
+}
+
+.company-toolbar .factors-action-label {
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 500;
+}
+
+.company-toolbar .toolbar-reporting-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.company-toolbar .toolbar-stack {
+    flex: 1 1 120px;
+    min-width: 100px;
+}
+
+.company-toolbar .toolbar-stack .toolbar-select {
+    width: 100%;
 }
 
 .form-inline-group {
@@ -1208,12 +1268,6 @@ body {
     }
 }
 
-@media (max-width: 1200px) {
-    .info-card-inline > .form-inline-group {
-        flex: 1 1 100%;
-    }
-}
-
 @media (max-width: 768px) {
     .sidebar {
         position: fixed;
@@ -1234,6 +1288,19 @@ body {
 
     .info-card-inline {
         flex-basis: 100%;
+    }
+
+    .company-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .company-toolbar .toolbar-field-inline {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .company-toolbar .toolbar-field-inline label {
+        min-width: 0;
     }
     
     .tabs-nav {
