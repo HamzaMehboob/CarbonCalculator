@@ -211,7 +211,7 @@ function syncToolbarOutputUnitToAssessmentScope(outputUnit) {
         asSel.value = calcUnit;
     }
     if (window.AssessmentScopeUnits?.applyCalculationUnitCascade) {
-        window.AssessmentScopeUnits.applyCalculationUnitCascade(calcUnit);
+        window.AssessmentScopeUnits.applyCalculationUnitCascade(calcUnit, { skipCarbonCalc: true });
     }
 }
 

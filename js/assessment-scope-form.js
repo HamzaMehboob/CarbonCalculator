@@ -531,16 +531,9 @@
         }
     }
 
-    function applyCalculationUnitCascade(calcUnit) {
+    function applyCalculationUnitCascade(calcUnit, options) {
+        const opts = options && typeof options === 'object' ? options : {};
         const outputUnit = calcUnit === 'kg_co2e' ? 'kgCO2e' : 'tCO2e';
-        if (typeof global.setOrgLocalItem === 'function') {
-            global.setOrgLocalItem('carbonCalcOutputUnit', outputUnit);
-        }
-        if (global.carbonCalc?.setOutputUnit) {
-            global.carbonCalc.setOutputUnit(outputUnit);
-        }
-        const ou = document.getElementById('outputUnitSelect');
-        if (ou) ou.value = outputUnit;
 
         const massPref = calcUnit === 'kg_co2e' ? 'kg' : 'tonnes';
         setUnitSelectValue('wasteUnit', massPref);
@@ -548,6 +541,19 @@
         if (calcUnit === 'kg_co2e') {
             setUnitSelectValue('refrigerantsUnit', 'kg');
             syncCategoryUnits('refrigerants', 'kg');
+        }
+
+        const ou = document.getElementById('outputUnitSelect');
+        if (ou) ou.value = outputUnit;
+
+        // When syncing from toolbar setOutputUnit, skip calling back into carbonCalc.
+        if (opts.skipCarbonCalc) return;
+
+        if (typeof global.setOrgLocalItem === 'function') {
+            global.setOrgLocalItem('carbonCalcOutputUnit', outputUnit);
+        }
+        if (global.carbonCalc?.setOutputUnit) {
+            global.carbonCalc.setOutputUnit(outputUnit);
         }
     }
 

@@ -708,14 +708,21 @@ function getOutputUnit() {
     return currentOutputUnit === 'kgCO2e' ? 'kgCO2e' : 'tCO2e';
 }
 
+let outputUnitSyncDepth = 0;
+
 function setOutputUnit(unit) {
     currentOutputUnit = unit === 'kgCO2e' ? 'kgCO2e' : 'tCO2e';
     writeOrgPref('carbonCalcOutputUnit', currentOutputUnit);
-    if (typeof window.setOrgLocalItem === 'function') {
-        window.setOrgLocalItem('carbonCalcOutputUnit', currentOutputUnit);
-    }
-    if (typeof window.syncToolbarOutputUnitToAssessmentScope === 'function') {
-        window.syncToolbarOutputUnitToAssessmentScope(currentOutputUnit);
+    outputUnitSyncDepth += 1;
+    try {
+        if (
+            outputUnitSyncDepth === 1 &&
+            typeof window.syncToolbarOutputUnitToAssessmentScope === 'function'
+        ) {
+            window.syncToolbarOutputUnitToAssessmentScope(currentOutputUnit);
+        }
+    } finally {
+        outputUnitSyncDepth -= 1;
     }
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
