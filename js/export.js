@@ -798,8 +798,10 @@ function printConversionFactorsReportPDF() {
 
     yPos += 10;
 
-    const factorsDb = window.carbonCalc.getConversionFactors();
-    const factors = factorsDb[countryKey] || {};
+    const reportYear = window.carbonCalc.getReportingYear?.() || 2025;
+    const factors = window.carbonCalc.getFactorsBucketForYear
+        ? window.carbonCalc.getFactorsBucketForYear(reportYear, countryKey)
+        : (window.carbonCalc.getConversionFactors()[countryKey] || {})[String(reportYear)] || {};
 
     const unitByKey = (key) => {
         if (key === 'water' || key === 'wastewater') return 'kg CO2e per m³';
@@ -972,8 +974,6 @@ function printInputEmissionsReportPDF() {
 
     yPos += 10;
 
-    const factorsDb = window.carbonCalc.getConversionFactors();
-    const factors = factorsDb[countryKey] || {};
     const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
@@ -1004,14 +1004,19 @@ function printInputEmissionsReportPDF() {
             const yearInput = row.querySelector('input[type="number"]:not(.month-input)');
             const year = yearInput?.value || '';
 
-            const co2Cell = row.querySelector('.co2-cell')?.textContent || '0';
-            const co2T = parseFloat(String(co2Cell).replace(/[^\d.-]/g, '')) || 0;
-            const kgCO2eTotal = co2T * 1000;
-
-            const factor = factors[emissionKey] || 0;
+            const factor = window.carbonCalc.getRowConversionFactor
+                ? window.carbonCalc.getRowConversionFactor(row, `${catKey}Table`)
+                : 0;
+            const rowUnit = row.querySelector('.row-unit-select')?.value || '';
             const monthInputs = Array.from(row.querySelectorAll('input.month-input'));
-            const monthVals = monthInputs.map(i => Number(i.value) || 0);
-            const monthKg = monthVals.map(v => v * factor);
+            const monthVals = monthInputs.map((i) => {
+                const raw = Number(i.value) || 0;
+                return window.carbonCalc.toBaseUnitValue
+                    ? window.carbonCalc.toBaseUnitValue(catKey, rowUnit, raw)
+                    : raw;
+            });
+            const kgCO2eTotal = monthVals.reduce((sum, v) => sum + v * factor, 0);
+            const monthKg = monthVals.map((v) => v * factor);
 
             const headerLine = `${rowIdx + 1}. ${desc} (${year}) | Total: ${kgCO2eTotal.toFixed(2)} kgCO2e`;
             const headerWrapped = doc.splitTextToSize(headerLine, 180);

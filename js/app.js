@@ -875,7 +875,10 @@ async function loadConversionFactorsFromBackend(token) {
             forceLogoutForExpiredSession(true);
             return;
         }
-        if (!factorsResponse.ok) return;
+        if (!factorsResponse.ok) {
+            console.warn('Factors API returned', factorsResponse.status, await factorsResponse.text().catch(() => ''));
+            return;
+        }
         const factorsData = await factorsResponse.json();
         if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiCatalogFactors) {
             window.carbonCalc.mergeApiCatalogFactors(factorsData);
@@ -1647,6 +1650,9 @@ function attachRowListeners(row) {
             calculateCategoryTotal(row.closest('table'));
         }
         saveCurrentSiteData(); // Save immediately on change
+        if (typeof updateInputEmissionsPreview === 'function') {
+            updateInputEmissionsPreview();
+        }
     };
     
     monthInputs.forEach(input => {
@@ -1961,11 +1967,8 @@ function updateTabQuestionUI(category) {
 
 function updateInputEmissionsPreview() {
     const body = document.getElementById('inputEmissionsPreviewBody');
-    if (!body || !window.carbonCalc || !window.carbonCalc.getConversionFactors || !window.carbonCalc.getCountry) return;
+    if (!body || !window.carbonCalc?.getRowConversionFactor) return;
 
-    const factorsDb = window.carbonCalc.getConversionFactors();
-    const countryKey = window.carbonCalc.getCountry();
-    const factors = factorsDb[countryKey] || {};
     const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
     const categoryLabel = {
         water: 'Water',
@@ -1982,12 +1985,15 @@ function updateInputEmissionsPreview() {
         table.querySelectorAll('.data-row').forEach((row) => {
             const emissionSelect = row.querySelector('.emission-select');
             const emissionType = emissionSelect?.selectedOptions?.[0]?.textContent?.trim() || emissionSelect?.value || '';
-            const emissionKey = emissionSelect?.value || '';
             const desc = row.querySelector('input[type="text"]')?.value?.trim() || emissionType;
             const year = row.querySelector('input[type="number"]:not(.month-input)')?.value || '';
-            const monthInputs = Array.from(row.querySelectorAll('.month-input'));
-            const inputTotal = monthInputs.reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
-            const factor = factors[emissionKey] || 0;
+            const inputTotal = window.carbonCalc.getInputRowBaseTotal
+                ? window.carbonCalc.getInputRowBaseTotal(row, category)
+                : Array.from(row.querySelectorAll('.month-input')).reduce(
+                      (sum, input) => sum + (parseFloat(input.value) || 0),
+                      0
+                  );
+            const factor = window.carbonCalc.getRowConversionFactor(row, `${category}Table`);
             const kg = inputTotal * factor;
             lines.push({
                 category: categoryLabel[category] || category,
@@ -2013,8 +2019,8 @@ function updateInputEmissionsPreview() {
             <td>${line.desc}</td>
             <td>${line.year}</td>
             <td>${line.inputTotal.toFixed(2)}</td>
-            <td>${line.factor.toFixed(6).replace(/\.?0+$/, '')}</td>
-            <td>${line.kg.toFixed(2)}</td>
+            <td>${line.factor > 0 ? line.factor.toFixed(6).replace(/\.?0+$/, '') : 'N/A'}</td>
+            <td>${line.factor > 0 ? line.kg.toFixed(2) : 'N/A'}</td>
         </tr>
     `).join('');
 }

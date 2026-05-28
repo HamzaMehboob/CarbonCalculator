@@ -782,6 +782,23 @@ function sourceToggleEnabled(sourceKey) {
     return true;
 }
 
+function getInputRowBaseTotal(row, category) {
+    const rowUnit = row.querySelector('.row-unit-select')?.value || '';
+    let total = 0;
+    row.querySelectorAll('.month-input').forEach((input) => {
+        total += toBaseUnitValue(category, rowUnit, parseFloat(input.value) || 0);
+    });
+    return total;
+}
+
+function getFactorsBucketForYear(year, country) {
+    const prev = currentCountry;
+    if (country) currentCountry = country;
+    const bucket = resolveUiFactorBucket(year);
+    if (country) currentCountry = prev;
+    return bucket;
+}
+
 function getRowConversionFactor(row, tableId) {
     const yearRaw = row.querySelector('input[type="number"]:not(.month-input)')?.value;
     const normalizedYear = normalizeRowYear(yearRaw);
@@ -1199,7 +1216,12 @@ window.carbonCalc = {
     inferFactorAssessmentSubgroup,
     getConversionFactors: function () {
         return CONVERSION_FACTORS;
-    }
+    },
+    getRowConversionFactor,
+    getInputRowBaseTotal,
+    getFactorsBucketForYear,
+    resolveUiFactorBucket,
+    toBaseUnitValue,
 };
 
 
