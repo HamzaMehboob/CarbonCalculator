@@ -1,5 +1,5 @@
 /**
- * API base URL — shared by app.js, api-warmup.js, export.js.
+ * API base URL — shared by app.js, export.js, organization-users.js.
  * Local dev: http://127.0.0.1:5000/api when opened from localhost.
  * Override: ?api=http://127.0.0.1:5000/api or localStorage carbonApiBase
  */

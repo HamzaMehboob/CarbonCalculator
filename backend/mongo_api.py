@@ -139,53 +139,6 @@ def get_data_col():
     db = get_db()
     return db['user_data'] if db is not None else None
 
-
-_USER_LOGIN_PROJECTION = {
-    '_id': 0,
-    'email': 1,
-    'username': 1,
-    'password': 1,
-    'full_name': 1,
-    'organization_id': 1,
-    'organization_name': 1,
-    'company_name': 1,
-    'is_org_admin': 1,
-}
-_db_indexes_ensured = False
-
-
-def ensure_db_indexes() -> None:
-    """Create indexes once per process so login/user lookups stay fast as data grows."""
-    global _db_indexes_ensured
-    if _db_indexes_ensured:
-        return
-    db = get_db()
-    if db is None:
-        return
-    try:
-        users = db['users']
-        users.create_index('email', unique=True, sparse=True, background=True)
-        users.create_index('username', unique=True, sparse=True, background=True)
-        db['user_data'].create_index('organization_id', unique=True, background=True)
-        db['conversion_factor_catalog'].create_index('country_key', background=True)
-        _db_indexes_ensured = True
-    except Exception as e:
-        print(f'WARN: could not ensure DB indexes: {e}', file=sys.stderr)
-
-
-def warm_db_connection() -> None:
-    """Eager connect + indexes at worker startup (non-blocking so import never stalls 20s)."""
-    import threading
-
-    def _run() -> None:
-        try:
-            if get_db() is not None:
-                ensure_db_indexes()
-        except Exception as e:
-            print(f'WARN: DB warmup failed: {e}', file=sys.stderr)
-
-    threading.Thread(target=_run, name='db-warmup', daemon=True).start()
-
 # Conversion Factors (country/year/source) — values live in MongoDB only.
 # Run scripts/update_conversion_factors.py to load from the customer datasheet.
 from data.catalog_factor_registry import (
@@ -554,40 +507,39 @@ def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
     return code, None
 
 
-def _find_user_by_email(users_col, email: str, projection=None):
+def _find_user_by_email(users_col, email: str):
     """Resolve user by normalized email, with fallback to legacy exact-match storage."""
     if not email or users_col is None:
         return None
     em = _normalize_email(email)
-    user = users_col.find_one({'email': em}, projection)
+    user = users_col.find_one({'email': em})
     if user:
         return user
-    return users_col.find_one({'email': email.strip()}, projection)
+    return users_col.find_one({'email': email.strip()})
 
 
-def _find_user_by_username(users_col, username: str, projection=None):
+def _find_user_by_username(users_col, username: str):
     if not username or users_col is None:
         return None
     uname = _normalize_username(username)
     if not uname:
         return None
-    user = users_col.find_one({'username': uname}, projection)
+    user = users_col.find_one({'username': uname})
     if user:
         return user
-    return users_col.find_one({'username': username.strip()}, projection)
+    return users_col.find_one({'username': username.strip()})
 
 
-def _find_user_by_login(users_col, identifier: str, projection=None):
+def _find_user_by_login(users_col, identifier: str):
     if not identifier or users_col is None:
         return None
     ident = (identifier or '').strip()
-    proj = projection if projection is not None else None
     if '@' in ident:
-        return _find_user_by_email(users_col, ident, proj)
-    user = _find_user_by_username(users_col, ident, proj)
+        return _find_user_by_email(users_col, ident)
+    user = _find_user_by_username(users_col, ident)
     if user:
         return user
-    return _find_user_by_email(users_col, ident, proj)
+    return _find_user_by_email(users_col, ident)
 
 
 _ALLOWED_ROW_UNITS = {
@@ -973,8 +925,11 @@ def signup():
 @app.route('/api/login', methods=['POST'])
 def login():
     users_col = get_users_col()
+    orgs_col = get_orgs_col()
     if users_col is None:
         return jsonify({"msg": "Database connection error"}), 503
+    if orgs_col is None:
+        return jsonify({"msg": "Database connection error (organizations)."}), 503
 
     data = request.get_json() or {}
     identifier = data.get('email') or data.get('username') or data.get('login')
@@ -982,7 +937,7 @@ def login():
     if not identifier or not password:
         return jsonify({"msg": "Missing login or password"}), 400
 
-    user = _find_user_by_login(users_col, identifier, _USER_LOGIN_PROJECTION)
+    user = _find_user_by_login(users_col, identifier)
     if user and bcrypt.check_password_hash(user['password'], password):
         identity = user.get('email') or user.get('username')
         access_token = create_access_token(identity=identity)
@@ -990,12 +945,7 @@ def login():
         org_id = user.get("organization_id")
         org_name = user.get("organization_name") or user.get("company_name")
         if not org_name and org_id:
-            orgs_col = get_orgs_col()
-            if orgs_col is None:
-                return jsonify({"msg": "Database connection error (organizations)."}), 503
-            org_doc = orgs_col.find_one({"_id": org_id}, {"name": 1}) or orgs_col.find_one(
-                {"name": org_id}, {"name": 1}
-            )
+            org_doc = orgs_col.find_one({"_id": org_id}) or orgs_col.find_one({"name": org_id})
             if org_doc:
                 org_name = org_doc.get("name")
 
@@ -1498,10 +1448,6 @@ def generate_final_report_docx():
     )
 
 
-# Warm MongoDB + indexes when Gunicorn loads the module (first login is much faster).
-warm_db_connection()
-
 if __name__ == '__main__':
-    warm_db_connection()
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)

@@ -160,13 +160,6 @@ body {
     box-shadow: var(--shadow-md);
 }
 
-.btn-primary:disabled {
-    opacity: 0.75;
-    cursor: wait;
-    transform: none;
-    box-shadow: none;
-}
-
 .btn-secondary {
     padding: 10px 20px;
     background: var(--bg-card);

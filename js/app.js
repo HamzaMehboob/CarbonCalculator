@@ -46,18 +46,6 @@ function getApiBaseUrl() {
         : window.__CARBON_API_BASE__ || 'https://carboncalculator-2eak.onrender.com/api';
 }
 
-function warmApiConnection() {
-    if (typeof window.wakeRenderBackend === 'function') {
-        window.wakeRenderBackend();
-        return;
-    }
-    const root =
-        typeof getApiRootUrl === 'function'
-            ? getApiRootUrl()
-            : getApiBaseUrl().replace(/\/api\/?$/i, '') + '/';
-    fetch(root, { method: 'GET', mode: 'cors', cache: 'no-store' }).catch(() => {});
-}
-
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -623,19 +611,6 @@ function showVerifyPanel(prefillEmail, verificationCode) {
     }
 }
 
-function setLoginSubmitting(isSubmitting) {
-    const btn = document.querySelector('#loginForm button[type="submit"]');
-    if (!btn) return;
-    if (!btn.dataset.defaultLabel) {
-        btn.dataset.defaultLabel = btn.textContent.trim();
-    }
-    btn.disabled = isSubmitting;
-    btn.setAttribute('aria-busy', isSubmitting ? 'true' : 'false');
-    btn.textContent = isSubmitting
-        ? (appState.currentLanguage === 'pt' ? 'Entrando…' : 'Signing in…')
-        : btn.dataset.defaultLabel;
-}
-
 // LOGIN FORM SUBMIT
 document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -645,8 +620,6 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
     const loginError = document.getElementById('loginError');
     
     if (loginError) loginError.textContent = '';
-    setLoginSubmitting(true);
-    warmApiConnection();
 
     try {
         let response = null;
@@ -658,7 +631,6 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
         outer: for (const base of apiBases) {
             for (let attempt = 0; attempt < 2; attempt += 1) {
                 if (attempt > 0) {
-                    warmApiConnection();
                     await sleep(2500);
                 }
                 try {
@@ -737,10 +709,8 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'flex';
 
-            requestAnimationFrame(() => {
-                initializeApp().catch((initErr) => {
-                    console.error('initializeApp failed after login:', initErr);
-                });
+            initializeApp().catch((initErr) => {
+                console.error('initializeApp failed after login:', initErr);
             });
         } else {
             if (loginError) {
@@ -752,8 +722,6 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
         if (loginError) {
             loginError.textContent = connectionErrorMessage(err);
         }
-    } finally {
-        setLoginSubmitting(false);
     }
 });
 
@@ -939,38 +907,6 @@ document.getElementById('backToLoginFromVerify')?.addEventListener('click', func
 });
 
 // BACKEND DATA PERSISTENCE
-async function loadConversionFactorsFromBackend(token) {
-    if (!token) return;
-    try {
-        const factorsResponse = await fetch(`${getApiBaseUrl()}/factors`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (factorsResponse.status === 401) {
-            forceLogoutForExpiredSession(true);
-            return;
-        }
-        if (!factorsResponse.ok) {
-            console.warn('Factors API returned', factorsResponse.status, await factorsResponse.text().catch(() => ''));
-            return;
-        }
-        const factorsData = await factorsResponse.json();
-        if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiCatalogFactors) {
-            window.carbonCalc.mergeApiCatalogFactors(factorsData);
-            if (window.carbonCalc.calculateAllTotals) {
-                window.carbonCalc.calculateAllTotals();
-            }
-            if (typeof updateInputEmissionsPreview === 'function') {
-                updateInputEmissionsPreview();
-            }
-            if (typeof updateDashboard === 'function') {
-                updateDashboard();
-            }
-        }
-    } catch (err) {
-        console.error('Error loading factors from backend:', err);
-    }
-}
-
 async function loadUserDataFromBackend() {
     const token = getActiveAuthToken();
     if (!token) return false;
@@ -980,16 +916,21 @@ async function loadUserDataFromBackend() {
             ? loginApiBaseCandidates()
             : [getApiBaseUrl()];
     let dataResponse = null;
+    let factorsResponse = null;
     for (const base of bases) {
         try {
-            const res = await fetch(`${base}/data`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            dataResponse = res;
-            if (res.status === 401) {
+            [dataResponse, factorsResponse] = await Promise.all([
+                fetch(`${base}/data`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+                fetch(`${base}/factors`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+            ]);
+            if (dataResponse.status === 401 || factorsResponse.status === 401) {
                 break;
             }
-            if (res.ok) {
+            if (dataResponse.ok) {
                 if (base !== getApiBaseUrl()) {
                     localStorage.setItem('carbonApiBase', base);
                 }
@@ -998,13 +939,14 @@ async function loadUserDataFromBackend() {
         } catch (err) {
             console.warn('Error loading data from backend:', base, err);
             dataResponse = null;
+            factorsResponse = null;
         }
     }
     if (!dataResponse) {
         return false;
     }
 
-    if (dataResponse.status === 401) {
+    if (dataResponse.status === 401 || factorsResponse?.status === 401) {
         forceLogoutForExpiredSession(false);
         return false;
     }
@@ -1060,8 +1002,22 @@ async function loadUserDataFromBackend() {
         console.error('Error parsing sites data from backend:', err);
     }
 
-    // Large catalog payload — load after sites so login → usable UI is faster.
-    loadConversionFactorsFromBackend(token);
+    try {
+        if (factorsResponse?.ok) {
+            const factorsData = await factorsResponse.json();
+            if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiCatalogFactors) {
+                window.carbonCalc.mergeApiCatalogFactors(factorsData);
+                if (window.carbonCalc.calculateAllTotals) {
+                    window.carbonCalc.calculateAllTotals();
+                }
+            }
+        } else if (factorsResponse && !factorsResponse.ok) {
+            console.warn('Factors API returned', factorsResponse.status, await factorsResponse.text().catch(() => ''));
+        }
+    } catch (err) {
+        console.error('Error parsing factors from backend:', err);
+    }
+
     return sitesLoaded;
 }
 
@@ -2794,8 +2750,6 @@ async function initializeApp() {
 // ============================================
 
 window.addEventListener('DOMContentLoaded', function() {
-    warmApiConnection();
-
     // Initialize theme palette UI as early as possible
     if (typeof window.initCarbonPaletteUI === 'function') {
         window.initCarbonPaletteUI();
@@ -2850,10 +2804,8 @@ window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loginEmail').value = savedEmail;
         }
 
-        requestAnimationFrame(() => {
-            initializeApp().catch((initErr) => {
-                console.error('initializeApp failed on session restore:', initErr);
-            });
+        initializeApp().catch((initErr) => {
+            console.error('initializeApp failed on session restore:', initErr);
         });
     } else {
         // Show login screen
