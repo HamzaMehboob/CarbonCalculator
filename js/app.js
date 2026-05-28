@@ -55,7 +55,12 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        return await fetch(url, { ...options, signal: controller.signal });
+        return await fetch(url, {
+            credentials: 'omit',
+            mode: 'cors',
+            ...options,
+            signal: controller.signal,
+        });
     } finally {
         clearTimeout(timer);
     }
@@ -64,6 +69,12 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
 function connectionErrorMessage(err) {
     const base = getApiBaseUrl();
     const isPt = appState.currentLanguage === 'pt';
+    const proto = typeof location !== 'undefined' ? location.protocol : '';
+    if (proto === 'file:') {
+        return isPt
+            ? 'Abra a app via um servidor local (ex.: py -m http.server na pasta do projeto) ou use ?api=http://127.0.0.1:5000/api com o backend local.'
+            : 'Open the app through a local web server (e.g. run py -m http.server in the project folder), or use ?api=http://127.0.0.1:5000/api with a local backend.';
+    }
     if (err && err.name === 'AbortError') {
         return isPt
             ? `Tempo esgotado ao contactar ${base}. Se usa Render gratuito, aguarde ~1 minuto e tente de novo.`
@@ -639,7 +650,7 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ login: identifier, password }),
                     });
-                    if (response.ok || response.status === 401 || response.status === 403) {
+                    if (response) {
                         if (base !== getApiBaseUrl() && typeof localStorage !== 'undefined') {
                             localStorage.setItem('carbonApiBase', base);
                         }

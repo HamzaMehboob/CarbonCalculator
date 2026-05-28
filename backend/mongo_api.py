@@ -62,8 +62,9 @@ def _apply_docx_narrative_overrides(xml_str: str, payload: dict) -> str:
     return xml_str
 
 app = Flask(__name__)
-# Enable CORS for all origins in development/testing
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+# JWT auth uses Authorization header — no cookies. Do not use supports_credentials with origins "*"
+# (browsers block preflight and fetch fails with "Connection error").
+CORS(app, resources={r"/*": {"origins": "*", "allow_headers": ["Content-Type", "Authorization"]}})
 
 
 def utc_now() -> datetime.datetime:
