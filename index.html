@@ -214,6 +214,7 @@
                                 <select id="countrySelect">
                                     <option value="UK" data-en="UK Govt (DEFRA 2025)" data-pt="Governo do Reino Unido (DEFRA 2025)">UK Govt (DEFRA 2025)</option>
                                     <option value="BRAZIL" data-en="Brazil GHG Protocol (SEEG)" data-pt="Brasil Protocolo GEE (SEEG)">Brazil GHG Protocol (SEEG)</option>
+                                    <option value="BAHRAIN" data-en="Bahrain national factors" data-pt="Fatores nacionais do Bahrein">Bahrain national factors</option>
                                 </select>
                             </div>
                             <div class="factors-actions" style="display: flex; flex-direction: column; gap: 4px;">
@@ -394,6 +395,18 @@
                                     <input type="checkbox" id="scope3EnabledInput" data-scope-enabled="scope3" checked>
                                     <span data-en="Include Scope 3 (Other indirect)" data-pt="Incluir Escopo 3 (Outras indiretas)">Include Scope 3 (Other indirect)</span>
                                 </label>
+                                <label style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="hotelStayEnabledInput" checked>
+                                    <span data-en="Include hotel stay sources" data-pt="Incluir fontes de hospedagem">Include hotel stay sources</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="wfhEnabledInput" checked>
+                                    <span data-en="Include working-from-home (WFH) sources" data-pt="Incluir fontes de trabalho remoto">Include working-from-home (WFH) sources</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="materialsEnabledInput" checked>
+                                    <span data-en="Include materials sources" data-pt="Incluir fontes de materiais">Include materials sources</span>
+                                </label>
                             </div>
                             <div class="form-inline-group" style="margin-top: 14px;">
                                 <label data-en="Buildings assessed" data-pt="Edifícios avaliados">Buildings assessed</label>
@@ -429,6 +442,7 @@
                                     <option value="m3">m³</option>
                                     <option value="litres">litres</option>
                                     <option value="gallons">gallons</option>
+                                    <option value="ft3">ft³</option>
                                 </select>
                             </div>
                             <div class="form-inline-group">
@@ -437,6 +451,8 @@
                                     <option value="kwh">kWh</option>
                                     <option value="mwh">MWh</option>
                                     <option value="gj">GJ</option>
+                                    <option value="mj">MJ</option>
+                                    <option value="therms">therms</option>
                                 </select>
                             </div>
                             <div class="form-inline-group">
@@ -444,6 +460,7 @@
                                 <select id="wasteUnitInput">
                                     <option value="tonnes">tonnes</option>
                                     <option value="kg">kg</option>
+                                    <option value="lbs">lbs</option>
                                 </select>
                             </div>
                             <div class="form-inline-group">
@@ -451,6 +468,10 @@
                                 <select id="transportUnitInput">
                                     <option value="km">km</option>
                                     <option value="miles">miles</option>
+                                    <option value="passenger_km">passenger-km</option>
+                                    <option value="tonne_km">tonne-km</option>
+                                    <option value="night">night</option>
+                                    <option value="day">day</option>
                                 </select>
                             </div>
                             <div class="form-inline-group">
@@ -458,6 +479,7 @@
                                 <select id="refrigerantsUnitInput">
                                     <option value="kg">kg</option>
                                     <option value="g">g</option>
+                                    <option value="lbs">lbs</option>
                                 </select>
                             </div>
                             <div class="form-inline-group full-width">
@@ -630,6 +652,7 @@
                                                 <option value="m3" selected>m³</option>
                                                 <option value="litres">litres</option>
                                                 <option value="gallons">gallons</option>
+                                                <option value="ft3">ft³</option>
                                             </select>
                                         </td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
@@ -708,6 +731,8 @@
                                                 <option value="kwh" selected>kWh</option>
                                                 <option value="mwh">MWh</option>
                                                 <option value="gj">GJ</option>
+                                                <option value="mj">MJ</option>
+                                                <option value="therms">therms</option>
                                             </select>
                                         </td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
@@ -784,6 +809,7 @@
                                             <select class="row-unit-select" data-category="waste">
                                                 <option value="tonnes" selected>tonnes</option>
                                                 <option value="kg">kg</option>
+                                                <option value="lbs">lbs</option>
                                             </select>
                                         </td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
@@ -857,6 +883,14 @@
                                                 <option value="flights_short" data-en="Flights - short-haul" data-pt="Voos - curta distância">Flights - short-haul</option>
                                                 <option value="flights_medium" data-en="Flights - medium-haul" data-pt="Voos - média distância">Flights - medium-haul</option>
                                                 <option value="flights_long" data-en="Flights - long-haul" data-pt="Voos - longa distância">Flights - long-haul</option>
+                                                <option value="business_travel_rail" data-en="Business travel - rail" data-pt="Viagem de negócios - trem">Business travel - rail</option>
+                                                <option value="business_travel_hotel_night" data-en="Business travel - hotel stay" data-pt="Viagem de negócios - hospedagem">Business travel - hotel stay</option>
+                                                <option value="freight_road_tonne_km" data-en="Freighting goods - road" data-pt="Frete de mercadorias - rodoviário">Freighting goods - road</option>
+                                                <option value="freight_air_tonne_km" data-en="Freighting goods - air" data-pt="Frete de mercadorias - aéreo">Freighting goods - air</option>
+                                                <option value="staff_commute_car_km" data-en="Staff commute - car" data-pt="Deslocamento de equipe - carro">Staff commute - car</option>
+                                                <option value="staff_commute_bus_km" data-en="Staff commute - bus" data-pt="Deslocamento de equipe - ônibus">Staff commute - bus</option>
+                                                <option value="wfh_day" data-en="Working from home" data-pt="Trabalho remoto">Working from home</option>
+                                                <option value="materials_paper_kg" data-en="Materials - paper" data-pt="Materiais - papel">Materials - paper</option>
                                             </select>
                                         </td>
                                         <td><input type="text" placeholder="Company vehicles" value="Company vehicles"></td>
@@ -864,6 +898,10 @@
                                             <select class="row-unit-select" data-category="transport">
                                                 <option value="km" selected>km</option>
                                                 <option value="miles">miles</option>
+                                                <option value="passenger_km">passenger-km</option>
+                                                <option value="tonne_km">tonne-km</option>
+                                                <option value="night">night</option>
+                                                <option value="day">day</option>
                                             </select>
                                         </td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>
@@ -941,6 +979,7 @@
                                             <select class="row-unit-select" data-category="refrigerants">
                                                 <option value="kg" selected>kg</option>
                                                 <option value="g">g</option>
+                                                <option value="lbs">lbs</option>
                                             </select>
                                         </td>
                                         <td><input type="number" value="2025" min="2020" max="2030"></td>

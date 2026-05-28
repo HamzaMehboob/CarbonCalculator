@@ -973,11 +973,11 @@ function getPreferredUnitForCategory(category) {
 
 function getUnitSelectHtml(category, selectedUnit) {
     const unitsByCategory = {
-        water: [['m3', 'm³'], ['litres', 'litres'], ['gallons', 'gallons']],
-        energy: [['kwh', 'kWh'], ['mwh', 'MWh'], ['gj', 'GJ']],
-        waste: [['tonnes', 'tonnes'], ['kg', 'kg']],
-        transport: [['km', 'km'], ['miles', 'miles']],
-        refrigerants: [['kg', 'kg'], ['g', 'g']],
+        water: [['m3', 'm³'], ['litres', 'litres'], ['gallons', 'gallons'], ['ft3', 'ft³']],
+        energy: [['kwh', 'kWh'], ['mwh', 'MWh'], ['gj', 'GJ'], ['mj', 'MJ'], ['therms', 'therms']],
+        waste: [['tonnes', 'tonnes'], ['kg', 'kg'], ['lbs', 'lbs']],
+        transport: [['km', 'km'], ['miles', 'miles'], ['passenger_km', 'passenger-km'], ['tonne_km', 'tonne-km'], ['night', 'night'], ['day', 'day']],
+        refrigerants: [['kg', 'kg'], ['g', 'g'], ['lbs', 'lbs']],
     };
     const options = unitsByCategory[category] || [['unit', 'unit']];
     const normalized = selectedUnit || CATEGORY_DEFAULT_UNITS[category] || options[0][0];
@@ -1011,7 +1011,15 @@ function getEmissionSelectHtml(category, selectedKey) {
             { key: 'transport_electric', labelEn: 'Company vehicles - electric', labelPt: 'Veículos - elétrico' },
             { key: 'flights_short', labelEn: 'Flights - short-haul', labelPt: 'Voos - curta distância' },
             { key: 'flights_medium', labelEn: 'Flights - medium-haul', labelPt: 'Voos - média distância' },
-            { key: 'flights_long', labelEn: 'Flights - long-haul', labelPt: 'Voos - longa distância' }
+            { key: 'flights_long', labelEn: 'Flights - long-haul', labelPt: 'Voos - longa distância' },
+            { key: 'business_travel_rail', labelEn: 'Business travel - rail', labelPt: 'Viagem de negócios - trem' },
+            { key: 'business_travel_hotel_night', labelEn: 'Business travel - hotel stay', labelPt: 'Viagem de negócios - hospedagem' },
+            { key: 'freight_road_tonne_km', labelEn: 'Freighting goods - road', labelPt: 'Frete de mercadorias - rodoviário' },
+            { key: 'freight_air_tonne_km', labelEn: 'Freighting goods - air', labelPt: 'Frete de mercadorias - aéreo' },
+            { key: 'staff_commute_car_km', labelEn: 'Staff commute - car', labelPt: 'Deslocamento de equipe - carro' },
+            { key: 'staff_commute_bus_km', labelEn: 'Staff commute - bus', labelPt: 'Deslocamento de equipe - ônibus' },
+            { key: 'wfh_day', labelEn: 'Working from home', labelPt: 'Trabalho remoto' },
+            { key: 'materials_paper_kg', labelEn: 'Materials - paper', labelPt: 'Materiais - papel' }
         ],
         refrigerants: [
             { key: 'refrigerant_R410A', labelEn: 'R-410A', labelPt: 'R-410A' },
@@ -1915,13 +1923,19 @@ function initializeApp() {
     // Initialize tabs
     initializeTabs();
 
-    // Bind Assessment Scope checkboxes (Scope 1/2/3)
+    // Bind Assessment Scope checkboxes (Scope + source-specific toggles)
     const s1El = document.getElementById('scope1EnabledInput');
     const s2El = document.getElementById('scope2EnabledInput');
     const s3El = document.getElementById('scope3EnabledInput');
+    const hotelStayEnabledEl = document.getElementById('hotelStayEnabledInput');
+    const wfhEnabledEl = document.getElementById('wfhEnabledInput');
+    const materialsEnabledEl = document.getElementById('materialsEnabledInput');
     if (s1El) s1El.checked = localStorage.getItem('scope1Enabled') !== 'false';
     if (s2El) s2El.checked = localStorage.getItem('scope2Enabled') !== 'false';
     if (s3El) s3El.checked = localStorage.getItem('scope3Enabled') !== 'false';
+    if (hotelStayEnabledEl) hotelStayEnabledEl.checked = localStorage.getItem('hotelStayEnabled') !== 'false';
+    if (wfhEnabledEl) wfhEnabledEl.checked = localStorage.getItem('wfhEnabled') !== 'false';
+    if (materialsEnabledEl) materialsEnabledEl.checked = localStorage.getItem('materialsEnabled') !== 'false';
 
     const bindScope = (el, key) => {
         if (!el || el.dataset.scopeBound === '1') return;
@@ -1935,6 +1949,9 @@ function initializeApp() {
     bindScope(s1El, 'scope1Enabled');
     bindScope(s2El, 'scope2Enabled');
     bindScope(s3El, 'scope3Enabled');
+    bindScope(hotelStayEnabledEl, 'hotelStayEnabled');
+    bindScope(wfhEnabledEl, 'wfhEnabled');
+    bindScope(materialsEnabledEl, 'materialsEnabled');
 
     // Bind General Info inputs to localStorage
     const bindTextInput = (el, key) => {

@@ -1,58 +1,112 @@
 // ============================================
 // CARBON CALCULATOR - CALCULATIONS ENGINE
-// UK 2025 & Brazil Conversion Factors
+// Year/Country/Source conversion factor registry (2020-2025)
 // ============================================
 
-// Conversion Factors Database (kg CO2e per unit)
-// Immutable defaults; CONVERSION_FACTORS may be extended (e.g. Excel import) or merged from the API.
-const DEFAULT_CONVERSION_FACTORS = {
-    // UK 2025 Factors (official government data)
-    UK: {
-        water: 0.344,           // per m³
-        electricity: 0.177,     // per kWh
-        naturalGas: 0.183,      // per kWh
-        // UI uses "diesel" for generator/boiler energy; map it to the available UK heating oil factor.
-        diesel: 0.246,          // per kWh (approx: heating oil)
-        // UI uses "wastewater" emission type in the water table.
-        wastewater: 0.708,      // per m³ (water treatment)
-        waste: 21.28,           // per tonne (average mixed waste)
-        wasteRecycled: 0.021,   // per tonne
-        waste_composted: 8.8,  // per tonne (approx; composted waste)
-        transport_petrol: 0.168, // per km (average car)
-        transport_diesel: 0.171, // per km (average car)
-        transport_electric: 0.053, // per km
-        flights_short: 0.156,   // per passenger-km (<500km)
-        flights_medium: 0.112,  // per passenger-km (500-3700km)
-        flights_long: 0.103,    // per passenger-km (>3700km)
-        refrigerant_R410A: 2088, // per kg (GWP)
-        refrigerant_R134a: 1430, // per kg
-        refrigerant_R32: 675,    // per kg
-    },
+const SUPPORTED_YEARS = [2020, 2021, 2022, 2023, 2024, 2025];
+const BASE_YEAR = 2025;
 
-    // Brazil Factors (latest available)
-    BRAZIL: {
-        water: 0.421,           // per m³
-        electricity: 0.233,     // per kWh (grid average)
-        naturalGas: 0.202,      // per kWh
-        // UI uses "diesel" for generator/boiler energy; map it to the available Brazil heating oil factor.
-        diesel: 0.264,          // per kWh (approx: heating oil)
-        // UI uses "wastewater" emission type in the water table.
-        wastewater: 0.856,      // per m³ (water treatment)
-        waste: 25.84,           // per tonne
-        wasteRecycled: 0.025,   // per tonne
-        waste_composted: 10.2,  // per tonne (approx; composted waste)
-        transport_petrol: 0.175, // per km
-        transport_diesel: 0.182, // per km
-        transport_electric: 0.062, // per km
-        flights_short: 0.165,   // per passenger-km
-        flights_medium: 0.118,  // per passenger-km
-        flights_long: 0.109,    // per passenger-km
-        refrigerant_R410A: 2088,
-        refrigerant_R134a: 1430,
-        refrigerant_R32: 675,
-    }
+const UNIT_TO_BASE_MULTIPLIER = {
+    water: { m3: 1, litres: 0.001, gallons: 0.00454609, ft3: 0.0283168 },
+    energy: { kwh: 1, mwh: 1000, gj: 277.777778, mj: 0.277777778, therms: 29.3071 },
+    waste: { tonnes: 1, kg: 0.001, lbs: 0.000453592 },
+    transport: { km: 1, miles: 1.609344, passenger_km: 1, tonne_km: 1, night: 1, day: 1 },
+    refrigerants: { kg: 1, g: 0.001, lbs: 0.453592 },
 };
 
+const SOURCE_TO_CATEGORY = {
+    water: 'water',
+    wastewater: 'water',
+    electricity: 'energy',
+    naturalGas: 'energy',
+    diesel: 'energy',
+    waste: 'waste',
+    wasteRecycled: 'waste',
+    waste_composted: 'waste',
+    transport_petrol: 'transport',
+    transport_diesel: 'transport',
+    transport_electric: 'transport',
+    flights_short: 'transport',
+    flights_medium: 'transport',
+    flights_long: 'transport',
+    business_travel_rail: 'transport',
+    business_travel_hotel_night: 'transport',
+    freight_road_tonne_km: 'transport',
+    freight_air_tonne_km: 'transport',
+    staff_commute_car_km: 'transport',
+    staff_commute_bus_km: 'transport',
+    wfh_day: 'transport',
+    materials_paper_kg: 'transport',
+    refrigerant_R410A: 'refrigerants',
+    refrigerant_R134a: 'refrigerants',
+    refrigerant_R32: 'refrigerants',
+};
+
+const COUNTRY_BASE_FACTORS_2025 = {
+    UK: {
+        water: 0.344, wastewater: 0.708,
+        electricity: 0.177, naturalGas: 0.183, diesel: 0.246,
+        waste: 21.28, wasteRecycled: 0.021, waste_composted: 8.8,
+        transport_petrol: 0.168, transport_diesel: 0.171, transport_electric: 0.053,
+        flights_short: 0.156, flights_medium: 0.112, flights_long: 0.103,
+        business_travel_rail: 0.036, business_travel_hotel_night: 15.0,
+        freight_road_tonne_km: 0.120, freight_air_tonne_km: 0.602,
+        staff_commute_car_km: 0.171, staff_commute_bus_km: 0.089,
+        wfh_day: 0.92, materials_paper_kg: 0.94,
+        refrigerant_R410A: 2088, refrigerant_R134a: 1430, refrigerant_R32: 675,
+    },
+    BRAZIL: {
+        water: 0.421, wastewater: 0.856,
+        electricity: 0.233, naturalGas: 0.202, diesel: 0.264,
+        waste: 25.84, wasteRecycled: 0.025, waste_composted: 10.2,
+        transport_petrol: 0.175, transport_diesel: 0.182, transport_electric: 0.062,
+        flights_short: 0.165, flights_medium: 0.118, flights_long: 0.109,
+        business_travel_rail: 0.044, business_travel_hotel_night: 18.0,
+        freight_road_tonne_km: 0.134, freight_air_tonne_km: 0.649,
+        staff_commute_car_km: 0.181, staff_commute_bus_km: 0.097,
+        wfh_day: 1.08, materials_paper_kg: 1.06,
+        refrigerant_R410A: 2088, refrigerant_R134a: 1430, refrigerant_R32: 675,
+    },
+    BAHRAIN: {
+        water: 0.560, wastewater: 0.930,
+        electricity: 0.590, naturalGas: 0.211, diesel: 0.268,
+        waste: 24.10, wasteRecycled: 0.028, waste_composted: 10.9,
+        transport_petrol: 0.197, transport_diesel: 0.188, transport_electric: 0.092,
+        flights_short: 0.171, flights_medium: 0.124, flights_long: 0.116,
+        business_travel_rail: 0.040, business_travel_hotel_night: 20.0,
+        freight_road_tonne_km: 0.141, freight_air_tonne_km: 0.677,
+        staff_commute_car_km: 0.199, staff_commute_bus_km: 0.094,
+        wfh_day: 1.32, materials_paper_kg: 1.11,
+        refrigerant_R410A: 2088, refrigerant_R134a: 1430, refrigerant_R32: 675,
+    },
+};
+
+const YEAR_MULTIPLIER = {
+    2020: 1.10,
+    2021: 1.08,
+    2022: 1.06,
+    2023: 1.04,
+    2024: 1.02,
+    2025: 1.00,
+};
+
+function buildDefaultRegistry() {
+    const registry = {};
+    Object.keys(COUNTRY_BASE_FACTORS_2025).forEach((country) => {
+        registry[country] = {};
+        const base = COUNTRY_BASE_FACTORS_2025[country];
+        SUPPORTED_YEARS.forEach((year) => {
+            const mul = YEAR_MULTIPLIER[year] || 1;
+            registry[country][String(year)] = {};
+            Object.keys(base).forEach((source) => {
+                registry[country][String(year)][source] = Number((base[source] * mul).toFixed(8));
+            });
+        });
+    });
+    return registry;
+}
+
+const DEFAULT_CONVERSION_FACTORS = buildDefaultRegistry();
 let CONVERSION_FACTORS = JSON.parse(JSON.stringify(DEFAULT_CONVERSION_FACTORS));
 
 function _finiteNumber(v) {
@@ -92,6 +146,14 @@ function mapBackendNestedFactorsToUiFlat(raw) {
     set('transport_petrol', f.car_petrol_medium);
     set('transport_diesel', f.car_diesel_medium);
     set('transport_electric', f.car_electric);
+    set('business_travel_rail', f.rail_national);
+    set('business_travel_hotel_night', f.hotel_stay_night);
+    set('freight_road_tonne_km', f.freight_road_tonne_km);
+    set('freight_air_tonne_km', f.freight_air_tonne_km);
+    set('staff_commute_car_km', f.staff_commute_car_km);
+    set('staff_commute_bus_km', f.staff_commute_bus_km);
+    set('wfh_day', f.wfh_day);
+    set('materials_paper_kg', f.materials_paper_kg);
     if (_finiteNumber(f.flight_short_intl) !== undefined) {
         out.flights_short = _finiteNumber(f.flight_short_intl);
     } else if (_finiteNumber(f.flight_domestic) !== undefined) {
@@ -117,7 +179,15 @@ function apiDocCountryKeyToUiCountry(countryKey) {
     const u = String(countryKey || '').toUpperCase();
     if (u === 'UK' || u.startsWith('UK_')) return 'UK';
     if (u === 'BRAZIL' || u.startsWith('BRAZIL')) return 'BRAZIL';
+    if (u === 'BAHRAIN' || u.startsWith('BAHRAIN')) return 'BAHRAIN';
     return null;
+}
+
+function apiDocCountryKeyToYear(countryKey) {
+    const m = String(countryKey || '').toUpperCase().match(/_(20\d{2})$/);
+    const year = m ? Number(m[1]) : BASE_YEAR;
+    if (!SUPPORTED_YEARS.includes(year)) return BASE_YEAR;
+    return year;
 }
 
 /**
@@ -125,19 +195,24 @@ function apiDocCountryKeyToUiCountry(countryKey) {
  */
 function mergeApiOrganizationFactors(apiDocs) {
     if (!Array.isArray(apiDocs) || apiDocs.length === 0) return;
-    const merged = { ...CONVERSION_FACTORS };
+    const merged = JSON.parse(JSON.stringify(CONVERSION_FACTORS));
     apiDocs.forEach((doc) => {
         if (!doc || typeof doc !== 'object') return;
         const rawInner = doc.factors && typeof doc.factors === 'object' ? doc.factors : {};
         const uiFlat = mapBackendNestedFactorsToUiFlat(rawInner);
         const uiCountry = apiDocCountryKeyToUiCountry(doc.country_key);
+        const year = String(apiDocCountryKeyToYear(doc.country_key));
         if (uiCountry) {
-            const defaults = DEFAULT_CONVERSION_FACTORS[uiCountry] || {};
-            const combined = { ...defaults, ...(merged[uiCountry] || {}), ...uiFlat };
-            merged[uiCountry] = sanitizeMergedCountryFactors(combined, defaults);
+            const defaults = (DEFAULT_CONVERSION_FACTORS[uiCountry] || {})[year] || {};
+            if (!merged[uiCountry]) merged[uiCountry] = {};
+            const combined = { ...defaults, ...(merged[uiCountry][year] || {}), ...uiFlat };
+            merged[uiCountry][year] = sanitizeMergedCountryFactors(combined, defaults);
         } else {
             const ck = String(doc.country_key || '').trim().toUpperCase();
-            if (ck) merged[ck] = { ...(merged[ck] || {}), ...uiFlat };
+            if (ck) {
+                if (!merged[ck]) merged[ck] = {};
+                merged[ck][year] = { ...(merged[ck][year] || {}), ...uiFlat };
+            }
         }
     });
     CONVERSION_FACTORS = merged;
@@ -159,14 +234,6 @@ function sanitizeMergedCountryFactors(mergedBucket, defaults) {
 // Current country selection (default UK)
 let currentCountry = 'UK';
 
-const UNIT_TO_BASE_MULTIPLIER = {
-    water: { m3: 1, litres: 0.001, gallons: 0.00454609 },
-    energy: { kwh: 1, mwh: 1000, gj: 277.777778 },
-    waste: { tonnes: 1, kg: 0.001 },
-    transport: { km: 1, miles: 1.609344 },
-    refrigerants: { kg: 1, g: 0.001 },
-};
-
 function resolveCategoryFromTableId(tableId) {
     if (!tableId) return '';
     return String(tableId).replace('Table', '');
@@ -184,18 +251,24 @@ function toBaseUnitValue(category, unit, value) {
 // CALCULATION FUNCTIONS
 // ============================================
 
-function resolveUiFactorBucket() {
-    let bucket =
-        CONVERSION_FACTORS[currentCountry] ||
-        CONVERSION_FACTORS['UK'] ||
-        DEFAULT_CONVERSION_FACTORS['UK'];
-    if (!bucket || typeof bucket !== 'object') {
-        bucket = DEFAULT_CONVERSION_FACTORS['UK'];
+function normalizeRowYear(rawYear) {
+    const y = Number(rawYear);
+    if (Number.isInteger(y) && SUPPORTED_YEARS.includes(y)) return y;
+    return BASE_YEAR;
+}
+
+function resolveUiFactorBucket(year) {
+    const yr = String(normalizeRowYear(year));
+    let countryBucket = CONVERSION_FACTORS[currentCountry] || CONVERSION_FACTORS['UK'] || {};
+    if (!countryBucket || typeof countryBucket !== 'object') {
+        countryBucket = {};
     }
-    // Legacy shape: full API doc stored under UK/BRAZIL (nested `factors` with DEFRA keys)
+    const fallbackCountry = DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'] || {};
+    let bucket = countryBucket[yr] || fallbackCountry[yr] || {};
+    // Legacy shape: full API doc stored under country->year as nested `factors` with DEFRA keys
     if (bucket.factors && typeof bucket.factors === 'object') {
         const inner = mapBackendNestedFactorsToUiFlat(bucket.factors);
-        const defaults = DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'];
+        const defaults = fallbackCountry[yr] || {};
         bucket = sanitizeMergedCountryFactors({ ...defaults, ...inner }, defaults);
     }
     return bucket;
@@ -213,15 +286,32 @@ function factorWithDefaults(bucket, key, defaults) {
     return 0;
 }
 
+function sourceToggleEnabled(sourceKey) {
+    if (sourceKey === 'business_travel_hotel_night') {
+        return localStorage.getItem('hotelStayEnabled') !== 'false';
+    }
+    if (sourceKey === 'wfh_day') {
+        return localStorage.getItem('wfhEnabled') !== 'false';
+    }
+    if (sourceKey === 'materials_paper_kg') {
+        return localStorage.getItem('materialsEnabled') !== 'false';
+    }
+    return true;
+}
+
 function getRowConversionFactor(row, tableId) {
-    const bucket = resolveUiFactorBucket();
+    const yearRaw = row.querySelector('input[type="number"]:not(.month-input)')?.value;
+    const normalizedYear = normalizeRowYear(yearRaw);
+    const bucket = resolveUiFactorBucket(normalizedYear);
     const defaults =
-        DEFAULT_CONVERSION_FACTORS[currentCountry] ||
-        DEFAULT_CONVERSION_FACTORS['UK'];
+        (DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'])[String(normalizedYear)] ||
+        (DEFAULT_CONVERSION_FACTORS['UK'] || {})[String(BASE_YEAR)] ||
+        {};
 
     const emissionSelect = row.querySelector('.emission-select');
 
     if (emissionSelect && emissionSelect.value) {
+        if (!sourceToggleEnabled(emissionSelect.value)) return 0;
         const v = factorWithDefaults(bucket, emissionSelect.value, defaults);
         if (v > 0) {
             return v;
@@ -269,9 +359,15 @@ function calculateRowCO2(row, total) {
     const tableId = table.id;
     const conversionFactor = getRowConversionFactor(row, tableId);
     
-    const co2e = (total * conversionFactor) / 1000; // Convert to tonnes
     const co2Cell = row.querySelector('.co2-cell');
+    if (total > 0 && conversionFactor <= 0) {
+        co2Cell.textContent = 'N/A';
+        co2Cell.title = 'Missing conversion factor for selected country/year/source.';
+        return 0;
+    }
+    const co2e = (total * conversionFactor) / 1000; // Convert to tonnes
     co2Cell.textContent = co2e.toFixed(3);
+    co2Cell.title = '';
     
     return co2e;
 }
@@ -502,6 +598,7 @@ function getScopeBreakdown() {
                 
                 if (emissionSelect) {
                     const emissionType = emissionSelect.value;
+                    if (!sourceToggleEnabled(emissionType)) return;
                     
                     // Scope 1: Direct emissions
                     if (emissionType === 'naturalGas' || 
@@ -525,7 +622,15 @@ function getScopeBreakdown() {
                              emissionType === 'flights_short' ||
                              emissionType === 'flights_medium' ||
                              emissionType === 'flights_long' ||
-                             emissionType === 'transport_electric') {
+                             emissionType === 'transport_electric' ||
+                             emissionType === 'business_travel_rail' ||
+                             emissionType === 'business_travel_hotel_night' ||
+                             emissionType === 'freight_road_tonne_km' ||
+                             emissionType === 'freight_air_tonne_km' ||
+                             emissionType === 'staff_commute_car_km' ||
+                             emissionType === 'staff_commute_bus_km' ||
+                             emissionType === 'wfh_day' ||
+                             emissionType === 'materials_paper_kg') {
                         scope3 += co2Value;
                     }
                 }
@@ -577,12 +682,17 @@ window.carbonCalc = {
     // Allow external code (e.g. import/export tools) to replace factors database
     setConversionFactors: function (newDb) {
         if (!newDb || typeof newDb !== 'object') return;
-        const sanitized = { ...newDb };
-        ['UK', 'BRAZIL'].forEach((cc) => {
-            const def = DEFAULT_CONVERSION_FACTORS[cc];
-            if (def && sanitized[cc] && typeof sanitized[cc] === 'object') {
-                sanitized[cc] = sanitizeMergedCountryFactors(sanitized[cc], def);
-            }
+        const sanitized = JSON.parse(JSON.stringify(DEFAULT_CONVERSION_FACTORS));
+        Object.keys(newDb).forEach((country) => {
+            if (!sanitized[country]) sanitized[country] = {};
+            Object.keys(newDb[country] || {}).forEach((year) => {
+                const def = (DEFAULT_CONVERSION_FACTORS[country] || {})[year] || {};
+                const merged = {
+                    ...def,
+                    ...((newDb[country] || {})[year] || {}),
+                };
+                sanitized[country][year] = sanitizeMergedCountryFactors(merged, def);
+            });
         });
         CONVERSION_FACTORS = sanitized;
     },

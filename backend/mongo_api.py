@@ -120,36 +120,72 @@ def get_factors_col():
     db = get_db()
     return db['conversion_factors'] if db is not None else None
 
-# Conversion Factors
-DEFAULT_CONVERSION_FACTORS = {
-    "UK_2025": {
-        "version": "2025.1",
-        "factors": {
-            "water_supply": 0.344, "water_treatment": 0.708,
-            "electricity_grid": 0.177, "natural_gas": 0.183, "heating_oil": 0.246, "coal": 0.317, "lpg": 0.214,
-            "waste_landfill": 467.0, "waste_incineration": 21.28, "waste_recycled": 21.3, "waste_composted": 8.8,
-            "car_petrol_small": 0.149, "car_petrol_medium": 0.188, "car_petrol_large": 0.280,
-            "car_diesel_small": 0.139, "car_diesel_medium": 0.166, "car_diesel_large": 0.227,
-            "car_electric": 0.053, "car_hybrid": 0.113,
-            "van_diesel": 0.788, "van_petrol": 0.804, "van_electric": 0.169,
-            "flight_domestic": 0.246, "flight_short_intl": 0.156, "flight_long_intl": 0.195,
-            "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
-        }
+# Conversion Factors (country/year/source)
+SUPPORTED_FACTOR_YEARS = [2020, 2021, 2022, 2023, 2024, 2025]
+YEAR_MULTIPLIER = {2020: 1.10, 2021: 1.08, 2022: 1.06, 2023: 1.04, 2024: 1.02, 2025: 1.00}
+COUNTRY_BASE_FACTORS_2025 = {
+    "UK": {
+        "water_supply": 0.344, "water_treatment": 0.708,
+        "electricity_grid": 0.177, "natural_gas": 0.183, "heating_oil": 0.246, "coal": 0.317, "lpg": 0.214,
+        "waste_landfill": 467.0, "waste_incineration": 21.28, "waste_recycled": 21.3, "waste_composted": 8.8,
+        "car_petrol_small": 0.149, "car_petrol_medium": 0.188, "car_petrol_large": 0.280,
+        "car_diesel_small": 0.139, "car_diesel_medium": 0.166, "car_diesel_large": 0.227,
+        "car_electric": 0.053, "car_hybrid": 0.113,
+        "van_diesel": 0.788, "van_petrol": 0.804, "van_electric": 0.169,
+        "flight_domestic": 0.246, "flight_short_intl": 0.156, "flight_long_intl": 0.195,
+        "rail_national": 0.036, "hotel_stay_night": 15.0,
+        "freight_road_tonne_km": 0.120, "freight_air_tonne_km": 0.602,
+        "staff_commute_car_km": 0.171, "staff_commute_bus_km": 0.089,
+        "wfh_day": 0.92, "materials_paper_kg": 0.94,
+        "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
     },
-    "BRAZIL_2025": {
-        "factors": {
-            "water_supply": 0.421, "water_treatment": 0.856,
-            "electricity_grid": 0.233, "natural_gas": 0.202, "heating_oil": 0.264, "lpg": 0.226,
-            "waste_landfill": 521.0, "waste_incineration": 25.84, "waste_recycled": 24.6, "waste_composted": 10.2,
-            "car_petrol_small": 0.158, "car_petrol_medium": 0.197, "car_petrol_large": 0.294,
-            "car_diesel_small": 0.148, "car_diesel_medium": 0.176, "car_diesel_large": 0.241,
-            "car_electric": 0.062, "car_hybrid": 0.124, "car_flex": 0.182,
-            "van_diesel": 0.831, "van_petrol": 0.847, "van_electric": 0.186,
-            "flight_domestic": 0.264, "flight_short_intl": 0.165, "flight_long_intl": 0.208,
-            "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
-        }
-    }
+    "BRAZIL": {
+        "water_supply": 0.421, "water_treatment": 0.856,
+        "electricity_grid": 0.233, "natural_gas": 0.202, "heating_oil": 0.264, "lpg": 0.226,
+        "waste_landfill": 521.0, "waste_incineration": 25.84, "waste_recycled": 24.6, "waste_composted": 10.2,
+        "car_petrol_small": 0.158, "car_petrol_medium": 0.197, "car_petrol_large": 0.294,
+        "car_diesel_small": 0.148, "car_diesel_medium": 0.176, "car_diesel_large": 0.241,
+        "car_electric": 0.062, "car_hybrid": 0.124, "car_flex": 0.182,
+        "van_diesel": 0.831, "van_petrol": 0.847, "van_electric": 0.186,
+        "flight_domestic": 0.264, "flight_short_intl": 0.165, "flight_long_intl": 0.208,
+        "rail_national": 0.044, "hotel_stay_night": 18.0,
+        "freight_road_tonne_km": 0.134, "freight_air_tonne_km": 0.649,
+        "staff_commute_car_km": 0.181, "staff_commute_bus_km": 0.097,
+        "wfh_day": 1.08, "materials_paper_kg": 1.06,
+        "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
+    },
+    "BAHRAIN": {
+        "water_supply": 0.560, "water_treatment": 0.930,
+        "electricity_grid": 0.590, "natural_gas": 0.211, "heating_oil": 0.268, "coal": 0.329, "lpg": 0.240,
+        "waste_landfill": 492.0, "waste_incineration": 24.10, "waste_recycled": 24.4, "waste_composted": 10.9,
+        "car_petrol_small": 0.172, "car_petrol_medium": 0.207, "car_petrol_large": 0.298,
+        "car_diesel_small": 0.153, "car_diesel_medium": 0.181, "car_diesel_large": 0.248,
+        "car_electric": 0.092, "car_hybrid": 0.138,
+        "van_diesel": 0.862, "van_petrol": 0.879, "van_electric": 0.228,
+        "flight_domestic": 0.272, "flight_short_intl": 0.171, "flight_long_intl": 0.216,
+        "rail_national": 0.040, "hotel_stay_night": 20.0,
+        "freight_road_tonne_km": 0.141, "freight_air_tonne_km": 0.677,
+        "staff_commute_car_km": 0.199, "staff_commute_bus_km": 0.094,
+        "wfh_day": 1.32, "materials_paper_kg": 1.11,
+        "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
+    },
 }
+
+
+def _build_default_conversion_factors():
+    data = {}
+    for country, factors in COUNTRY_BASE_FACTORS_2025.items():
+        for year in SUPPORTED_FACTOR_YEARS:
+            mul = YEAR_MULTIPLIER.get(year, 1.0)
+            data[f"{country}_{year}"] = {
+                "version": f"{year}.1",
+                "source": "Default",
+                "factors": {k: round(float(v) * mul, 8) for k, v in factors.items()},
+            }
+    return data
+
+
+DEFAULT_CONVERSION_FACTORS = _build_default_conversion_factors()
 
 def init_org_factors(organization_id: str):
     """
@@ -490,6 +526,104 @@ def _sanitize_site_data_payload(payload: dict) -> dict:
                 })
             data[category] = clean_rows
     return payload
+
+
+_SOURCE_TO_BACKEND_FACTOR_KEY = {
+    'water': 'water_supply',
+    'wastewater': 'water_treatment',
+    'electricity': 'electricity_grid',
+    'naturalGas': 'natural_gas',
+    'diesel': 'heating_oil',
+    'waste': 'waste_incineration',
+    'wasteRecycled': 'waste_recycled',
+    'waste_composted': 'waste_composted',
+    'transport_petrol': 'car_petrol_medium',
+    'transport_diesel': 'car_diesel_medium',
+    'transport_electric': 'car_electric',
+    'flights_short': 'flight_short_intl',
+    'flights_medium': 'flight_domestic',
+    'flights_long': 'flight_long_intl',
+    'business_travel_rail': 'rail_national',
+    'business_travel_hotel_night': 'hotel_stay_night',
+    'freight_road_tonne_km': 'freight_road_tonne_km',
+    'freight_air_tonne_km': 'freight_air_tonne_km',
+    'staff_commute_car_km': 'staff_commute_car_km',
+    'staff_commute_bus_km': 'staff_commute_bus_km',
+    'wfh_day': 'wfh_day',
+    'materials_paper_kg': 'materials_paper_kg',
+    'refrigerant_R410A': 'refrigerant_R410A',
+    'refrigerant_R134a': 'refrigerant_R134a',
+    'refrigerant_R32': 'refrigerant_R32',
+}
+_SOURCE_CATEGORY = {
+    'water': 'water', 'wastewater': 'water',
+    'electricity': 'energy', 'naturalGas': 'energy', 'diesel': 'energy',
+    'waste': 'waste', 'wasteRecycled': 'waste', 'waste_composted': 'waste',
+    'transport_petrol': 'transport', 'transport_diesel': 'transport', 'transport_electric': 'transport',
+    'flights_short': 'transport', 'flights_medium': 'transport', 'flights_long': 'transport',
+    'business_travel_rail': 'transport', 'business_travel_hotel_night': 'transport',
+    'freight_road_tonne_km': 'transport', 'freight_air_tonne_km': 'transport',
+    'staff_commute_car_km': 'transport', 'staff_commute_bus_km': 'transport',
+    'wfh_day': 'transport', 'materials_paper_kg': 'transport',
+    'refrigerant_R410A': 'refrigerants', 'refrigerant_R134a': 'refrigerants', 'refrigerant_R32': 'refrigerants',
+}
+_UNIT_TO_BASE = {
+    'water': {'m3': 1.0, 'litres': 0.001, 'gallons': 0.00454609, 'ft3': 0.0283168},
+    'energy': {'kwh': 1.0, 'mwh': 1000.0, 'gj': 277.777778, 'mj': 0.277777778, 'therms': 29.3071},
+    'waste': {'tonnes': 1.0, 'kg': 0.001, 'lbs': 0.000453592},
+    'transport': {'km': 1.0, 'miles': 1.609344, 'passenger_km': 1.0, 'tonne_km': 1.0, 'night': 1.0, 'day': 1.0},
+    'refrigerants': {'kg': 1.0, 'g': 0.001, 'lbs': 0.453592},
+}
+
+
+def _normalize_year(year: int | str | None) -> int:
+    try:
+        y = int(year or 2025)
+    except (TypeError, ValueError):
+        y = 2025
+    if y < 2020:
+        return 2020
+    if y > 2025:
+        return 2025
+    return y
+
+
+def lookup_conversion_factor(country: str, year: int | str, source_key: str, unit: str = '') -> tuple[float | None, str | None]:
+    """Return factor and optional error for (country, year, source, unit), in base units."""
+    c = (country or 'UK').strip().upper()
+    y = _normalize_year(year)
+    src = (source_key or '').strip()
+    if src not in _SOURCE_TO_BACKEND_FACTOR_KEY:
+        return None, f'Unsupported source: {src}'
+    category = _SOURCE_CATEGORY.get(src)
+    unit_clean = (unit or '').strip().lower()
+    if unit_clean:
+        allowed = _UNIT_TO_BASE.get(category, {})
+        if unit_clean not in allowed:
+            return None, f'Unsupported unit "{unit_clean}" for category "{category}"'
+    doc = DEFAULT_CONVERSION_FACTORS.get(f'{c}_{y}') or DEFAULT_CONVERSION_FACTORS.get(f'UK_{y}')
+    if not doc:
+        return None, f'Missing factors for country/year: {c}/{y}'
+    factor_key = _SOURCE_TO_BACKEND_FACTOR_KEY[src]
+    factor = (doc.get('factors') or {}).get(factor_key)
+    if factor is None:
+        return None, f'Missing factor for source "{src}" ({factor_key})'
+    return float(factor), None
+
+
+def calculate_emission_kg(country: str, year: int | str, source_key: str, value: float, unit: str = '') -> tuple[float | None, str | None]:
+    factor, err = lookup_conversion_factor(country, year, source_key, unit)
+    if err:
+        return None, err
+    category = _SOURCE_CATEGORY.get(source_key)
+    mul = 1.0
+    if unit:
+        mul = (_UNIT_TO_BASE.get(category, {}) or {}).get(unit.lower(), 1.0)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None, 'Invalid numeric value'
+    return numeric * mul * float(factor), None
 
 
 @app.route('/', methods=['GET'])
@@ -880,6 +1014,26 @@ def handle_factors():
             upsert=True
         )
         return jsonify({"msg": "Factors saved successfully"}), 200
+
+
+@app.route('/api/factor-lookup', methods=['POST'])
+@jwt_required()
+def factor_lookup():
+    payload = request.get_json() or {}
+    country = payload.get('country') or 'UK'
+    year = payload.get('year')
+    source_key = payload.get('source_key')
+    unit = payload.get('unit') or ''
+    factor, err = lookup_conversion_factor(country, year, source_key, unit)
+    if err:
+        return jsonify({'msg': err}), 400
+    return jsonify({
+        'country': str(country).upper(),
+        'year': _normalize_year(year),
+        'source_key': source_key,
+        'unit': unit,
+        'factor': factor,
+    }), 200
 
 def _png_bytes_from_logo_data_url(data_url: str | None) -> bytes | None:
     """Decode a data: URL to PNG bytes for word/media (accept PNG; rasterize JPEG/WebP via Pillow if installed)."""
