@@ -462,6 +462,63 @@ function inferFactorCategory(key) {
     return 'transport';
 }
 
+/** Assessment Scope conversion-factor groups (datasheet Quantified Carbon Emissions). */
+function inferFactorAssessmentSubgroup(key) {
+    const k = String(key || '');
+    const ui = CATALOG_UI_KEY_FOR_BACKEND[k] || k;
+    if (['electricity', 'electricity_grid'].includes(ui)) return 'electricity';
+    if (['naturalGas', 'diesel', 'lpg', 'coal', 'natural_gas', 'heating_oil'].includes(ui)) {
+        return 'gas_energy';
+    }
+    if (['water', 'water_supply', 'water_reuse'].includes(ui)) return 'water';
+    if (['wastewater', 'water_treatment'].includes(ui)) return 'wastewater';
+    if (k.startsWith('waste') || ['wasteRecycled', 'waste_composted'].includes(ui)) return 'waste';
+    if (k.startsWith('refrigerant_')) return 'refrigerants';
+    if (k.includes('hotel') || k === 'business_travel_hotel_night') return 'hotel_stay';
+    if (k.includes('wfh')) return 'wfh';
+    if (k.startsWith('materials_')) return 'materials';
+    if (k.startsWith('freight_') || k.startsWith('cargo_ship')) return 'freight';
+    if (/^(car_|van_|hgv_|transport_petrol|transport_diesel|transport_electric|motorbike_)/.test(k)) {
+        return 'fleet';
+    }
+    if (/^(flight_|staff_commute|business_travel)/.test(k) || k.includes('commute')) {
+        return 'business_travel';
+    }
+    return 'other_transport';
+}
+
+const ASSESSMENT_FACTOR_SUBGROUP_ORDER = [
+    'electricity',
+    'gas_energy',
+    'water',
+    'wastewater',
+    'waste',
+    'fleet',
+    'business_travel',
+    'freight',
+    'refrigerants',
+    'hotel_stay',
+    'wfh',
+    'materials',
+    'other_transport',
+];
+
+const ASSESSMENT_FACTOR_SUBGROUP_TITLES = {
+    electricity: { en: 'Electricity', pt: 'Eletricidade' },
+    gas_energy: { en: 'Gas & other fuels', pt: 'Gás e outros combustíveis' },
+    water: { en: 'Water', pt: 'Água' },
+    wastewater: { en: 'Waste water', pt: 'Águas residuais' },
+    waste: { en: 'Waste', pt: 'Resíduos' },
+    fleet: { en: 'Company fleet & leased vehicles', pt: 'Frota e veículos alugados' },
+    business_travel: { en: 'Business & staff travel', pt: 'Viagens de negócios e equipe' },
+    freight: { en: 'Freighting goods', pt: 'Frete de mercadorias' },
+    refrigerants: { en: 'Refrigerants', pt: 'Refrigerantes' },
+    hotel_stay: { en: 'Hotel stay', pt: 'Estadia em hotel' },
+    wfh: { en: 'Working from home', pt: 'Trabalho remoto' },
+    materials: { en: 'Materials', pt: 'Materiais' },
+    other_transport: { en: 'Other transport', pt: 'Outros transportes' },
+};
+
 function getFactorDisplayLabel(key) {
     const catalogKey = CATALOG_FACTOR_LABELS_EN[key]
         ? key
@@ -496,36 +553,33 @@ function rebuildConversionFactorCheckboxes() {
     if (!host) return;
     const year = getReportingYear();
     const bucket = resolveUiFactorBucket(year);
-    const byCategory = { energy: [], water: [], transport: [], waste: [], refrigerants: [] };
+    const bySubgroup = {};
     const seen = new Set();
     Object.keys(bucket).forEach((key) => {
         const n = Number(bucket[key]);
         if (!Number.isFinite(n) || n <= 0) return;
-        const cat = inferFactorCategory(key);
-        if (!byCategory[cat]) return;
         const uiKey = CATALOG_UI_KEY_FOR_BACKEND[key] || key;
         if (seen.has(uiKey)) return;
         seen.add(uiKey);
-        byCategory[cat].push({ key: uiKey, label: getFactorDisplayLabel(uiKey) });
+        const subgroup = inferFactorAssessmentSubgroup(uiKey);
+        if (!bySubgroup[subgroup]) bySubgroup[subgroup] = [];
+        bySubgroup[subgroup].push({ key: uiKey, label: getFactorDisplayLabel(uiKey) });
     });
-    const titles = {
-        energy: { en: 'Energy', pt: 'Energia' },
-        water: { en: 'Water', pt: 'Água' },
-        transport: { en: 'Transport & other', pt: 'Transporte e outros' },
-        waste: { en: 'Waste', pt: 'Resíduos' },
-        refrigerants: { en: 'Refrigerants', pt: 'Refrigerantes' },
-    };
     host.innerHTML = '';
-    ['energy', 'water', 'transport', 'waste', 'refrigerants'].forEach((cat) => {
-        const items = byCategory[cat];
-        if (!items.length) return;
+    ASSESSMENT_FACTOR_SUBGROUP_ORDER.forEach((subgroup) => {
+        const items = bySubgroup[subgroup];
+        if (!items?.length) return;
         items.sort((a, b) => a.label.localeCompare(b.label));
+        const titles = ASSESSMENT_FACTOR_SUBGROUP_TITLES[subgroup] || {
+            en: humanizeFactorKey(subgroup),
+            pt: humanizeFactorKey(subgroup),
+        };
         const group = document.createElement('div');
         group.className = 'conversion-factor-group';
         const h3 = document.createElement('h3');
-        h3.textContent = titles[cat].en;
-        h3.setAttribute('data-en', titles[cat].en);
-        h3.setAttribute('data-pt', titles[cat].pt);
+        h3.textContent = titles.en;
+        h3.setAttribute('data-en', titles.en);
+        h3.setAttribute('data-pt', titles.pt);
         group.appendChild(h3);
         items.forEach(({ key, label }) => {
             const labelEl = document.createElement('label');
@@ -659,6 +713,9 @@ function setOutputUnit(unit) {
     writeOrgPref('carbonCalcOutputUnit', currentOutputUnit);
     if (typeof window.setOrgLocalItem === 'function') {
         window.setOrgLocalItem('carbonCalcOutputUnit', currentOutputUnit);
+    }
+    if (typeof window.syncToolbarOutputUnitToAssessmentScope === 'function') {
+        window.syncToolbarOutputUnitToAssessmentScope(currentOutputUnit);
     }
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
@@ -1139,6 +1196,7 @@ window.carbonCalc = {
     rebuildConversionFactorCheckboxes,
     getFactorDisplayLabel,
     inferFactorCategory,
+    inferFactorAssessmentSubgroup,
     getConversionFactors: function () {
         return CONVERSION_FACTORS;
     }

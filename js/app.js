@@ -108,7 +108,7 @@ const ORG_SCOPED_PREF_KEYS = [
     'assessmentOrgName', 'assessmentBaseYear', 'assessmentPeriodDetail', 'scopeStreamsSummary',
     'assessmentGeneralNotes', 'assessmentExtraNote1', 'assessmentExtraNote2',
     'assessmentCalculationUnit', 'netZeroCommitment', 'energyIncluded',
-    'electricityIncluded', 'gasIncluded', 'gasUnit', 'elecDistLossIncluded', 'elecDistLossUnit',
+    'electricityIncluded', 'electricityUnit', 'gasIncluded', 'gasUnit', 'elecDistLossIncluded', 'elecDistLossUnit',
     'waterIncluded', 'wasteWaterIncluded', 'wasteWaterUnit', 'wasteIncluded',
     'fleetIncluded', 'businessTravelIncluded', 'businessTravelUnit', 'refrigerantIncluded',
     'hotelStayUnit', 'wfhUnit', 'materialsUnit',
@@ -210,6 +210,22 @@ function refreshAssessmentScopeForm() {
     bindAssessmentScopeExtras();
 }
 
+function syncToolbarOutputUnitToAssessmentScope(outputUnit) {
+    const calcUnit = outputUnit === 'kgCO2e' ? 'kg_co2e' : 'tonnes_co2e';
+    if (typeof setOrgLocalItem === 'function') {
+        setOrgLocalItem('assessmentCalculationUnit', calcUnit);
+    }
+    const asSel = document.querySelector(
+        '.assessment-scope-unit[data-storage-key="assessmentCalculationUnit"]'
+    );
+    if (asSel && Array.from(asSel.options).some((o) => o.value === calcUnit)) {
+        asSel.value = calcUnit;
+    }
+    if (window.AssessmentScopeUnits?.applyCalculationUnitCascade) {
+        window.AssessmentScopeUnits.applyCalculationUnitCascade(calcUnit);
+    }
+}
+
 function bindAssessmentScopeExtras() {
     const bindScope = (el, key) => {
         if (!el || el.dataset.bound === '1') return;
@@ -229,11 +245,20 @@ function bindAssessmentScopeExtras() {
     bindScope(document.getElementById('scope2EnabledInput'), 'scope2Enabled');
     bindScope(document.getElementById('scope3EnabledInput'), 'scope3Enabled');
 
+    const outputUnitSelect = document.getElementById('outputUnitSelect');
+    if (outputUnitSelect && outputUnitSelect.dataset.asToolbarBound !== '1') {
+        outputUnitSelect.dataset.asToolbarBound = '1';
+        outputUnitSelect.addEventListener('change', () => {
+            syncToolbarOutputUnitToAssessmentScope(outputUnitSelect.value);
+        });
+    }
+
     if (window.carbonCalc?.rebuildConversionFactorCheckboxes) {
         window.carbonCalc.rebuildConversionFactorCheckboxes();
     }
 }
 window.bindAssessmentScopeExtras = bindAssessmentScopeExtras;
+window.syncToolbarOutputUnitToAssessmentScope = syncToolbarOutputUnitToAssessmentScope;
 
 function ensureOrganizationSession(orgId, companyName) {
     if (!orgId) return;
@@ -1366,12 +1391,13 @@ function addDataRow(category) {
     // Build emission type selector based on category
     const reportYear = window.carbonCalc?.getReportingYear?.() || 2025;
     const emissionSelectHtml = getEmissionSelectHtml(category, null, reportYear);
-    const defaultUnit = getPreferredUnitForCategory(category);
+    const defaultEmissionKey = null;
+    const defaultUnit = getPreferredUnitForCategory(category, defaultEmissionKey);
 
     row.innerHTML = `
         <td>${emissionSelectHtml}</td>
         <td><input type="text" placeholder="Description"></td>
-        <td>${getUnitSelectHtml(category, defaultUnit)}</td>
+        <td>${getUnitSelectHtml(category, defaultUnit, defaultEmissionKey)}</td>
         <td><input type="number" value="2025" min="2020" max="2030"></td>
         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
         <td><input type="number" step="0.01" min="0" class="month-input" data-month="1"></td>
@@ -1391,10 +1417,23 @@ function addDataRow(category) {
     `;
     
     tbody.appendChild(row);
+    const emissionSel = row.querySelector('.emission-select');
+    const emissionKey = emissionSel?.value || null;
+    if (emissionKey && row.cells[2]) {
+        row.cells[2].innerHTML = getUnitSelectHtml(
+            category,
+            getPreferredUnitForCategory(category, emissionKey),
+            emissionKey
+        );
+    }
     attachRowListeners(row);
 }
 
-function getPreferredUnitForCategory(category) {
+function getPreferredUnitForCategory(category, emissionKey) {
+    if (window.AssessmentScopeUnits?.resolvePreferredUnit) {
+        const resolved = window.AssessmentScopeUnits.resolvePreferredUnit(category, emissionKey);
+        if (resolved) return resolved;
+    }
     const keyMap = {
         water: 'waterUnit',
         energy: 'energyUnit',
@@ -1404,18 +1443,25 @@ function getPreferredUnitForCategory(category) {
     };
     const key = keyMap[category];
     if (!key) return CATEGORY_DEFAULT_UNITS[category] || '';
-    return localStorage.getItem(key) || CATEGORY_DEFAULT_UNITS[category] || '';
+    const scoped =
+        typeof getOrgLocalItem === 'function' ? getOrgLocalItem(key, '') : localStorage.getItem(key);
+    return scoped || CATEGORY_DEFAULT_UNITS[category] || '';
 }
 
-function getUnitSelectHtml(category, selectedUnit) {
-    const unitsByCategory = {
-        water: [['m3', 'm³'], ['litres', 'litres'], ['gallons', 'gallons'], ['ft3', 'ft³']],
-        energy: [['kwh', 'kWh'], ['mwh', 'MWh'], ['gj', 'GJ'], ['mj', 'MJ'], ['therms', 'therms']],
-        waste: [['tonnes', 'tonnes'], ['kg', 'kg'], ['lbs', 'lbs']],
-        transport: [['km', 'km'], ['miles', 'miles'], ['passenger_km', 'passenger-km'], ['tonne_km', 'tonne-km'], ['night', 'night'], ['day', 'day']],
-        refrigerants: [['kg', 'kg'], ['g', 'g'], ['lbs', 'lbs']],
-    };
-    const options = unitsByCategory[category] || [['unit', 'unit']];
+function getUnitSelectHtml(category, selectedUnit, emissionKey) {
+    let options;
+    if (category === 'energy' && emissionKey && window.AssessmentScopeUnits?.getEnergyUnitOptions) {
+        options = window.AssessmentScopeUnits.getEnergyUnitOptions(emissionKey);
+    } else {
+        const unitsByCategory = {
+            water: [['m3', 'm³'], ['litres', 'litres'], ['gallons', 'gallons'], ['ft3', 'ft³']],
+            energy: [['kwh', 'kWh'], ['mwh', 'MWh'], ['gj', 'GJ'], ['mj', 'MJ'], ['therms', 'therms']],
+            waste: [['tonnes', 'tonnes'], ['kg', 'kg'], ['lbs', 'lbs']],
+            transport: [['km', 'km'], ['miles', 'miles'], ['passenger_km', 'passenger-km'], ['tonne_km', 'tonne-km'], ['night', 'night'], ['day', 'day']],
+            refrigerants: [['kg', 'kg'], ['g', 'g'], ['lbs', 'lbs']],
+        };
+        options = unitsByCategory[category] || [['unit', 'unit']];
+    }
     const normalized = selectedUnit || CATEGORY_DEFAULT_UNITS[category] || options[0][0];
     let html = `<select class="row-unit-select" data-category="${category}">`;
     options.forEach(([val, label]) => {
@@ -1622,6 +1668,20 @@ function attachRowListeners(row) {
 
     if (emissionSelect) {
         emissionSelect.addEventListener('change', () => {
+            const table = row.closest('table');
+            const category = table?.id?.replace(/Table$/, '') || emissionSelect.dataset.category;
+            if (unitSelect && category) {
+                const emissionKey = emissionSelect.value;
+                const preferred = getPreferredUnitForCategory(category, emissionKey);
+                const unitCell = unitSelect.parentElement;
+                if (unitCell) {
+                    unitCell.innerHTML = getUnitSelectHtml(category, preferred, emissionKey);
+                    const newUnitSelect = row.querySelector('.row-unit-select');
+                    if (newUnitSelect) {
+                        newUnitSelect.addEventListener('change', () => saveData());
+                    }
+                }
+            }
             saveData();
         });
     }
@@ -1838,7 +1898,12 @@ function saveCurrentSiteData() {
                     year: parseInt(inputs[1]?.value) || 2025,
                     months: [],
                     emissionType: emissionSelect ? emissionSelect.value : null,
-                    unit: unitSelect ? unitSelect.value : getPreferredUnitForCategory(category)
+                    unit: unitSelect
+                        ? unitSelect.value
+                        : getPreferredUnitForCategory(
+                              category,
+                              emissionSelect ? emissionSelect.value : null
+                          )
                 };
                 
                 monthInputs.forEach(input => {

@@ -15,13 +15,29 @@
         'netZeroCommitment',
         'energyIncluded',
         'electricityIncluded',
+        'electricityUnit',
         'gasIncluded',
         'gasUnit',
         'elecDistLossIncluded',
+        'elecDistLossUnit',
+        'waterIncluded',
+        'waterUnit',
         'wasteWaterIncluded',
         'wasteWaterUnit',
+        'wasteIncluded',
+        'wasteUnit',
         'fleetIncluded',
+        'transportUnit',
         'businessTravelIncluded',
+        'businessTravelUnit',
+        'refrigerantIncluded',
+        'refrigerantsUnit',
+        'hotelStayEnabled',
+        'hotelStayUnit',
+        'wfhEnabled',
+        'wfhUnit',
+        'materialsEnabled',
+        'materialsUnit',
         'carbonReductionPlanDesc',
         'offsetStrategyDesc',
         'elaborateSubmitReviewDesc',
@@ -50,6 +66,39 @@
         'intlSkaRating',
         'otherStandardRequiredIntl',
     ];
+
+    const ELECTRICITY_EMISSION_KEYS = new Set(['electricity', 'electricity_grid']);
+    const GAS_EMISSION_KEYS = new Set([
+        'naturalGas', 'diesel', 'lpg', 'coal', 'natural_gas', 'heating_oil',
+    ]);
+    const WATER_SUPPLY_KEYS = new Set(['water', 'water_supply', 'water_reuse']);
+    const WASTEWATER_KEYS = new Set(['wastewater', 'water_treatment']);
+    const WASTE_EMISSION_KEYS = new Set([
+        'waste', 'waste_landfill', 'waste_to_energy', 'waste_to_recycling', 'waste_to_composting',
+        'wasteRecycled', 'waste_composted',
+    ]);
+
+    /** Pairs of assessment-scope unit keys that stay in sync (datasheet: same unit family). */
+    const UNIT_MIRROR_KEYS = {
+        waterUnit: 'wasteWaterUnit',
+        wasteWaterUnit: 'waterUnit',
+        transportUnit: 'businessTravelUnit',
+        businessTravelUnit: 'transportUnit',
+    };
+
+    const SYNC_GROUP_TABLE = {
+        energy_electricity: 'energyTable',
+        energy_gas: 'energyTable',
+        water_supply: 'waterTable',
+        water_wastewater: 'waterTable',
+        waste: 'wasteTable',
+        transport_fleet: 'transportTable',
+        transport_travel: 'transportTable',
+        refrigerants: 'refrigerantsTable',
+        transport_hotel: 'transportTable',
+        transport_wfh: 'transportTable',
+        transport_materials: 'transportTable',
+    };
 
     const SECTIONS = [
         {
@@ -147,9 +196,9 @@
                     labelPt: 'Eletricidade',
                     type: 'unit_yesno',
                     yesKey: 'electricityIncluded',
-                    unitKey: 'energyUnit',
-                    unitId: 'energyUnitInput',
-                    unitSync: 'energy',
+                    unitKey: 'electricityUnit',
+                    unitId: 'electricityUnitInput',
+                    unitSync: 'energy_electricity',
                     unitOptions: [
                         { value: 'kwh', labelEn: 'kWh', labelPt: 'kWh' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
@@ -161,6 +210,7 @@
                     type: 'unit_yesno',
                     yesKey: 'gasIncluded',
                     unitKey: 'gasUnit',
+                    unitSync: 'energy_gas',
                     unitOptions: [
                         { value: 'kwh', labelEn: 'kWh', labelPt: 'kWh' },
                         { value: 'litres', labelEn: 'Litres', labelPt: 'Litros' },
@@ -174,6 +224,7 @@
                     type: 'unit_yesno',
                     yesKey: 'elecDistLossIncluded',
                     unitKey: 'elecDistLossUnit',
+                    unitSync: 'energy_electricity',
                     unitOptions: [
                         { value: 'kwh', labelEn: 'kWh', labelPt: 'kWh' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
@@ -186,7 +237,7 @@
                     yesKey: 'waterIncluded',
                     unitKey: 'waterUnit',
                     unitId: 'waterUnitInput',
-                    unitSync: 'water',
+                    unitSync: 'water_supply',
                     unitOptions: [
                         { value: 'm3', labelEn: 'm³', labelPt: 'm³' },
                         { value: 'million_litres', labelEn: 'Million litres', labelPt: 'Milhões de litros' },
@@ -199,6 +250,7 @@
                     type: 'unit_yesno',
                     yesKey: 'wasteWaterIncluded',
                     unitKey: 'wasteWaterUnit',
+                    unitSync: 'water_wastewater',
                     unitOptions: [
                         { value: 'm3', labelEn: 'm³', labelPt: 'm³' },
                         { value: 'million_litres', labelEn: 'Million litres', labelPt: 'Milhões de litros' },
@@ -216,6 +268,7 @@
                     unitOptions: [
                         { value: 'kg', labelEn: 'Kg', labelPt: 'Kg' },
                         { value: 'tonnes', labelEn: 'Tonnes', labelPt: 'Toneladas' },
+                        { value: 'lbs', labelEn: 'lbs', labelPt: 'lbs' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
                     ],
                 },
@@ -226,10 +279,12 @@
                     yesKey: 'fleetIncluded',
                     unitKey: 'transportUnit',
                     unitId: 'transportUnitInput',
-                    unitSync: 'transport',
+                    unitSync: 'transport_fleet',
                     unitOptions: [
                         { value: 'miles', labelEn: 'Miles', labelPt: 'Milhas' },
                         { value: 'km', labelEn: 'Km', labelPt: 'Km' },
+                        { value: 'passenger_km', labelEn: 'Passenger-km', labelPt: 'Passageiro-km' },
+                        { value: 'tonne_km', labelEn: 'Tonne-km', labelPt: 'Tonelada-km' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
                     ],
                 },
@@ -239,9 +294,14 @@
                     type: 'unit_yesno',
                     yesKey: 'businessTravelIncluded',
                     unitKey: 'businessTravelUnit',
+                    unitSync: 'transport_travel',
                     unitOptions: [
                         { value: 'miles', labelEn: 'Miles', labelPt: 'Milhas' },
                         { value: 'km', labelEn: 'Km', labelPt: 'Km' },
+                        { value: 'passenger_km', labelEn: 'Passenger-km', labelPt: 'Passageiro-km' },
+                        { value: 'tonne_km', labelEn: 'Tonne-km', labelPt: 'Tonelada-km' },
+                        { value: 'night', labelEn: 'Room-nights', labelPt: 'Noites-quarto' },
+                        { value: 'day', labelEn: 'Day', labelPt: 'Dia' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
                     ],
                 },
@@ -255,6 +315,8 @@
                     unitSync: 'refrigerants',
                     unitOptions: [
                         { value: 'kg', labelEn: 'Kg', labelPt: 'Kg' },
+                        { value: 'g', labelEn: 'g', labelPt: 'g' },
+                        { value: 'lbs', labelEn: 'lbs', labelPt: 'lbs' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
                     ],
                 },
@@ -265,8 +327,10 @@
                     yesKey: 'hotelStayEnabled',
                     yesStore: 'boolean',
                     unitKey: 'hotelStayUnit',
+                    unitSync: 'transport_hotel',
                     unitOptions: [
                         { value: 'room_nights', labelEn: 'Room-Nights', labelPt: 'Noites-quarto' },
+                        { value: 'night', labelEn: 'Night', labelPt: 'Noite' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
                     ],
                 },
@@ -277,8 +341,10 @@
                     yesKey: 'wfhEnabled',
                     yesStore: 'boolean',
                     unitKey: 'wfhUnit',
+                    unitSync: 'transport_wfh',
                     unitOptions: [
                         { value: 'working_hour', labelEn: 'Working hour', labelPt: 'Hora de trabalho' },
+                        { value: 'day', labelEn: 'Day', labelPt: 'Dia' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
                     ],
                 },
@@ -289,8 +355,10 @@
                     yesKey: 'materialsEnabled',
                     yesStore: 'boolean',
                     unitKey: 'materialsUnit',
+                    unitSync: 'transport_materials',
                     unitOptions: [
                         { value: 'tonnes', labelEn: 'Tonnes', labelPt: 'Toneladas' },
+                        { value: 'kg', labelEn: 'Kg', labelPt: 'Kg' },
                         { value: 'none', labelEn: 'No option', labelPt: 'Sem opção' },
                     ],
                 },
@@ -401,6 +469,126 @@
         },
     ];
 
+    function isGasEmission(emissionKey) {
+        return GAS_EMISSION_KEYS.has(String(emissionKey || ''));
+    }
+
+    function isElectricityEmission(emissionKey) {
+        return ELECTRICITY_EMISSION_KEYS.has(String(emissionKey || ''));
+    }
+
+    function emissionMatchesSyncGroup(emissionKey, syncGroup) {
+        const k = String(emissionKey || '');
+        if (!k || !syncGroup) return false;
+        switch (syncGroup) {
+            case 'energy_electricity':
+                return isElectricityEmission(k);
+            case 'energy_gas':
+                return isGasEmission(k);
+            case 'water_supply':
+                return WATER_SUPPLY_KEYS.has(k);
+            case 'water_wastewater':
+                return WASTEWATER_KEYS.has(k);
+            case 'waste':
+                return WASTE_EMISSION_KEYS.has(k) || k.startsWith('waste');
+            case 'refrigerants':
+                return k.startsWith('refrigerant_');
+            case 'transport_fleet':
+                return /^(car_|van_|hgv_|transport_petrol|transport_diesel|transport_electric|motorbike_)/.test(k);
+            case 'transport_travel':
+                return /^(flight_|staff_commute|business_travel|freight_|bus_|rail_|taxi_)/.test(k)
+                    || k.includes('commute');
+            case 'transport_hotel':
+                return k.includes('hotel') || k === 'business_travel_hotel_night';
+            case 'transport_wfh':
+                return k.includes('wfh');
+            case 'transport_materials':
+                return k.startsWith('materials_');
+            default:
+                return false;
+        }
+    }
+
+    function setUnitSelectValue(storageKey, value) {
+        if (!storageKey || !value || typeof global.setOrgLocalItem !== 'function') return;
+        global.setOrgLocalItem(storageKey, value);
+        document.querySelectorAll(`.assessment-scope-unit[data-storage-key="${CSS.escape(storageKey)}"]`).forEach((sel) => {
+            if (Array.from(sel.options).some((o) => o.value === value)) {
+                sel.value = value;
+            }
+        });
+    }
+
+    function mirrorLinkedUnit(sourceKey, value) {
+        const mirrorKey = UNIT_MIRROR_KEYS[sourceKey];
+        if (!mirrorKey || !value || value === 'none') return;
+        setUnitSelectValue(mirrorKey, value);
+        const mirrorSelect = document.querySelector(
+            `.assessment-scope-unit[data-storage-key="${CSS.escape(mirrorKey)}"]`
+        );
+        if (mirrorSelect?.dataset.unitSync) {
+            syncCategoryUnits(mirrorSelect.dataset.unitSync, value);
+        }
+    }
+
+    function applyCalculationUnitCascade(calcUnit) {
+        const outputUnit = calcUnit === 'kg_co2e' ? 'kgCO2e' : 'tCO2e';
+        if (typeof global.setOrgLocalItem === 'function') {
+            global.setOrgLocalItem('carbonCalcOutputUnit', outputUnit);
+        }
+        if (global.carbonCalc?.setOutputUnit) {
+            global.carbonCalc.setOutputUnit(outputUnit);
+        }
+        const ou = document.getElementById('outputUnitSelect');
+        if (ou) ou.value = outputUnit;
+
+        const massPref = calcUnit === 'kg_co2e' ? 'kg' : 'tonnes';
+        setUnitSelectValue('wasteUnit', massPref);
+        syncCategoryUnits('waste', massPref);
+        if (calcUnit === 'kg_co2e') {
+            setUnitSelectValue('refrigerantsUnit', 'kg');
+            syncCategoryUnits('refrigerants', 'kg');
+        }
+    }
+
+    function resolvePreferredUnit(category, emissionKey) {
+        const get = (key, fallback) =>
+            typeof global.getOrgLocalItem === 'function'
+                ? global.getOrgLocalItem(key, fallback)
+                : fallback;
+        if (category === 'energy' && emissionKey) {
+            if (isGasEmission(emissionKey)) {
+                return mapAssessmentUnitToRowUnit('energy', get('gasUnit', 'kwh'), emissionKey);
+            }
+            if (isElectricityEmission(emissionKey)) {
+                return mapAssessmentUnitToRowUnit('energy', get('electricityUnit', 'kwh'), emissionKey);
+            }
+            return mapAssessmentUnitToRowUnit('energy', get('energyUnit', 'kwh'), emissionKey);
+        }
+        const keyMap = {
+            water: 'waterUnit',
+            waste: 'wasteUnit',
+            transport: 'transportUnit',
+            refrigerants: 'refrigerantsUnit',
+        };
+        const prefKey = keyMap[category];
+        if (!prefKey) return '';
+        return mapAssessmentUnitToRowUnit(category, get(prefKey, ''), emissionKey);
+    }
+
+    function getEnergyUnitOptions(emissionKey) {
+        if (isGasEmission(emissionKey)) {
+            return [
+                ['kwh', 'kWh'],
+                ['litres', 'Litres'],
+                ['tonnes', 'Tonnes'],
+                ['mwh', 'MWh'],
+                ['gj', 'GJ'],
+            ];
+        }
+        return [['kwh', 'kWh'], ['mwh', 'MWh'], ['gj', 'GJ'], ['mj', 'MJ'], ['therms', 'therms']];
+    }
+
     function el(tag, className, attrs) {
         const node = document.createElement(tag);
         if (className) node.className = className;
@@ -494,9 +682,16 @@
         const key = control.dataset.storageKey;
         const handler = () => {
             if (!key || typeof global.setOrgLocalItem !== 'function') return;
-            global.setOrgLocalItem(key, control.value == null ? '' : String(control.value));
+            const val = control.value == null ? '' : String(control.value);
+            global.setOrgLocalItem(key, val);
+            if (key === 'assessmentCalculationUnit') {
+                applyCalculationUnitCascade(val);
+            }
+            if (UNIT_MIRROR_KEYS[key]) {
+                mirrorLinkedUnit(key, val);
+            }
             if (control.dataset.unitSync) {
-                syncCategoryUnits(control.dataset.unitSync, control.value);
+                syncCategoryUnits(control.dataset.unitSync, val);
             }
             recalcIfNeeded(control);
         };
@@ -507,26 +702,59 @@
         }
     }
 
-    function syncCategoryUnits(category, value) {
+    function syncCategoryUnits(syncGroup, value) {
         if (!value || value === 'none') return;
-        document.querySelectorAll(`#${category}Table .row-unit-select`).forEach((unitEl) => {
-            const mapped = mapAssessmentUnitToRowUnit(category, value);
-            if (mapped) unitEl.value = mapped;
+        const tableId = SYNC_GROUP_TABLE[syncGroup];
+        if (!tableId) return;
+        const category = tableId.replace(/Table$/, '');
+        document.querySelectorAll(`#${tableId} tr.data-row`).forEach((tr) => {
+            const emissionSel = tr.querySelector('.emission-select');
+            const unitEl = tr.querySelector('.row-unit-select');
+            if (!emissionSel || !unitEl) return;
+            if (!emissionMatchesSyncGroup(emissionSel.value, syncGroup)) return;
+            const mapped = mapAssessmentUnitToRowUnit(category, value, emissionSel.value);
+            if (mapped && Array.from(unitEl.options).some((o) => o.value === mapped)) {
+                unitEl.value = mapped;
+            }
         });
         if (typeof global.saveCurrentSiteData === 'function') {
             global.saveCurrentSiteData();
         }
+        if (global.carbonCalc?.calculateAllTotals) {
+            global.carbonCalc.calculateAllTotals();
+        }
     }
 
-    function mapAssessmentUnitToRowUnit(category, value) {
+    function mapAssessmentUnitToRowUnit(category, value, emissionKey) {
         const map = {
-            water: { m3: 'm3', million_litres: 'litres' },
-            energy: { kwh: 'kwh' },
-            waste: { kg: 'kg', tonnes: 'tonnes' },
-            transport: { miles: 'miles', km: 'km' },
-            refrigerants: { kg: 'kg' },
+            water: { m3: 'm3', million_litres: 'litres', litres: 'litres', gallons: 'gallons', ft3: 'ft3' },
+            energy: {
+                kwh: 'kwh',
+                litres: 'litres',
+                tonnes: 'tonnes',
+                mwh: 'mwh',
+                gj: 'gj',
+                mj: 'mj',
+                therms: 'therms',
+            },
+            waste: { kg: 'kg', tonnes: 'tonnes', lbs: 'lbs' },
+            transport: {
+                miles: 'miles',
+                km: 'km',
+                passenger_km: 'passenger_km',
+                tonne_km: 'tonne_km',
+                room_nights: 'night',
+                night: 'night',
+                working_hour: 'day',
+                day: 'day',
+            },
+            refrigerants: { kg: 'kg', g: 'g', lbs: 'lbs' },
         };
-        return (map[category] && map[category][value]) || value;
+        const base = (map[category] && map[category][value]) || value;
+        if (category === 'energy' && emissionKey && isGasEmission(emissionKey)) {
+            if (['litres', 'tonnes', 'kwh'].includes(value)) return value;
+        }
+        return base;
     }
 
     function renderAssessmentScopeForm(host) {
@@ -641,6 +869,19 @@
                     : '');
             if (company) orgNameEl.value = company;
         }
+
+        if (typeof global.getOrgLocalItem === 'function' && typeof global.setOrgLocalItem === 'function') {
+            const legacyEnergy = global.getOrgLocalItem('energyUnit', '');
+            if (!global.getOrgLocalItem('electricityUnit', '') && legacyEnergy) {
+                global.setOrgLocalItem('electricityUnit', legacyEnergy);
+            }
+        }
+
+        const calcUnit =
+            typeof global.getOrgLocalItem === 'function'
+                ? global.getOrgLocalItem('assessmentCalculationUnit', 'tonnes_co2e')
+                : 'tonnes_co2e';
+        applyCalculationUnitCascade(calcUnit || 'tonnes_co2e');
     }
 
     function initAssessmentScopeForm() {
@@ -653,6 +894,15 @@
             global.carbonCalc.rebuildConversionFactorCheckboxes();
         }
     }
+
+    global.AssessmentScopeUnits = {
+        resolvePreferredUnit,
+        getEnergyUnitOptions,
+        isGasEmission,
+        isElectricityEmission,
+        mapAssessmentUnitToRowUnit,
+        applyCalculationUnitCascade,
+    };
 
     global.AssessmentScopeForm = {
         SECTIONS,
