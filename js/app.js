@@ -40,7 +40,18 @@ const appState = {
 // ============================================
 
 // Render / local API. Streamlit sets window.__CARBON_API_BASE__ in app_integrated.py when embedded.
-const API_BASE_URL = 'https://carboncalculator-2eak.onrender.com/api';
+const API_BASE_URL =
+    (typeof window !== 'undefined' && window.__CARBON_API_BASE__) ||
+    'https://carboncalculator-2eak.onrender.com/api';
+/** Ping Render so the service wakes before login (see js/api-warmup.js, loaded first in index.html). */
+function warmApiConnection() {
+    if (typeof window.wakeRenderBackend === 'function') {
+        window.wakeRenderBackend();
+        return;
+    }
+    const root = API_BASE_URL.replace(/\/api\/?$/, '') + '/';
+    fetch(root, { method: 'GET', mode: 'cors', cache: 'no-store' }).catch(() => {});
+}
 
 const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_EXPIRES_AT_KEY = 'sessionExpiresAt';
@@ -64,12 +75,23 @@ const ORG_SCOPED_PREF_KEYS = [
     'scope1Enabled', 'scope2Enabled', 'scope3Enabled',
     'hotelStayEnabled', 'wfhEnabled', 'materialsEnabled',
     'orgRegisteredAddress', 'organizationProfile', 'buildingsAssessedCount',
-    'assessmentBaseYear', 'assessmentPeriodDetail', 'scopeStreamsSummary',
+    'assessmentOrgName', 'assessmentBaseYear', 'assessmentPeriodDetail', 'scopeStreamsSummary',
     'assessmentGeneralNotes', 'assessmentExtraNote1', 'assessmentExtraNote2',
-    'orgSector', 'orgSubSector', 'orgIndustryCode', 'orgCount',
-    'eventInclusionWorkflow', 'eventCount', 'assetGroupName', 'assetAddress',
-    'buildingProfile', 'occupancyDimensions', 'assetOptionalFields',
-    'eventGeneralInfo', 'eventOperationalInputs', 'onboardingReferences',
+    'assessmentCalculationUnit', 'netZeroCommitment', 'energyIncluded',
+    'electricityIncluded', 'gasIncluded', 'gasUnit', 'elecDistLossIncluded', 'elecDistLossUnit',
+    'waterIncluded', 'wasteWaterIncluded', 'wasteWaterUnit', 'wasteIncluded',
+    'fleetIncluded', 'businessTravelIncluded', 'businessTravelUnit', 'refrigerantIncluded',
+    'hotelStayUnit', 'wfhUnit', 'materialsUnit',
+    'carbonReductionPlanDesc', 'offsetStrategyDesc', 'elaborateSubmitReviewDesc',
+    'policyEnvIso14001', 'policyHumanRights', 'policySustainableProcurement',
+    'policyEnergyAudit', 'policyOdsGri', 'otherStandardRequiredIntl',
+    'intlEcoAuditActionPlan', 'intlBreeamInUse', 'intlCarbonReductionPlan',
+    'intlScienceBasedTargets', 'intlCibseBenchmark', 'intlFitwell', 'intlCrremEu',
+    'intlNabersUk', 'intlGresb', 'intlLeedsOm', 'intlWellStandard', 'intlEcoChurch',
+    'intlGhgProtocol', 'intlSasb', 'intlSfdr', 'intlGri', 'intlEuTaxonomy', 'intlSkaRating',
+    'orgCount', 'assetAddress', 'buildingProfile', 'occupancyDimensions', 'assetOptionalFields',
+    'eventGeneralInfo', 'eventOperationalInputs', 'eventInclusionWorkflow', 'onboardingReferences',
+    ...(window.GeneralInfo?.STORAGE_KEYS || []),
     'waterUnit', 'energyUnit', 'wasteUnit', 'transportUnit', 'refrigerantsUnit',
     'otherEmissions', 'standardsPolicies', 'otherStandardRequired',
     'carbonCalcCountry', 'carbonCalcReportingYear', 'carbonCalcOutputUnit',
@@ -121,6 +143,12 @@ function resetAppStateForCompany(companyName) {
     appState.currentSite = 'site-1';
 }
 
+function refreshAssessmentScopeForm() {
+    if (window.AssessmentScopeForm?.init) {
+        window.AssessmentScopeForm.init();
+    }
+}
+
 function ensureOrganizationSession(orgId, companyName) {
     if (!orgId) return;
     const previousOrgId = localStorage.getItem(LAST_LOADED_ORG_KEY);
@@ -134,6 +162,7 @@ function ensureOrganizationSession(orgId, companyName) {
         setOrgLocalItem('companyName', companyName);
         localStorage.setItem('companyName', companyName);
     }
+    refreshAssessmentScopeForm();
 }
 
 window.getOrgLocalItem = getOrgLocalItem;
@@ -441,6 +470,19 @@ function showVerifyPanel(prefillEmail, verificationCode) {
     }
 }
 
+function setLoginSubmitting(isSubmitting) {
+    const btn = document.querySelector('#loginForm button[type="submit"]');
+    if (!btn) return;
+    if (!btn.dataset.defaultLabel) {
+        btn.dataset.defaultLabel = btn.textContent.trim();
+    }
+    btn.disabled = isSubmitting;
+    btn.setAttribute('aria-busy', isSubmitting ? 'true' : 'false');
+    btn.textContent = isSubmitting
+        ? (appState.currentLanguage === 'pt' ? 'Entrando…' : 'Signing in…')
+        : btn.dataset.defaultLabel;
+}
+
 // LOGIN FORM SUBMIT
 document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -450,6 +492,8 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
     const loginError = document.getElementById('loginError');
     
     if (loginError) loginError.textContent = '';
+    setLoginSubmitting(true);
+    warmApiConnection();
     
     try {
         const response = await fetch(`${API_BASE_URL}/login`, {
@@ -503,8 +547,8 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'flex';
 
-            // Show the app immediately; initializeApp loads local state then syncs MongoDB in the background.
-            initializeApp();
+            // Paint main shell first; heavy init + Mongo sync run on the next frame.
+            requestAnimationFrame(() => initializeApp());
         } else {
             if (loginError) {
                 loginError.textContent = loginFailureMessage(response.status, data);
@@ -518,6 +562,8 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
                     ? 'Erro de conexão. O servidor está disponível?'
                     : 'Connection error. Is the backend running?';
         }
+    } finally {
+        setLoginSubmitting(false);
     }
 });
 
@@ -703,27 +749,50 @@ document.getElementById('backToLoginFromVerify')?.addEventListener('click', func
 });
 
 // BACKEND DATA PERSISTENCE
+async function loadConversionFactorsFromBackend(token) {
+    if (!token) return;
+    try {
+        const factorsResponse = await fetch(`${API_BASE_URL}/factors`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (factorsResponse.status === 401) {
+            forceLogoutForExpiredSession(true);
+            return;
+        }
+        if (!factorsResponse.ok) return;
+        const factorsData = await factorsResponse.json();
+        if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiCatalogFactors) {
+            window.carbonCalc.mergeApiCatalogFactors(factorsData);
+            if (window.carbonCalc.calculateAllTotals) {
+                window.carbonCalc.calculateAllTotals();
+            }
+            if (typeof updateInputEmissionsPreview === 'function') {
+                updateInputEmissionsPreview();
+            }
+            if (typeof updateDashboard === 'function') {
+                updateDashboard();
+            }
+        }
+    } catch (err) {
+        console.error('Error loading factors from backend:', err);
+    }
+}
+
 async function loadUserDataFromBackend() {
     const token = getActiveAuthToken();
     if (!token) return false;
 
     let dataResponse;
-    let factorsResponse;
     try {
-        [dataResponse, factorsResponse] = await Promise.all([
-            fetch(`${API_BASE_URL}/data`, {
-                headers: { Authorization: `Bearer ${token}` },
-            }),
-            fetch(`${API_BASE_URL}/factors`, {
-                headers: { Authorization: `Bearer ${token}` },
-            }),
-        ]);
+        dataResponse = await fetch(`${API_BASE_URL}/data`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
     } catch (err) {
         console.error('Error loading data from backend:', err);
         return false;
     }
 
-    if (dataResponse.status === 401 || factorsResponse.status === 401) {
+    if (dataResponse.status === 401) {
         forceLogoutForExpiredSession(true);
         return false;
     }
@@ -748,19 +817,8 @@ async function loadUserDataFromBackend() {
         console.error('Error parsing sites data from backend:', err);
     }
 
-    try {
-        if (factorsResponse.ok) {
-            const factorsData = await factorsResponse.json();
-            if (Array.isArray(factorsData) && factorsData.length > 0 && window.carbonCalc.mergeApiOrganizationFactors) {
-                window.carbonCalc.mergeApiOrganizationFactors(factorsData);
-                if (window.carbonCalc.calculateAllTotals) {
-                    window.carbonCalc.calculateAllTotals();
-                }
-            }
-        }
-    } catch (err) {
-        console.error('Error parsing factors from backend:', err);
-    }
+    // Large catalog payload — load after sites so login → usable UI is faster.
+    loadConversionFactorsFromBackend(token);
     return sitesLoaded;
 }
 
@@ -918,11 +976,6 @@ function setActiveSubNav(subName) {
         } else {
             tabsContent.style.display = 'none';
         }
-        const conversionSection = document.getElementById('section-conversion-factors');
-        if (conversionSection) {
-            conversionSection.style.display = subName === 'assessment-scope' ? 'block' : 'none';
-            conversionSection.classList.toggle('active', subName === 'assessment-scope');
-        }
         if (subName === 'input-emissions') {
             updateInputEmissionsPreview();
         }
@@ -1023,9 +1076,6 @@ function addSiteToList(siteId, siteName) {
             </button>
             <button class="sub-nav-btn" data-sub="assessment-scope">
                 <i class="fas fa-crosshairs"></i> <span data-en="Assessment Scope" data-pt="Escopo da Avaliação">Assessment Scope</span>
-            </button>
-            <button class="sub-nav-btn" data-sub="assessment-scope">
-                <i class="fas fa-database"></i> <span data-en="Scope + Factors" data-pt="Escopo + Fatores">Scope + Factors</span>
             </button>
             <button class="sub-nav-btn" data-sub="input-emissions">
                 <i class="fas fa-cloud"></i> <span data-en="Input Emissions" data-pt="Emissões de Entrada">Input Emissions</span>
@@ -1187,7 +1237,8 @@ function addDataRow(category) {
     row.className = 'data-row';
     
     // Build emission type selector based on category
-    const emissionSelectHtml = getEmissionSelectHtml(category);
+    const reportYear = window.carbonCalc?.getReportingYear?.() || 2025;
+    const emissionSelectHtml = getEmissionSelectHtml(category, null, reportYear);
     const defaultUnit = getPreferredUnitForCategory(category);
 
     row.innerHTML = `
@@ -1247,8 +1298,25 @@ function getUnitSelectHtml(category, selectedUnit) {
     return html;
 }
 
-// Build emission type dropdown HTML per category
-function getEmissionSelectHtml(category, selectedKey) {
+// Build emission type dropdown HTML per category (options from conversion_factor_catalog via carbonCalc)
+function getEmissionSelectHtml(category, selectedKey, year) {
+    if (window.carbonCalc && typeof window.carbonCalc.getCatalogEmissionOptions === 'function') {
+        const catalogOpts = window.carbonCalc.getCatalogEmissionOptions(
+            category,
+            year || (window.carbonCalc.getReportingYear && window.carbonCalc.getReportingYear())
+        );
+        if (catalogOpts.length > 0) {
+            const defaultSelected = selectedKey || catalogOpts[0].key;
+            let html = `<select class="emission-select" data-category="${category}">`;
+            catalogOpts.forEach((opt) => {
+                const selectedAttr = opt.key === defaultSelected ? 'selected' : '';
+                html += `<option value="${opt.key}" ${selectedAttr} data-en="${opt.labelEn}" data-pt="${opt.labelPt}">${opt.labelEn}</option>`;
+            });
+            html += '</select>';
+            return html;
+        }
+    }
+
     const optionsByCategory = {
         water: [
             { key: 'water', labelEn: 'Water supply', labelPt: 'Abastecimento de água' },
@@ -2265,35 +2333,9 @@ function initializeApp() {
     // Initialize tabs
     initializeTabs();
 
-    // Bind Assessment Scope checkboxes (Scope + source-specific toggles)
-    const s1El = document.getElementById('scope1EnabledInput');
-    const s2El = document.getElementById('scope2EnabledInput');
-    const s3El = document.getElementById('scope3EnabledInput');
-    const hotelStayEnabledEl = document.getElementById('hotelStayEnabledInput');
-    const wfhEnabledEl = document.getElementById('wfhEnabledInput');
-    const materialsEnabledEl = document.getElementById('materialsEnabledInput');
-    if (s1El) s1El.checked = getOrgLocalItem('scope1Enabled', 'true') !== 'false';
-    if (s2El) s2El.checked = getOrgLocalItem('scope2Enabled', 'true') !== 'false';
-    if (s3El) s3El.checked = getOrgLocalItem('scope3Enabled', 'true') !== 'false';
-    if (hotelStayEnabledEl) hotelStayEnabledEl.checked = getOrgLocalItem('hotelStayEnabled', 'true') !== 'false';
-    if (wfhEnabledEl) wfhEnabledEl.checked = getOrgLocalItem('wfhEnabled', 'true') !== 'false';
-    if (materialsEnabledEl) materialsEnabledEl.checked = getOrgLocalItem('materialsEnabled', 'true') !== 'false';
-
-    const bindScope = (el, key) => {
-        if (!el || el.dataset.scopeBound === '1') return;
-        el.dataset.scopeBound = '1';
-        el.addEventListener('change', () => {
-            setOrgLocalItem(key, el.checked ? 'true' : 'false');
-            if (window.carbonCalc && window.carbonCalc.calculateAllTotals) window.carbonCalc.calculateAllTotals();
-            if (window.updateDashboard) window.updateDashboard();
-        });
-    };
-    bindScope(s1El, 'scope1Enabled');
-    bindScope(s2El, 'scope2Enabled');
-    bindScope(s3El, 'scope3Enabled');
-    bindScope(hotelStayEnabledEl, 'hotelStayEnabled');
-    bindScope(wfhEnabledEl, 'wfhEnabled');
-    bindScope(materialsEnabledEl, 'materialsEnabled');
+    if (window.AssessmentScopeForm?.init) {
+        window.AssessmentScopeForm.init();
+    }
 
     // Bind General Info inputs to localStorage
     const bindTextInput = (el, key) => {
@@ -2311,117 +2353,13 @@ function initializeApp() {
         reportStatusEl.addEventListener('change', () => setOrgLocalItem('reportStatus', reportStatusEl.value));
     }
 
-    const orgRegisteredAddressEl = document.getElementById('orgRegisteredAddressInput');
     const organizationProfileEl = document.getElementById('organizationProfileInput');
-    const buildingsAssessedEl = document.getElementById('buildingsAssessedInput');
-    const assessmentBaseYearEl = document.getElementById('assessmentBaseYearInput');
-    const assessmentPeriodDetailEl = document.getElementById('assessmentPeriodDetailInput');
-    const scopeStreamsSummaryEl = document.getElementById('scopeStreamsSummaryInput');
-    const assessmentGeneralNotesEl = document.getElementById('assessmentGeneralNotesInput');
-    const assessmentExtraNote1El = document.getElementById('assessmentExtraNote1Input');
-    const assessmentExtraNote2El = document.getElementById('assessmentExtraNote2Input');
-    const orgSectorEl = document.getElementById('orgSectorInput');
-    const orgSubSectorEl = document.getElementById('orgSubSectorInput');
-    const orgIndustryCodeEl = document.getElementById('orgIndustryCodeInput');
-    const orgCountEl = document.getElementById('orgCountInput');
-    const eventInclusionWorkflowEl = document.getElementById('eventInclusionWorkflowInput');
-    const eventCountEl = document.getElementById('eventCountInput');
-    const assetGroupNameEl = document.getElementById('assetGroupNameInput');
-    const assetAddressEl = document.getElementById('assetAddressInput');
-    const buildingProfileEl = document.getElementById('buildingProfileInput');
-    const occupancyDimensionsEl = document.getElementById('occupancyDimensionsInput');
-    const assetOptionalFieldsEl = document.getElementById('assetOptionalFieldsInput');
-    const eventGeneralInfoEl = document.getElementById('eventGeneralInfoInput');
-    const eventOperationalInputsEl = document.getElementById('eventOperationalInputsInput');
-    const onboardingReferencesEl = document.getElementById('onboardingReferencesInput');
-    const waterUnitEl = document.getElementById('waterUnitInput');
-    const energyUnitEl = document.getElementById('energyUnitInput');
-    const wasteUnitEl = document.getElementById('wasteUnitInput');
-    const transportUnitEl = document.getElementById('transportUnitInput');
-    const refrigerantsUnitEl = document.getElementById('refrigerantsUnitInput');
-    const otherEmissionsEl = document.getElementById('otherEmissionsInput');
-    const standardsPoliciesEl = document.getElementById('standardsPoliciesInput');
-    const otherStandardRequiredEl = document.getElementById('otherStandardRequiredInput');
-
-    if (orgRegisteredAddressEl) orgRegisteredAddressEl.value = getOrgLocalItem('orgRegisteredAddress', '');
     if (organizationProfileEl) organizationProfileEl.value = getOrgLocalItem('organizationProfile', '');
-    if (buildingsAssessedEl) buildingsAssessedEl.value = getOrgLocalItem('buildingsAssessedCount', '');
-    if (assessmentBaseYearEl) assessmentBaseYearEl.value = getOrgLocalItem('assessmentBaseYear', '');
-    if (assessmentPeriodDetailEl) assessmentPeriodDetailEl.value = getOrgLocalItem('assessmentPeriodDetail', '');
-    if (scopeStreamsSummaryEl) scopeStreamsSummaryEl.value = getOrgLocalItem('scopeStreamsSummary', '');
-    if (assessmentGeneralNotesEl) assessmentGeneralNotesEl.value = getOrgLocalItem('assessmentGeneralNotes', '');
-    if (assessmentExtraNote1El) assessmentExtraNote1El.value = getOrgLocalItem('assessmentExtraNote1', '');
-    if (assessmentExtraNote2El) assessmentExtraNote2El.value = getOrgLocalItem('assessmentExtraNote2', '');
-    if (orgSectorEl) orgSectorEl.value = getOrgLocalItem('orgSector', '');
-    if (orgSubSectorEl) orgSubSectorEl.value = getOrgLocalItem('orgSubSector', '');
-    if (orgIndustryCodeEl) orgIndustryCodeEl.value = getOrgLocalItem('orgIndustryCode', '');
-    if (orgCountEl) orgCountEl.value = getOrgLocalItem('orgCount', '');
-    if (eventInclusionWorkflowEl) eventInclusionWorkflowEl.value = getOrgLocalItem('eventInclusionWorkflow', '');
-    if (eventCountEl) eventCountEl.value = getOrgLocalItem('eventCount', '');
-    if (assetGroupNameEl) assetGroupNameEl.value = getOrgLocalItem('assetGroupName', '');
-    if (assetAddressEl) assetAddressEl.value = getOrgLocalItem('assetAddress', '');
-    if (buildingProfileEl) buildingProfileEl.value = getOrgLocalItem('buildingProfile', '');
-    if (occupancyDimensionsEl) occupancyDimensionsEl.value = getOrgLocalItem('occupancyDimensions', '');
-    if (assetOptionalFieldsEl) assetOptionalFieldsEl.value = getOrgLocalItem('assetOptionalFields', '');
-    if (eventGeneralInfoEl) eventGeneralInfoEl.value = getOrgLocalItem('eventGeneralInfo', '');
-    if (eventOperationalInputsEl) eventOperationalInputsEl.value = getOrgLocalItem('eventOperationalInputs', '');
-    if (onboardingReferencesEl) onboardingReferencesEl.value = getOrgLocalItem('onboardingReferences', '');
-    if (waterUnitEl) waterUnitEl.value = getOrgLocalItem('waterUnit', CATEGORY_DEFAULT_UNITS.water);
-    if (energyUnitEl) energyUnitEl.value = getOrgLocalItem('energyUnit', CATEGORY_DEFAULT_UNITS.energy);
-    if (wasteUnitEl) wasteUnitEl.value = getOrgLocalItem('wasteUnit', CATEGORY_DEFAULT_UNITS.waste);
-    if (transportUnitEl) transportUnitEl.value = getOrgLocalItem('transportUnit', CATEGORY_DEFAULT_UNITS.transport);
-    if (refrigerantsUnitEl) refrigerantsUnitEl.value = getOrgLocalItem('refrigerantsUnit', CATEGORY_DEFAULT_UNITS.refrigerants);
-    if (otherEmissionsEl) otherEmissionsEl.value = getOrgLocalItem('otherEmissions', '');
-    if (standardsPoliciesEl) standardsPoliciesEl.value = getOrgLocalItem('standardsPolicies', '');
-    if (otherStandardRequiredEl) otherStandardRequiredEl.value = getOrgLocalItem('otherStandardRequired', '');
+    if (window.GeneralInfo?.initGeneralInfoForm) {
+        window.GeneralInfo.initGeneralInfoForm(getOrgLocalItem, setOrgLocalItem);
+    }
 
-    bindTextInput(orgRegisteredAddressEl, 'orgRegisteredAddress');
     bindTextInput(organizationProfileEl, 'organizationProfile');
-    bindTextInput(buildingsAssessedEl, 'buildingsAssessedCount');
-    bindTextInput(assessmentBaseYearEl, 'assessmentBaseYear');
-    bindTextInput(assessmentPeriodDetailEl, 'assessmentPeriodDetail');
-    bindTextInput(scopeStreamsSummaryEl, 'scopeStreamsSummary');
-    bindTextInput(assessmentGeneralNotesEl, 'assessmentGeneralNotes');
-    bindTextInput(assessmentExtraNote1El, 'assessmentExtraNote1');
-    bindTextInput(assessmentExtraNote2El, 'assessmentExtraNote2');
-    bindTextInput(orgSectorEl, 'orgSector');
-    bindTextInput(orgSubSectorEl, 'orgSubSector');
-    bindTextInput(orgIndustryCodeEl, 'orgIndustryCode');
-    bindTextInput(orgCountEl, 'orgCount');
-    bindTextInput(eventInclusionWorkflowEl, 'eventInclusionWorkflow');
-    bindTextInput(eventCountEl, 'eventCount');
-    bindTextInput(assetGroupNameEl, 'assetGroupName');
-    bindTextInput(assetAddressEl, 'assetAddress');
-    bindTextInput(buildingProfileEl, 'buildingProfile');
-    bindTextInput(occupancyDimensionsEl, 'occupancyDimensions');
-    bindTextInput(assetOptionalFieldsEl, 'assetOptionalFields');
-    bindTextInput(eventGeneralInfoEl, 'eventGeneralInfo');
-    bindTextInput(eventOperationalInputsEl, 'eventOperationalInputs');
-    bindTextInput(onboardingReferencesEl, 'onboardingReferences');
-    bindTextInput(otherEmissionsEl, 'otherEmissions');
-    bindTextInput(standardsPoliciesEl, 'standardsPolicies');
-    bindTextInput(otherStandardRequiredEl, 'otherStandardRequired');
-
-    const bindCategoryUnit = (el, storageKey, category) => {
-        if (!el || el.dataset.bound === '1') return;
-        el.dataset.bound = '1';
-        el.addEventListener('change', () => {
-            setOrgLocalItem(storageKey, el.value || '');
-            document.querySelectorAll(`#${category}Table .row-unit-select`).forEach((unitEl) => {
-                unitEl.value = el.value || unitEl.value;
-            });
-            saveCurrentSiteData();
-            if (window.carbonCalc && window.carbonCalc.calculateAllTotals) {
-                window.carbonCalc.calculateAllTotals();
-            }
-            if (window.updateDashboard) window.updateDashboard();
-        });
-    };
-    bindCategoryUnit(waterUnitEl, 'waterUnit', 'water');
-    bindCategoryUnit(energyUnitEl, 'energyUnit', 'energy');
-    bindCategoryUnit(wasteUnitEl, 'wasteUnit', 'waste');
-    bindCategoryUnit(transportUnitEl, 'transportUnit', 'transport');
-    bindCategoryUnit(refrigerantsUnitEl, 'refrigerantsUnit', 'refrigerants');
 
     const tabQuestionNotesInput = document.getElementById('tabQuestionNotesInput');
     if (tabQuestionNotesInput && tabQuestionNotesInput.dataset.bound !== '1') {
@@ -2564,6 +2502,8 @@ function initializeApp() {
 // ============================================
 
 window.addEventListener('DOMContentLoaded', function() {
+    warmApiConnection();
+
     // Initialize theme palette UI as early as possible
     if (typeof window.initCarbonPaletteUI === 'function') {
         window.initCarbonPaletteUI();
@@ -2615,8 +2555,7 @@ window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loginEmail').value = savedEmail;
         }
 
-        // Same as manual login: load MongoDB org data first (see syncOrganizationDataFromServer).
-        initializeApp();
+        requestAnimationFrame(() => initializeApp());
     } else {
         // Show login screen
         document.getElementById('loginScreen').style.display = 'flex';

@@ -139,134 +139,159 @@ def get_data_col():
     db = get_db()
     return db['user_data'] if db is not None else None
 
-def get_factors_col():
-    db = get_db()
-    return db['conversion_factors'] if db is not None else None
 
-# Conversion Factors (country/year/source)
-SUPPORTED_FACTOR_YEARS = [2020, 2021, 2022, 2023, 2024, 2025]
-YEAR_MULTIPLIER = {2020: 1.10, 2021: 1.08, 2022: 1.06, 2023: 1.04, 2024: 1.02, 2025: 1.00}
-COUNTRY_BASE_FACTORS_2025 = {
-    "UK": {
-        "water_supply": 0.344, "water_treatment": 0.708,
-        "electricity_grid": 0.177, "natural_gas": 0.183, "heating_oil": 0.246, "coal": 0.317, "lpg": 0.214,
-        "waste_landfill": 467.0, "waste_incineration": 21.28, "waste_recycled": 21.3, "waste_composted": 8.8,
-        "car_petrol_small": 0.149, "car_petrol_medium": 0.188, "car_petrol_large": 0.280,
-        "car_diesel_small": 0.139, "car_diesel_medium": 0.166, "car_diesel_large": 0.227,
-        "car_electric": 0.053, "car_hybrid": 0.113,
-        "van_diesel": 0.788, "van_petrol": 0.804, "van_electric": 0.169,
-        "flight_domestic": 0.246, "flight_short_intl": 0.156, "flight_long_intl": 0.195,
-        "rail_national": 0.036, "hotel_stay_night": 15.0,
-        "freight_road_tonne_km": 0.120, "freight_air_tonne_km": 0.602,
-        "staff_commute_car_km": 0.171, "staff_commute_bus_km": 0.089,
-        "wfh_day": 0.92, "materials_paper_kg": 0.94,
-        "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
-        "refrigerant_R407A": 2107, "refrigerant_R408A": 3152,
-        "car_petrol_average": 0.1743, "car_diesel_average": 0.16844,
-        "car_hybrid_small": 0.10275, "car_hybrid_medium": 0.10698, "car_hybrid_large": 0.1448, "car_hybrid_average": 0.11558,
-        "car_plugin_hybrid_small": 0.0586, "car_plugin_hybrid_medium": 0.09251, "car_plugin_hybrid_large": 0.10515, "car_plugin_hybrid_average": 0.09712,
-        "motorbike_small": 0.08277, "motorbike_medium": 0.10086, "motorbike_large": 0.13237, "motorbike_average": 0.11337,
-        "taxi_regular": 0.14549, "taxi_black_cab": 0.20793,
-        "bus_local": 0.1195, "bus_local_london": 0.07856, "bus_local_average": 0.10312, "bus_coach": 0.02732,
-        "rail_international": 0.00497, "rail_light_tram": 0.02991, "rail_underground": 0.0275,
-        "flight_short_economy": 0.15298, "flight_short_average": 0.15553, "flight_short_business": 0.22947,
-        "flight_long_economy": 0.14615, "flight_long_average": 0.19085, "flight_long_business": 0.42385,
-        "flight_non_uk_economy": 0.1392452, "flight_non_uk_average": 0.18181, "flight_non_uk_business": 0.40379,
-        "van_diesel_average": 0.2471, "van_petrol_average": 0.21962,
-        "hgv_diesel": 0.8654, "hgv_diesel_refrigerated": 1.0142,
-        "freight_flight_domestic": 2.52129, "freight_flight_short_haul": 1.1681,
-        "freight_flight_long_haul": 0.59943, "freight_flight_international": 0.59943,
-        "rail_freight_train": 0.02556, "cargo_ship_bulk": 0.003539, "cargo_ship_general": 0.013232,
-        "cargo_ship_container": 0.016142, "cargo_ship_vehicle": 0.038581, "cargo_ship_refrigerated": 0.01308,
-        "hotel_uk": 13.9, "hotel_uk_london": 13.8,
-        "materials_construction_avg": 79.2678,
-        "materials_aggregates_primary": 7.7726, "materials_aggregates_reused": 2.21, "materials_aggregates_closed_loop": 3.2068,
-        "materials_asphalt_primary": 39.2125, "materials_asphalt_reused": 1.7383, "materials_asphalt_closed_loop": 28.6668,
-        "materials_bricks_primary": 241.7726, "materials_concrete_primary": 131.7726, "materials_concrete_closed_loop": 3.2068,
-    },
-    "BRAZIL": {
-        "water_supply": 0.421, "water_treatment": 0.856,
-        "electricity_grid": 0.233, "natural_gas": 0.202, "heating_oil": 0.264, "lpg": 0.226,
-        "waste_landfill": 521.0, "waste_incineration": 25.84, "waste_recycled": 24.6, "waste_composted": 10.2,
-        "car_petrol_small": 0.158, "car_petrol_medium": 0.197, "car_petrol_large": 0.294,
-        "car_diesel_small": 0.148, "car_diesel_medium": 0.176, "car_diesel_large": 0.241,
-        "car_electric": 0.062, "car_hybrid": 0.124, "car_flex": 0.182,
-        "van_diesel": 0.831, "van_petrol": 0.847, "van_electric": 0.186,
-        "flight_domestic": 0.264, "flight_short_intl": 0.165, "flight_long_intl": 0.208,
-        "rail_national": 0.044, "hotel_stay_night": 18.0,
-        "freight_road_tonne_km": 0.134, "freight_air_tonne_km": 0.649,
-        "staff_commute_car_km": 0.181, "staff_commute_bus_km": 0.097,
-        "wfh_day": 1.08, "materials_paper_kg": 1.06,
-        "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
-    },
-    "BAHRAIN": {
-        "water_supply": 0.560, "water_treatment": 0.930,
-        "electricity_grid": 0.590, "natural_gas": 0.211, "heating_oil": 0.268, "coal": 0.329, "lpg": 0.240,
-        "waste_landfill": 492.0, "waste_incineration": 24.10, "waste_recycled": 24.4, "waste_composted": 10.9,
-        "car_petrol_small": 0.172, "car_petrol_medium": 0.207, "car_petrol_large": 0.298,
-        "car_diesel_small": 0.153, "car_diesel_medium": 0.181, "car_diesel_large": 0.248,
-        "car_electric": 0.092, "car_hybrid": 0.138,
-        "van_diesel": 0.862, "van_petrol": 0.879, "van_electric": 0.228,
-        "flight_domestic": 0.272, "flight_short_intl": 0.171, "flight_long_intl": 0.216,
-        "rail_national": 0.040, "hotel_stay_night": 20.0,
-        "freight_road_tonne_km": 0.141, "freight_air_tonne_km": 0.677,
-        "staff_commute_car_km": 0.199, "staff_commute_bus_km": 0.094,
-        "wfh_day": 1.32, "materials_paper_kg": 1.11,
-        "refrigerant_R410A": 2088, "refrigerant_R134a": 1430, "refrigerant_R32": 675, "refrigerant_R404A": 3922, "refrigerant_R407C": 1774,
-    },
+_USER_LOGIN_PROJECTION = {
+    '_id': 0,
+    'email': 1,
+    'username': 1,
+    'password': 1,
+    'full_name': 1,
+    'organization_id': 1,
+    'organization_name': 1,
+    'company_name': 1,
+    'is_org_admin': 1,
 }
-
-# Ensure sheet-parity keys exist for every country (fallback to UK when country-specific
-# values are unavailable in the workbook) so all source options calculate.
-for _country_key, _factor_map in COUNTRY_BASE_FACTORS_2025.items():
-    if _country_key == "UK":
-        continue
-    for _src_key, _src_val in COUNTRY_BASE_FACTORS_2025["UK"].items():
-        _factor_map.setdefault(_src_key, _src_val)
+_db_indexes_ensured = False
 
 
-def _build_default_conversion_factors():
-    data = {}
-    for country, factors in COUNTRY_BASE_FACTORS_2025.items():
-        for year in SUPPORTED_FACTOR_YEARS:
-            mul = YEAR_MULTIPLIER.get(year, 1.0)
-            data[f"{country}_{year}"] = {
-                "version": f"{year}.1",
-                "source": "Default",
-                "factors": {k: round(float(v) * mul, 8) for k, v in factors.items()},
-            }
-    return data
+def ensure_db_indexes() -> None:
+    """Create indexes once per process so login/user lookups stay fast as data grows."""
+    global _db_indexes_ensured
+    if _db_indexes_ensured:
+        return
+    db = get_db()
+    if db is None:
+        return
+    try:
+        users = db['users']
+        users.create_index('email', unique=True, sparse=True, background=True)
+        users.create_index('username', unique=True, sparse=True, background=True)
+        db['user_data'].create_index('organization_id', unique=True, background=True)
+        db['conversion_factor_catalog'].create_index('country_key', background=True)
+        _db_indexes_ensured = True
+    except Exception as e:
+        print(f'WARN: could not ensure DB indexes: {e}', file=sys.stderr)
 
 
-DEFAULT_CONVERSION_FACTORS = _build_default_conversion_factors()
+def warm_db_connection() -> None:
+    """Eager connect + indexes at worker startup (non-blocking so import never stalls 20s)."""
+    import threading
 
-def init_org_factors(organization_id: str):
-    """
-    Initialize conversion factors for a given organization.
+    def _run() -> None:
+        try:
+            if get_db() is not None:
+                ensure_db_indexes()
+        except Exception as e:
+            print(f'WARN: DB warmup failed: {e}', file=sys.stderr)
 
-    Note: Frontend stores factors per company/org for report generation.
-    """
-    col = get_factors_col()
-    if col is None:
-        return []
-    inserted_factors = []
-    for key, data in DEFAULT_CONVERSION_FACTORS.items():
-        doc = {
-            "organization_id": organization_id,
-            "country_key": key,
-            "version": data.get("version", "2025"),
-            "source": data.get("source", "Default"),
-            "factors": data["factors"],
-            "updated_at": utc_now()
+    threading.Thread(target=_run, name='db-warmup', daemon=True).start()
+
+# Conversion Factors (country/year/source) — values live in MongoDB only.
+# Run scripts/update_conversion_factors.py to load from the customer datasheet.
+from data.catalog_factor_registry import (
+    CATALOG_COLLECTION,
+    SUPPORTED_YEARS as SUPPORTED_FACTOR_YEARS,
+    catalog_document_for_api,
+    category_for_factor_key,
+    resolve_catalog_factor_key,
+)
+DATASHEET_FACTORS_JSON = Path(__file__).resolve().parent / 'data' / 'datasheet_uk_factors_by_year.json'
+
+
+def get_catalog_col():
+    db = get_db()
+    return db[CATALOG_COLLECTION] if db is not None else None
+
+
+def _factors_docs_to_registry(docs: list[dict]) -> dict:
+    merged = {}
+    for doc in docs:
+        key = doc.get('country_key')
+        factors = doc.get('factors')
+        if not key or not isinstance(factors, dict):
+            continue
+        merged[key] = {
+            'version': doc.get('version', '2025.1'),
+            'source': doc.get('source', 'Catalog'),
+            'factors': factors,
         }
-        col.update_one(
-            {"organization_id": organization_id, "country_key": key},
-            {"$setOnInsert": doc},
-            upsert=True
-        )
-        doc.pop('_id', None)
-        inserted_factors.append(doc)
-    return inserted_factors
+    return merged
+
+
+def _load_datasheet_factors_json() -> dict:
+    if not DATASHEET_FACTORS_JSON.is_file():
+        return {}
+    try:
+        payload = json.loads(DATASHEET_FACTORS_JSON.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    docs = payload.get('documents') if isinstance(payload, dict) else None
+    if not isinstance(docs, list):
+        return {}
+    return _factors_docs_to_registry(docs)
+
+
+def _datasheet_json_fallback_enabled() -> bool:
+    return os.environ.get('ALLOW_DATASHEET_FACTOR_JSON', '').lower() in ('1', 'true', 'yes')
+
+
+def load_conversion_factors_from_catalog():
+    """Load factors from MongoDB catalog (production). Optional JSON mirror for local dev/tests."""
+    if _datasheet_json_fallback_enabled():
+        merged = _load_datasheet_factors_json()
+        if merged:
+            return merged
+    col = get_catalog_col()
+    if col is not None:
+        docs = list(col.find({}, {'_id': 0, 'country_key': 1, 'version': 1, 'source': 1, 'factors': 1}))
+        if docs:
+            merged = _factors_docs_to_registry(docs)
+            if merged:
+                return merged
+    return {}
+
+
+def get_conversion_factors_registry(force_reload: bool = False) -> dict:
+    """Registry used by lookup_conversion_factor (always read from catalog)."""
+    return load_conversion_factors_from_catalog()
+
+
+def invalidate_conversion_factors_cache() -> None:
+    """Kept for compatibility; registry is not cached in-process."""
+    pass
+
+
+def list_catalog_factor_documents() -> list[dict]:
+    """Global conversion_factor_catalog — same documents as scripts/update_conversion_factors.py uploads."""
+    col = get_catalog_col()
+    if col is None:
+        registry = get_conversion_factors_registry()
+        return [
+            catalog_document_for_api({
+                "country_key": key,
+                "version": data.get("version", ""),
+                "source": data.get("source", ""),
+                "factors": data.get("factors") or {},
+            })
+            for key, data in sorted(registry.items())
+        ]
+    docs = list(
+        col.find(
+            {},
+            {
+                "_id": 0,
+                "country_key": 1,
+                "country": 1,
+                "year": 1,
+                "version": 1,
+                "source": 1,
+                "factors": 1,
+                "updated_at": 1,
+            },
+        ).sort("country_key", 1)
+    )
+    return [catalog_document_for_api(doc) for doc in docs]
+
 
 # Security
 app.config['JWT_SECRET_KEY'] = resolve_jwt_secret(os.environ.get('JWT_SECRET_KEY'), os.environ.get('APP_ENV'))
@@ -529,39 +554,40 @@ def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
     return code, None
 
 
-def _find_user_by_email(users_col, email: str):
+def _find_user_by_email(users_col, email: str, projection=None):
     """Resolve user by normalized email, with fallback to legacy exact-match storage."""
     if not email or users_col is None:
         return None
     em = _normalize_email(email)
-    user = users_col.find_one({'email': em})
+    user = users_col.find_one({'email': em}, projection)
     if user:
         return user
-    return users_col.find_one({'email': email.strip()})
+    return users_col.find_one({'email': email.strip()}, projection)
 
 
-def _find_user_by_username(users_col, username: str):
+def _find_user_by_username(users_col, username: str, projection=None):
     if not username or users_col is None:
         return None
     uname = _normalize_username(username)
     if not uname:
         return None
-    user = users_col.find_one({'username': uname})
+    user = users_col.find_one({'username': uname}, projection)
     if user:
         return user
-    return users_col.find_one({'username': username.strip()})
+    return users_col.find_one({'username': username.strip()}, projection)
 
 
-def _find_user_by_login(users_col, identifier: str):
+def _find_user_by_login(users_col, identifier: str, projection=None):
     if not identifier or users_col is None:
         return None
     ident = (identifier or '').strip()
+    proj = projection if projection is not None else None
     if '@' in ident:
-        return _find_user_by_email(users_col, ident)
-    user = _find_user_by_username(users_col, ident)
+        return _find_user_by_email(users_col, ident, proj)
+    user = _find_user_by_username(users_col, ident, proj)
     if user:
         return user
-    return _find_user_by_email(users_col, ident)
+    return _find_user_by_email(users_col, ident, proj)
 
 
 _ALLOWED_ROW_UNITS = {
@@ -776,23 +802,15 @@ def lookup_conversion_factor(country: str, year: int | str, source_key: str, uni
     c = (country or 'UK').strip().upper()
     y = _normalize_year(year)
     src = (source_key or '').strip()
-    doc = DEFAULT_CONVERSION_FACTORS.get(f'{c}_{y}') or DEFAULT_CONVERSION_FACTORS.get(f'UK_{y}')
+    registry = get_conversion_factors_registry()
+    doc = registry.get(f'{c}_{y}') or registry.get(f'UK_{y}')
     factors_bucket = (doc or {}).get('factors') or {}
-    factor_key = _SOURCE_TO_BACKEND_FACTOR_KEY.get(src, src)
+    factor_key = resolve_catalog_factor_key(src)
+    if factor_key not in factors_bucket and src in factors_bucket:
+        factor_key = src
     if factor_key not in factors_bucket:
         return None, f'Unsupported source: {src}'
-    category = _SOURCE_CATEGORY.get(src)
-    if not category and isinstance(src, str):
-        if src.startswith('refrigerant_'):
-            category = 'refrigerants'
-        elif src.startswith('waste'):
-            category = 'waste'
-        elif src in ('water', 'wastewater'):
-            category = 'water'
-        elif src in ('electricity', 'naturalGas', 'diesel'):
-            category = 'energy'
-        else:
-            category = 'transport'
+    category = category_for_factor_key(factor_key)
     unit_clean = (unit or '').strip().lower()
     if unit_clean:
         allowed = _UNIT_TO_BASE.get(category, {})
@@ -810,7 +828,7 @@ def calculate_emission_kg(country: str, year: int | str, source_key: str, value:
     factor, err = lookup_conversion_factor(country, year, source_key, unit)
     if err:
         return None, err
-    category = _SOURCE_CATEGORY.get(source_key)
+    category = category_for_factor_key(resolve_catalog_factor_key(source_key) or source_key)
     mul = 1.0
     if unit:
         mul = (_UNIT_TO_BASE.get(category, {}) or {}).get(unit.lower(), 1.0)
@@ -922,13 +940,6 @@ def signup():
     # Notify Sustain Quality about new registration (best effort, non-blocking).
     notify_sustain_quality_new_registration(em, company_name, data.get('full_name'))
 
-    # Initialize factors at org level
-    try:
-        init_org_factors(org_id)
-    except Exception:
-        # Don't block signup if factors init fails; factors can be lazily initialized later.
-        pass
-
     return jsonify({
         "msg": "Organization account created successfully. Please log in.",
         "email": em,
@@ -937,19 +948,16 @@ def signup():
 @app.route('/api/login', methods=['POST'])
 def login():
     users_col = get_users_col()
-    orgs_col = get_orgs_col()
     if users_col is None:
         return jsonify({"msg": "Database connection error"}), 503
-    if orgs_col is None:
-        return jsonify({"msg": "Database connection error (organizations)."}), 503
-        
+
     data = request.get_json() or {}
     identifier = data.get('email') or data.get('username') or data.get('login')
     password = data.get('password')
     if not identifier or not password:
         return jsonify({"msg": "Missing login or password"}), 400
 
-    user = _find_user_by_login(users_col, identifier)
+    user = _find_user_by_login(users_col, identifier, _USER_LOGIN_PROJECTION)
     if user and bcrypt.check_password_hash(user['password'], password):
         identity = user.get('email') or user.get('username')
         access_token = create_access_token(identity=identity)
@@ -957,7 +965,12 @@ def login():
         org_id = user.get("organization_id")
         org_name = user.get("organization_name") or user.get("company_name")
         if not org_name and org_id:
-            org_doc = orgs_col.find_one({"_id": org_id}) or orgs_col.find_one({"name": org_id})
+            orgs_col = get_orgs_col()
+            if orgs_col is None:
+                return jsonify({"msg": "Database connection error (organizations)."}), 503
+            org_doc = orgs_col.find_one({"_id": org_id}, {"name": 1}) or orgs_col.find_one(
+                {"name": org_id}, {"name": 1}
+            )
             if org_doc:
                 org_name = org_doc.get("name")
 
@@ -1196,55 +1209,25 @@ def save_user_data():
     data_col.update_one({"organization_id": org_id}, {"$set": data}, upsert=True)
     return jsonify({"msg": "Data saved"}), 200
 
-@app.route('/api/factors', methods=['GET', 'POST'])
+@app.route('/api/factors', methods=['GET'])
 @jwt_required()
 def handle_factors():
-    factors_col = get_factors_col()
-    if factors_col is None: return jsonify({"msg": "DB Error"}), 503
-    
+    """Return global conversion_factor_catalog (same for all organizations)."""
+    if get_catalog_col() is None and not _datasheet_json_fallback_enabled():
+        return jsonify({"msg": "DB Error"}), 503
+
     current_identity = get_jwt_identity()
     users_col = get_users_col()
     user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
-    org_id = user.get("organization_id") if user else None
-    user_email = user.get("email") if user else None
-    if not org_id:
+    if not user or not user.get("organization_id"):
         return jsonify({"msg": "Organization is not linked to this account."}), 400
-    
-    if request.method == 'GET':
-        query = {"organization_id": org_id}
-        factors = list(factors_col.find(query, {"_id": 0}))
-        if not factors:
-            # New accounts/organizations may not have seeded factors yet.
-            # Seed defaults, then re-read from Mongo so response always reflects DB state.
-            init_org_factors(org_id)
-            factors = list(factors_col.find(query, {"_id": 0}))
-        return jsonify(factors), 200
-        
-    if request.method == 'POST':
-        data = request.get_json()
-        if not data: return jsonify({"msg": "Missing JSON"}), 400
-        
-        country_key = data.get('country_key')
-        factors = data.get('factors')
-        
-        if not country_key or not factors:
-            return jsonify({"msg": "Missing country_key or factors"}), 400
-            
-        doc = {
-            "organization_id": org_id,
-            "country_key": country_key,
-            "version": data.get("version", "Custom"),
-            "source": data.get("source", "Imported"),
-            "factors": factors,
-            "updated_at": utc_now()
-        }
-        
-        factors_col.update_one(
-            {"organization_id": org_id, "country_key": country_key},
-            {"$set": doc},
-            upsert=True
-        )
-        return jsonify({"msg": "Factors saved successfully"}), 200
+
+    factors = list_catalog_factor_documents()
+    if not factors:
+        return jsonify({
+            "msg": "No conversion factors in catalog. Run scripts/update_conversion_factors.py.",
+        }), 503
+    return jsonify(factors), 200
 
 
 @app.route('/api/factor-lookup', methods=['POST'])
@@ -1463,6 +1446,10 @@ def generate_final_report_docx():
     )
 
 
+# Warm MongoDB + indexes when Gunicorn loads the module (first login is much faster).
+warm_db_connection()
+
 if __name__ == '__main__':
+    warm_db_connection()
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)

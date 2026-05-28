@@ -1092,15 +1092,29 @@ async function generateFinalReportDOCX() {
     const project_number = (projectNumberInput?.value || '').toString().trim();
     const company_logo_data_url = _getReportLogoDataUrl();
 
+    const readPref = (key) =>
+        (typeof window.getOrgLocalItem === 'function' ? window.getOrgLocalItem(key, '') : '') ||
+        document.getElementById(`${key}Input`)?.value?.trim() ||
+        '';
     const organization_profile = document.getElementById('organizationProfileInput')?.value?.trim() || '';
-    const org_registered_address = document.getElementById('orgRegisteredAddressInput')?.value?.trim() || '';
-    const scope_streams_summary = document.getElementById('scopeStreamsSummaryInput')?.value?.trim() || '';
-    const assessment_period_detail = document.getElementById('assessmentPeriodDetailInput')?.value?.trim() || '';
-    const assessment_general_notes = document.getElementById('assessmentGeneralNotesInput')?.value?.trim() || '';
-    const assessment_extra_note1 = document.getElementById('assessmentExtraNote1Input')?.value?.trim() || '';
-    const assessment_extra_note2 = document.getElementById('assessmentExtraNote2Input')?.value?.trim() || '';
-    const buildings_assessed = document.getElementById('buildingsAssessedInput')?.value?.trim() || '';
-    const assessment_base_year = document.getElementById('assessmentBaseYearInput')?.value?.trim() || '';
+    const org_registered_address =
+        document.getElementById('orgRegisteredAddressInput')?.value?.trim() ||
+        readPref('orgRegisteredAddress');
+    const scope_streams_summary = readPref('scopeStreamsSummary');
+    const assessment_period_detail = readPref('assessmentPeriodDetail');
+    const assessment_general_notes = readPref('assessmentGeneralNotes');
+    const assessment_extra_note1 =
+        document.getElementById('assessmentExtraNote1Input')?.value?.trim() ||
+        readPref('assessmentExtraNote1');
+    const assessment_extra_note2 =
+        document.getElementById('assessmentExtraNote2Input')?.value?.trim() ||
+        readPref('assessmentExtraNote2');
+    const buildings_assessed =
+        document.getElementById('buildingsAssessedInput')?.value?.trim() ||
+        readPref('buildingsAssessedCount');
+    const assessment_base_year =
+        document.getElementById('assessmentBaseYearInput')?.value?.trim() ||
+        readPref('assessmentBaseYear');
 
     const grand_total_kg = (Object.values(totals_kg).reduce((a, b) => a + b, 0)) || 0;
 

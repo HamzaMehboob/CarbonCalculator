@@ -16,13 +16,13 @@
       "factors": {
         "water": {
           "supply": {
-            "value": 0.344,
+            "value": 0.1913,
             "unit": "kg CO2e per m³",
             "scope": 3,
             "description": "Water supply and distribution"
           },
           "treatment": {
-            "value": 0.708,
+            "value": 0.17088,
             "unit": "kg CO2e per m³",
             "scope": 3,
             "description": "Wastewater treatment"

@@ -160,6 +160,13 @@ body {
     box-shadow: var(--shadow-md);
 }
 
+.btn-primary:disabled {
+    opacity: 0.75;
+    cursor: wait;
+    transform: none;
+    box-shadow: none;
+}
+
 .btn-secondary {
     padding: 10px 20px;
     background: var(--bg-card);
@@ -775,6 +782,102 @@ body {
 .form-inline-group textarea:focus {
     outline: none;
     border-color: var(--primary-color);
+}
+
+/* General Info (onboarding spreadsheet layout) */
+.general-info-page .card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 16px;
+}
+
+.general-info-page-desc {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 720px;
+}
+
+.general-info-meta-title {
+    margin: 0 0 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.general-info-section {
+    margin-top: 8px;
+    padding-top: 4px;
+}
+
+.general-info-section h3 {
+    background: #e85d04;
+    color: #fff;
+    padding: 10px 14px;
+    margin: 0 0 14px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 6px;
+}
+
+.general-info-intro {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.general-info-two-col-headers {
+    display: grid;
+    grid-template-columns: minmax(200px, 1fr) 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.gi-paired-row .gi-paired-inputs {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.general-info-split-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 28px;
+}
+
+.general-info-split-col h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+}
+
+#section-general-info .form-inline-group.full-width label {
+    min-width: 220px;
+    max-width: 42%;
+    white-space: normal;
+    line-height: 1.35;
+}
+
+@media (max-width: 960px) {
+    .general-info-split-cols,
+    .general-info-two-col-headers,
+    .gi-paired-row .gi-paired-inputs {
+        grid-template-columns: 1fr;
+    }
+
+    .general-info-two-col-headers span:not(:first-child) {
+        display: none;
+    }
 }
 
 /* Tabs Navigation */
@@ -1523,6 +1626,113 @@ body {
     gap: 12px;
     padding: 20px 24px;
     border-top: 2px solid var(--border-color);
+}
+
+/* Assessment Scope spreadsheet layout */
+.assessment-scope-form-host {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.assessment-scope-section {
+    margin-bottom: 0;
+}
+
+.assessment-scope-section-title {
+    margin: 0 0 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    padding: 8px 12px;
+    background: linear-gradient(90deg, #f97316 0%, #fb923c 100%);
+    color: #fff;
+    border-radius: 6px;
+}
+
+.assessment-scope-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.assessment-scope-table th {
+    text-align: left;
+    padding: 10px 12px;
+    background: #f97316;
+    color: #fff;
+    font-weight: 600;
+    border: 1px solid #ea580c;
+}
+
+.assessment-scope-table th:nth-child(2) {
+    width: 180px;
+}
+
+.assessment-scope-table th:nth-child(3) {
+    width: 200px;
+}
+
+.assessment-scope-table td {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    vertical-align: top;
+    background: var(--bg-card);
+}
+
+.assessment-scope-label {
+    font-weight: 500;
+    color: var(--text-primary);
+    min-width: 220px;
+}
+
+.assessment-scope-unit-cell,
+.assessment-scope-value-cell {
+    min-width: 140px;
+}
+
+.assessment-scope-na {
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.assessment-scope-input,
+.assessment-scope-unit,
+.assessment-scope-yn {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.assessment-scope-input {
+    resize: vertical;
+    min-height: 36px;
+}
+
+@media (max-width: 900px) {
+    .assessment-scope-table thead {
+        display: none;
+    }
+    .assessment-scope-table tr {
+        display: block;
+        margin-bottom: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+    .assessment-scope-table td {
+        display: block;
+        border: none;
+        width: 100%;
+    }
+    .assessment-scope-label {
+        font-weight: 700;
+        background: var(--bg-main);
+    }
 }
 
 .form-group {

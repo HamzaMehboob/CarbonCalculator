@@ -122,8 +122,8 @@ const SOURCE_TO_CATEGORY = {
 
 const COUNTRY_BASE_FACTORS_2025 = {
     UK: {
-        water: 0.344, wastewater: 0.708, water_reuse: 0.028,
-        electricity: 0.177, naturalGas: 0.183, diesel: 0.246, lpg: 0.214, coal: 0.317,
+        water: 0.1913, wastewater: 0.17088, water_reuse: 0.028,
+        electricity: 0.177, naturalGas: 0.18296, diesel: 0.24411, lpg: 0.214, coal: 0.317,
         waste: 467.0, wasteRecycled: 21.3, waste_composted: 8.8,
         waste_landfill: 467.0, waste_to_energy: 21.28, waste_to_recycling: 21.3, waste_to_composting: 8.8,
         transport_petrol: 0.168, transport_diesel: 0.171, transport_electric: 0.053,
@@ -137,7 +137,7 @@ const COUNTRY_BASE_FACTORS_2025 = {
         car_petrol_small: 0.14836, car_petrol_medium: 0.18659, car_petrol_large: 0.27807, car_petrol_average: 0.1743,
         car_diesel_small: 0.13721, car_diesel_medium: 0.16637, car_diesel_large: 0.20419, car_diesel_average: 0.16844,
         car_hybrid_small: 0.10275, car_hybrid_medium: 0.10698, car_hybrid_large: 0.1448, car_hybrid_average: 0.11558,
-        car_plugin_hybrid_small: 0.0586, car_plugin_hybrid_medium: 0.09251, car_plugin_hybrid_large: 0.10515, car_plugin_hybrid_average: 0.09712,
+        car_plugin_hybrid_small: 0.05622, car_plugin_hybrid_medium: 0.08753, car_plugin_hybrid_large: 0.11353, car_plugin_hybrid_average: 0.10389,
         motorbike_small: 0.08277, motorbike_medium: 0.10086, motorbike_large: 0.13237, motorbike_average: 0.11337,
         taxi_regular: 0.14549, taxi_black_cab: 0.20793,
         bus_local: 0.1195, bus_local_london: 0.07856, bus_local_average: 0.10312, bus_coach: 0.02732,
@@ -164,19 +164,6 @@ const COUNTRY_BASE_FACTORS_2025 = {
         freight_road_tonne_km: 0.134, freight_air_tonne_km: 0.649, freight_sea_tonne_km: 0.018,
         staff_commute_car_km: 0.181, staff_commute_bus_km: 0.097, staff_commute_rail_km: 0.044,
         wfh_day: 1.08, materials_paper_kg: 1.06, materials_steel_kg: 2.03,
-        refrigerant_R410A: 2088, refrigerant_R134a: 1430, refrigerant_R32: 675,
-    },
-    BAHRAIN: {
-        water: 0.560, wastewater: 0.930, water_reuse: 0.041,
-        electricity: 0.590, naturalGas: 0.211, diesel: 0.268, lpg: 0.240, coal: 0.329,
-        waste: 492.0, wasteRecycled: 24.4, waste_composted: 10.9,
-        waste_landfill: 492.0, waste_to_energy: 24.10, waste_to_recycling: 24.4, waste_to_composting: 10.9,
-        transport_petrol: 0.197, transport_diesel: 0.188, transport_electric: 0.092,
-        flights_short: 0.171, flights_medium: 0.272, flights_long: 0.216,
-        business_travel_rail: 0.040, business_travel_hotel_night: 20.0,
-        freight_road_tonne_km: 0.141, freight_air_tonne_km: 0.677, freight_sea_tonne_km: 0.021,
-        staff_commute_car_km: 0.199, staff_commute_bus_km: 0.094, staff_commute_rail_km: 0.040,
-        wfh_day: 1.32, materials_paper_kg: 1.11, materials_steel_kg: 2.10,
         refrigerant_R410A: 2088, refrigerant_R134a: 1430, refrigerant_R32: 675,
     },
 };
@@ -265,7 +252,7 @@ function mapBackendNestedFactorsToUiFlat(raw) {
     set('transport_diesel', f.car_diesel_medium);
     set('transport_electric', f.car_electric);
     set('business_travel_rail', f.rail_national);
-    set('business_travel_hotel_night', f.hotel_stay_night);
+    set('business_travel_hotel_night', f.hotel_stay_night ?? f.hotel_uk);
     set('freight_road_tonne_km', f.freight_road_tonne_km);
     set('freight_air_tonne_km', f.freight_air_tonne_km);
     set('freight_sea_tonne_km', f.freight_sea_tonne_km || f.cargo_ship_container);
@@ -304,7 +291,6 @@ function apiDocCountryKeyToUiCountry(countryKey) {
     const u = String(countryKey || '').toUpperCase();
     if (u === 'UK' || u.startsWith('UK_')) return 'UK';
     if (u === 'BRAZIL' || u.startsWith('BRAZIL')) return 'BRAZIL';
-    if (u === 'BAHRAIN' || u.startsWith('BAHRAIN')) return 'BAHRAIN';
     return null;
 }
 
@@ -315,10 +301,252 @@ function apiDocCountryKeyToYear(countryKey) {
     return year;
 }
 
+/** Catalog keys (backend) -> UI label for display / checkboxes */
+const CATALOG_FACTOR_LABELS_EN = {
+    water_supply: 'Water supply',
+    water_treatment: 'Waste water treatment',
+    electricity_grid: 'Electricity (grid)',
+    natural_gas: 'Natural gas',
+    heating_oil: 'Diesel / heating oil',
+    lpg: 'LPG',
+    coal: 'Coal',
+    waste_landfill: 'Waste to landfill',
+    waste_incineration: 'Waste to energy',
+    waste_recycled: 'Waste to recycling',
+    waste_composted: 'Waste to composting',
+    car_petrol_small: 'Car (small) petrol',
+    car_petrol_medium: 'Car (medium) petrol',
+    car_petrol_large: 'Car (large) petrol',
+    car_petrol_average: 'Car (average) petrol',
+    car_diesel_small: 'Car (small) diesel',
+    car_diesel_medium: 'Car (medium) diesel',
+    car_diesel_large: 'Car (large) diesel',
+    car_diesel_average: 'Car (average) diesel',
+    car_hybrid_small: 'Car (small) hybrid',
+    car_hybrid_medium: 'Car (medium) hybrid',
+    car_hybrid_large: 'Car (large) hybrid',
+    car_hybrid_average: 'Car (average) hybrid',
+    car_plugin_hybrid_small: 'Car (small) plug-in hybrid',
+    car_plugin_hybrid_medium: 'Car (medium) plug-in hybrid',
+    car_plugin_hybrid_large: 'Car (large) plug-in hybrid',
+    car_plugin_hybrid_average: 'Car (average) plug-in hybrid',
+    car_electric: 'Car (electric)',
+    motorbike_small: 'Motorbike (small)',
+    motorbike_medium: 'Motorbike (medium)',
+    motorbike_large: 'Motorbike (large)',
+    motorbike_average: 'Motorbike (average)',
+    taxi_regular: 'Taxi (regular)',
+    taxi_black_cab: 'Taxi (black cab)',
+    bus_local: 'Bus (local)',
+    bus_local_london: 'Bus (local London)',
+    bus_local_average: 'Bus (average local)',
+    bus_coach: 'Bus (coach)',
+    rail_national: 'Rail (national)',
+    rail_international: 'Rail (international)',
+    rail_light_tram: 'Rail (light rail / tram)',
+    rail_underground: 'Rail (underground)',
+    flight_domestic: 'Flight domestic',
+    flight_short_intl: 'Flight short-haul (international)',
+    flight_long_intl: 'Flight long-haul (international)',
+    flight_short_economy: 'Flight short-haul (economy)',
+    flight_short_average: 'Flight short-haul (average)',
+    flight_short_business: 'Flight short-haul (business)',
+    flight_long_economy: 'Flight long-haul (economy)',
+    flight_long_average: 'Flight long-haul (average)',
+    flight_long_business: 'Flight long-haul (business)',
+    flight_non_uk_economy: 'Flight non-UK (economy)',
+    flight_non_uk_average: 'Flight non-UK (average)',
+    flight_non_uk_business: 'Flight non-UK (business)',
+    van_diesel_average: 'Van (diesel average)',
+    van_petrol_average: 'Van (petrol average)',
+    van_diesel: 'Van (diesel)',
+    van_petrol: 'Van (petrol)',
+    van_electric: 'Van (electric)',
+    car_hybrid: 'Car (hybrid)',
+    car_flex: 'Car (flex fuel)',
+    hgv_diesel: 'HGV (diesel)',
+    hgv_diesel_refrigerated: 'HGV refrigerated',
+    freight_flight_domestic: 'Freight flights (domestic)',
+    freight_flight_short_haul: 'Freight flights (short-haul)',
+    freight_flight_long_haul: 'Freight flights (long-haul)',
+    freight_flight_international: 'Freight flights (international)',
+    rail_freight_train: 'Rail (freight)',
+    cargo_ship_bulk: 'Cargo ship (bulk)',
+    cargo_ship_general: 'Cargo ship (general)',
+    cargo_ship_container: 'Cargo ship (container)',
+    cargo_ship_vehicle: 'Cargo ship (vehicle)',
+    cargo_ship_refrigerated: 'Cargo ship (refrigerated)',
+    hotel_uk: 'Hotel stay (UK)',
+    hotel_uk_london: 'Hotel stay (UK London)',
+    hotel_stay_night: 'Hotel stay',
+    wfh_day: 'Working from home',
+    materials_paper_kg: 'Materials (paper)',
+    materials_construction_avg: 'Materials (construction)',
+    materials_aggregates_primary: 'Materials (aggregates primary)',
+    materials_aggregates_reused: 'Materials (aggregates reused)',
+    materials_aggregates_closed_loop: 'Materials (aggregates closed-loop)',
+    materials_asphalt_primary: 'Materials (asphalt primary)',
+    materials_asphalt_reused: 'Materials (asphalt reused)',
+    materials_asphalt_closed_loop: 'Materials (asphalt closed-loop)',
+    materials_bricks_primary: 'Materials (bricks primary)',
+    materials_concrete_primary: 'Materials (concrete primary)',
+    materials_concrete_closed_loop: 'Materials (concrete closed-loop)',
+    freight_road_tonne_km: 'Freight (road)',
+    freight_air_tonne_km: 'Freight (air)',
+    staff_commute_car_km: 'Staff commute (car)',
+    staff_commute_bus_km: 'Staff commute (bus)',
+    refrigerant_R410A: 'R-410A',
+    refrigerant_R134a: 'R-134a',
+    refrigerant_R32: 'R-32',
+    refrigerant_R404A: 'R-404A',
+    refrigerant_R407A: 'R-407A',
+    refrigerant_R407C: 'R-407C',
+    refrigerant_R408A: 'R-408A',
+    water: 'Water supply',
+    wastewater: 'Waste water',
+    water_reuse: 'Reused water',
+    electricity: 'Electricity (grid)',
+    naturalGas: 'Natural gas',
+    diesel: 'Diesel / heating oil',
+    transport_petrol: 'Company vehicles (petrol)',
+    transport_diesel: 'Company vehicles (diesel)',
+    transport_electric: 'Company vehicles (electric)',
+    flights_short: 'Flights (short-haul)',
+    flights_medium: 'Flights (medium-haul)',
+    flights_long: 'Flights (long-haul)',
+    business_travel_rail: 'Business travel (rail)',
+    business_travel_hotel_night: 'Hotel stay',
+    freight_sea_tonne_km: 'Freight (sea)',
+    staff_commute_rail_km: 'Staff commute (rail)',
+    materials_steel_kg: 'Materials (steel)',
+    waste: 'Waste to landfill',
+    wasteRecycled: 'Waste recycled',
+    waste_composted: 'Waste composted',
+    waste_to_energy: 'Waste to energy',
+    waste_to_recycling: 'Waste to recycling',
+    waste_to_composting: 'Waste to composting',
+};
+
+const CATALOG_UI_KEY_FOR_BACKEND = {
+    water_supply: 'water',
+    water_treatment: 'wastewater',
+    electricity_grid: 'electricity',
+    natural_gas: 'naturalGas',
+    heating_oil: 'diesel',
+};
+
+const UI_KEY_TO_CATALOG_KEY = Object.fromEntries(
+    Object.entries(CATALOG_UI_KEY_FOR_BACKEND).map(([catalog, ui]) => [ui, catalog])
+);
+
+function humanizeFactorKey(key) {
+    return String(key || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function inferFactorCategory(key) {
+    const k = String(key || '');
+    if (['water', 'wastewater', 'water_reuse', 'water_supply', 'water_treatment'].includes(k)) {
+        return 'water';
+    }
+    if (['electricity', 'naturalGas', 'diesel', 'lpg', 'coal', 'electricity_grid', 'natural_gas', 'heating_oil'].includes(k)) {
+        return 'energy';
+    }
+    if (k.startsWith('waste') || ['wasteRecycled', 'waste_composted'].includes(k)) {
+        return 'waste';
+    }
+    if (k.startsWith('refrigerant_')) {
+        return 'refrigerants';
+    }
+    return 'transport';
+}
+
+function getFactorDisplayLabel(key) {
+    const catalogKey = CATALOG_FACTOR_LABELS_EN[key]
+        ? key
+        : (UI_KEY_TO_CATALOG_KEY[key] || key);
+    return CATALOG_FACTOR_LABELS_EN[catalogKey] || CATALOG_FACTOR_LABELS_EN[key] || humanizeFactorKey(key);
+}
+
+/** Emission dropdown options from loaded conversion_factor_catalog for country/year */
+function getCatalogEmissionOptions(category, year) {
+    const bucket = resolveUiFactorBucket(year || getReportingYear());
+    const seen = new Set();
+    const options = [];
+    Object.keys(bucket).forEach((key) => {
+        const n = Number(bucket[key]);
+        if (!Number.isFinite(n) || n <= 0) return;
+        if (inferFactorCategory(key) !== category) return;
+        const uiKey = CATALOG_UI_KEY_FOR_BACKEND[key] || key;
+        if (seen.has(uiKey)) return;
+        seen.add(uiKey);
+        options.push({
+            key: uiKey,
+            labelEn: getFactorDisplayLabel(uiKey),
+            labelPt: getFactorDisplayLabel(uiKey),
+        });
+    });
+    options.sort((a, b) => a.labelEn.localeCompare(b.labelEn));
+    return options;
+}
+
+function rebuildConversionFactorCheckboxes() {
+    const host = document.getElementById('conversion-factor-grid-host');
+    if (!host) return;
+    const year = getReportingYear();
+    const bucket = resolveUiFactorBucket(year);
+    const byCategory = { energy: [], water: [], transport: [], waste: [], refrigerants: [] };
+    const seen = new Set();
+    Object.keys(bucket).forEach((key) => {
+        const n = Number(bucket[key]);
+        if (!Number.isFinite(n) || n <= 0) return;
+        const cat = inferFactorCategory(key);
+        if (!byCategory[cat]) return;
+        const uiKey = CATALOG_UI_KEY_FOR_BACKEND[key] || key;
+        if (seen.has(uiKey)) return;
+        seen.add(uiKey);
+        byCategory[cat].push({ key: uiKey, label: getFactorDisplayLabel(uiKey) });
+    });
+    const titles = {
+        energy: { en: 'Energy', pt: 'Energia' },
+        water: { en: 'Water', pt: 'Água' },
+        transport: { en: 'Transport & other', pt: 'Transporte e outros' },
+        waste: { en: 'Waste', pt: 'Resíduos' },
+        refrigerants: { en: 'Refrigerants', pt: 'Refrigerantes' },
+    };
+    host.innerHTML = '';
+    ['energy', 'water', 'transport', 'waste', 'refrigerants'].forEach((cat) => {
+        const items = byCategory[cat];
+        if (!items.length) return;
+        items.sort((a, b) => a.label.localeCompare(b.label));
+        const group = document.createElement('div');
+        group.className = 'conversion-factor-group';
+        const h3 = document.createElement('h3');
+        h3.textContent = titles[cat].en;
+        h3.setAttribute('data-en', titles[cat].en);
+        h3.setAttribute('data-pt', titles[cat].pt);
+        group.appendChild(h3);
+        items.forEach(({ key, label }) => {
+            const labelEl = document.createElement('label');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'conversion-factor-checkbox';
+            cb.dataset.factorKey = key;
+            cb.checked = true;
+            labelEl.appendChild(cb);
+            labelEl.appendChild(document.createTextNode(` ${label}`));
+            group.appendChild(labelEl);
+        });
+        host.appendChild(group);
+    });
+}
+
 /**
- * Merge GET /api/factors payload into CONVERSION_FACTORS without breaking UK/BRAZIL keys expected by the UI.
+ * Merge GET /api/factors (global catalog) into CONVERSION_FACTORS for the UI.
+ * Catalog is not scoped per organization — same factors for every account.
  */
-function mergeApiOrganizationFactors(apiDocs) {
+function mergeApiCatalogFactors(apiDocs) {
     if (!Array.isArray(apiDocs) || apiDocs.length === 0) return;
     const merged = JSON.parse(JSON.stringify(CONVERSION_FACTORS));
     apiDocs.forEach((doc) => {
@@ -328,19 +556,25 @@ function mergeApiOrganizationFactors(apiDocs) {
         const uiCountry = apiDocCountryKeyToUiCountry(doc.country_key);
         const year = String(apiDocCountryKeyToYear(doc.country_key));
         if (uiCountry) {
-            const defaults = (DEFAULT_CONVERSION_FACTORS[uiCountry] || {})[year] || {};
             if (!merged[uiCountry]) merged[uiCountry] = {};
-            const combined = { ...defaults, ...(merged[uiCountry][year] || {}), ...uiFlat };
-            merged[uiCountry][year] = sanitizeMergedCountryFactors(combined, defaults);
+            const prior = merged[uiCountry][year] || {};
+            merged[uiCountry][year] = sanitizeMergedCountryFactors({ ...prior, ...uiFlat }, prior);
         } else {
             const ck = String(doc.country_key || '').trim().toUpperCase();
             if (ck) {
                 if (!merged[ck]) merged[ck] = {};
-                merged[ck][year] = { ...(merged[ck][year] || {}), ...uiFlat };
+                const prior = merged[ck][year] || {};
+                merged[ck][year] = sanitizeMergedCountryFactors({ ...prior, ...uiFlat }, prior);
             }
         }
     });
     CONVERSION_FACTORS = merged;
+    rebuildConversionFactorCheckboxes();
+}
+
+/** @deprecated Use mergeApiCatalogFactors */
+function mergeApiOrganizationFactors(apiDocs) {
+    mergeApiCatalogFactors(apiDocs);
 }
 
 /** Drop non-positive / non-numeric overrides so bad imports or zeros never wipe calculations. */
@@ -408,6 +642,7 @@ function getReportingYear() {
 function setReportingYear(year) {
     currentReportingYear = normalizeRowYear(year);
     writeOrgPref('carbonCalcReportingYear', String(currentReportingYear));
+    rebuildConversionFactorCheckboxes();
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
 }
@@ -774,8 +1009,7 @@ function getYearComparison() {
 function setCountry(country) {
     currentCountry = country.toUpperCase();
     writeOrgPref('carbonCalcCountry', currentCountry);
-    
-    // Recalculate all values
+    rebuildConversionFactorCheckboxes();
     calculateAllTotals();
     updateDashboard();
 }
@@ -828,13 +1062,9 @@ function getScopeBreakdown() {
         }
     });
 
-    // If the user disabled specific scopes in "Assessment Scope", zero them out.
-    const scope1El = document.getElementById('scope1EnabledInput');
-    const scope2El = document.getElementById('scope2EnabledInput');
-    const scope3El = document.getElementById('scope3EnabledInput');
-    if (scope1El && !scope1El.checked) scope1 = 0;
-    if (scope2El && !scope2El.checked) scope2 = 0;
-    if (scope3El && !scope3El.checked) scope3 = 0;
+    if (readOrgPref('scope1Enabled', 'true') === 'false') scope1 = 0;
+    if (readOrgPref('scope2Enabled', 'true') === 'false') scope2 = 0;
+    if (readOrgPref('scope3Enabled', 'true') === 'false') scope3 = 0;
     
     return {
         scope1: scope1,
@@ -892,8 +1122,14 @@ window.carbonCalc = {
             });
         });
         CONVERSION_FACTORS = sanitized;
+        rebuildConversionFactorCheckboxes();
     },
+    mergeApiCatalogFactors,
     mergeApiOrganizationFactors,
+    getCatalogEmissionOptions,
+    rebuildConversionFactorCheckboxes,
+    getFactorDisplayLabel,
+    inferFactorCategory,
     getConversionFactors: function () {
         return CONVERSION_FACTORS;
     }
