@@ -544,17 +544,27 @@ def _find_user_by_login(users_col, identifier: str):
 
 
 _ALLOWED_ROW_UNITS = {
-    'water': {'m3', 'litres', 'gallons'},
-    'energy': {'kwh', 'mwh', 'gj'},
-    'waste': {'tonnes', 'kg'},
-    'transport': {'km', 'miles'},
-    'refrigerants': {'kg', 'g'},
+    'water': {'m3', 'million_litres', 'litres', 'gallons'},
+    'energy': {'kwh', 'mwh', 'gj', 'mj', 'therms'},
+    'waste': {'tonnes', 'kg', 'lbs'},
+    'transport': {'km', 'miles', 'passenger_km', 'tonne_km', 'night', 'day'},
+    'businessTravel': {'km', 'miles', 'passenger_km', 'tonne_km', 'night', 'day'},
+    'freight': {'km', 'miles', 'passenger_km', 'tonne_km', 'night', 'day'},
+    'staffCommute': {'km', 'miles', 'passenger_km', 'tonne_km', 'night', 'day'},
+    'wfh': {'km', 'miles', 'passenger_km', 'tonne_km', 'night', 'day'},
+    'materials': {'kg', 'tonnes', 'lbs'},
+    'refrigerants': {'kg', 'g', 'lbs'},
 }
 _DEFAULT_ROW_UNIT = {
     'water': 'm3',
     'energy': 'kwh',
     'waste': 'tonnes',
     'transport': 'km',
+    'businessTravel': 'km',
+    'freight': 'tonne_km',
+    'staffCommute': 'km',
+    'wfh': 'day',
+    'materials': 'kg',
     'refrigerants': 'kg',
 }
 

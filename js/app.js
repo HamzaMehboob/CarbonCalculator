@@ -176,6 +176,8 @@ function collectLegacyOrgPreferencesFromLocalStorage() {
 }
 
 let orgPreferencesSaveTimer = null;
+let siteDataSaveTimer = null;
+
 function scheduleOrgPreferencesSave() {
     if (!appState.loggedIn) return;
     if (orgPreferencesSaveTimer) clearTimeout(orgPreferencesSaveTimer);
@@ -185,6 +187,26 @@ function scheduleOrgPreferencesSave() {
     }, 800);
 }
 window.scheduleOrgPreferencesSave = scheduleOrgPreferencesSave;
+
+/** Debounced MongoDB sync for sites (water, energy, all data-input rows). */
+function scheduleSiteDataSave() {
+    if (!appState.loggedIn) return;
+    if (siteDataSaveTimer) clearTimeout(siteDataSaveTimer);
+    siteDataSaveTimer = setTimeout(() => {
+        siteDataSaveTimer = null;
+        saveUserDataToBackend();
+    }, 1000);
+}
+window.scheduleSiteDataSave = scheduleSiteDataSave;
+
+function flushSiteDataSave() {
+    if (siteDataSaveTimer) {
+        clearTimeout(siteDataSaveTimer);
+        siteDataSaveTimer = null;
+    }
+    return saveUserDataToBackend();
+}
+window.flushSiteDataSave = flushSiteDataSave;
 
 function createDefaultSitesState(companyName) {
     const name = companyName || 'My Company';
@@ -916,9 +938,32 @@ async function loadUserDataFromBackend() {
                 data.org_preferences?.companyName ||
                 localStorage.getItem('companyName') ||
                 'My Company';
-            appState.sites = (data.sites && Object.keys(data.sites).length > 0)
-                ? data.sites
-                : createDefaultSitesState(companyName);
+            const serverSites = data.sites && typeof data.sites === 'object' ? data.sites : {};
+            const hasServerSites = Object.keys(serverSites).length > 0;
+            if (hasServerSites) {
+                appState.sites = serverSites;
+            } else {
+                const orgId = data.organization_id || localStorage.getItem('organizationId') || 'default';
+                const localKey = `carbonCalcSites_${orgId}`;
+                const localRaw = localStorage.getItem(localKey);
+                let migratedFromLocal = false;
+                if (localRaw) {
+                    try {
+                        const localSites = JSON.parse(localRaw);
+                        if (localSites && typeof localSites === 'object' && Object.keys(localSites).length > 0) {
+                            appState.sites = localSites;
+                            migratedFromLocal = true;
+                        }
+                    } catch (_e) {
+                        /* ignore */
+                    }
+                }
+                if (!migratedFromLocal) {
+                    appState.sites = createDefaultSitesState(companyName);
+                } else {
+                    scheduleSiteDataSave();
+                }
+            }
             saveSitesToLocalStorage();
             rebuildSitesUIFromState();
             sitesLoaded = true;
@@ -982,31 +1027,43 @@ async function syncOrganizationDataFromServer() {
     }
 }
 
-async function saveUserDataToBackend() {
-    if (!appState.loggedIn) return;
-    
+async function saveUserDataToBackend(options) {
+    if (!appState.loggedIn) return false;
+
     const token = getActiveAuthToken();
-    if (!token) return;
-    
+    if (!token) return false;
+
+    const keepalive = options && options.keepalive === true;
+    const payload = JSON.stringify({
+        sites: appState.sites,
+        org_preferences: window.OrgPreferences?.collectOrgPreferencesFromDOM
+            ? window.OrgPreferences.collectOrgPreferencesFromDOM()
+            : {},
+    });
+
     try {
         const response = await fetch(`${API_BASE_URL}/data`, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({
-                sites: appState.sites,
-                org_preferences: window.OrgPreferences?.collectOrgPreferencesFromDOM
-                    ? window.OrgPreferences.collectOrgPreferencesFromDOM()
-                    : {},
-            })
+            body: payload,
+            keepalive,
         });
         if (response.status === 401) {
             forceLogoutForExpiredSession(true);
+            return false;
         }
+        if (!response.ok) {
+            const errBody = await response.text().catch(() => '');
+            console.error('Failed to save organization data:', response.status, errBody);
+            return false;
+        }
+        return true;
     } catch (err) {
         console.error('Error saving data to backend:', err);
+        return false;
     }
 }
 
@@ -1245,6 +1302,7 @@ function addSiteToList(siteId, siteName) {
         if (appState.sites[siteId]) {
             appState.sites[siteId].name = newName;
             saveSitesToLocalStorage();
+            scheduleSiteDataSave();
         }
     });
     nameInput.addEventListener('keypress', function(e) {
@@ -1268,11 +1326,12 @@ function addSiteToList(siteId, siteName) {
 }
 
 function switchSite(siteId) {
-    // Save current site data before switching
+    // Save current site data before switching and sync to MongoDB
     if (appState.currentSite) {
         saveCurrentSiteData();
+        flushSiteDataSave();
     }
-    
+
     appState.currentSite = siteId;
     
     document.querySelectorAll('.site-item').forEach(item => {
@@ -1697,6 +1756,7 @@ function deleteRow(button) {
         : 'Excluir esta linha?')) {
         button.closest('tr').remove();
         calculateAllTotals();
+        saveCurrentSiteData();
     }
 }
 
@@ -2032,6 +2092,7 @@ function saveCurrentSiteData() {
     }
     
     saveSitesToLocalStorage();
+    scheduleSiteDataSave();
 }
 
 function updateTabQuestionUI(category) {
@@ -2524,6 +2585,7 @@ document.getElementById('companyNotes')?.addEventListener('input', function() {
     if (appState.currentSite && appState.sites[appState.currentSite]) {
         appState.sites[appState.currentSite].notes = notes;
         saveSitesToLocalStorage();
+        scheduleSiteDataSave();
     }
 });
 
@@ -2533,6 +2595,7 @@ document.getElementById('companyNotes')?.addEventListener('blur', function() {
     if (appState.currentSite && appState.sites[appState.currentSite]) {
         appState.sites[appState.currentSite].notes = notes;
         saveSitesToLocalStorage();
+        scheduleSiteDataSave();
     }
 });
 
@@ -2959,11 +3022,10 @@ window.generateQaSummary = generateQaSummary;
 window.copyQaSummary = copyQaSummary;
 
 // Prevent data loss on page unload
-window.addEventListener('beforeunload', function(e) {
-    if (appState.loggedIn) {
-        saveCurrentSiteData();
-        saveUserDataToBackend(); // Attempt background sync
-    }
+window.addEventListener('beforeunload', function() {
+    if (!appState.loggedIn) return;
+    saveCurrentSiteData();
+    flushSiteDataSave();
 });
 
 
