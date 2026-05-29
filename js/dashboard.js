@@ -16,6 +16,16 @@ function _chartTheme() {
 }
 
 const CHART_PREFS_KEY = 'carbonChartPreferences';
+const BAR_CHART_YEAR_MIN = 2020;
+const BAR_CHART_YEAR_MAX = 2025;
+
+function getBarChartYearLabels() {
+    const years = [];
+    for (let y = BAR_CHART_YEAR_MIN; y <= BAR_CHART_YEAR_MAX; y++) {
+        years.push(String(y));
+    }
+    return years;
+}
 const CATEGORY_COLOR_PALETTE = [
     '#0EA5E9', '#F59E0B', '#16A34A', '#DC2626', '#64748B', '#6610F2', '#FD7E14', '#20C997', '#E83E8C',
 ];
@@ -28,6 +38,49 @@ const CHART_MODAL_TITLES = {
     lineChart: { en: 'Monthly Emissions Trend (Total)', pt: 'Tendência Mensal (Total)' },
     sourceTrendChart: { en: 'Monthly Trend by Source (All)', pt: 'Tendência por fonte (todas)' },
 };
+
+/** Preset font stacks for chart.js (labels, axes, legend). */
+const CHART_FONT_OPTIONS = [
+    {
+        value: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+        labelEn: 'System UI',
+        labelPt: 'Sistema (UI)',
+    },
+    { value: 'Inter, Arial, sans-serif', labelEn: 'Inter', labelPt: 'Inter' },
+    { value: "Arial, Helvetica, sans-serif", labelEn: 'Arial', labelPt: 'Arial' },
+    { value: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", labelEn: 'Segoe UI', labelPt: 'Segoe UI' },
+    { value: 'Roboto, Arial, sans-serif', labelEn: 'Roboto', labelPt: 'Roboto' },
+    { value: "Verdana, Geneva, sans-serif", labelEn: 'Verdana', labelPt: 'Verdana' },
+    { value: 'Tahoma, Geneva, sans-serif', labelEn: 'Tahoma', labelPt: 'Tahoma' },
+    { value: "'Trebuchet MS', Helvetica, sans-serif", labelEn: 'Trebuchet MS', labelPt: 'Trebuchet MS' },
+    { value: "Georgia, 'Times New Roman', serif", labelEn: 'Georgia', labelPt: 'Georgia' },
+    { value: "'Times New Roman', Times, serif", labelEn: 'Times New Roman', labelPt: 'Times New Roman' },
+    { value: "'Courier New', Courier, monospace", labelEn: 'Courier New', labelPt: 'Courier New' },
+];
+
+function escapeHtmlAttr(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;');
+}
+
+function buildChartFontFamilySelectHtml(selectedValue) {
+    const selected = selectedValue || getChartPrefs().fontFamily;
+    const pt = appState.currentLanguage === 'pt';
+    const isKnown = CHART_FONT_OPTIONS.some((o) => o.value === selected);
+    let optionsHtml = '';
+    if (selected && !isKnown) {
+        const customLabel = pt ? 'Personalizado' : 'Custom';
+        optionsHtml += `<option value="${escapeHtmlAttr(selected)}" selected>${customLabel}</option>`;
+    }
+    CHART_FONT_OPTIONS.forEach((opt) => {
+        const label = pt ? opt.labelPt : opt.labelEn;
+        const sel = opt.value === selected ? ' selected' : '';
+        optionsHtml += `<option value="${escapeHtmlAttr(opt.value)}"${sel}>${escapeHtmlAttr(label)}</option>`;
+    });
+    return `<select id="chartFontFamily">${optionsHtml}</select>`;
+}
 
 function getChartPrefs() {
     const defaults = {
@@ -187,15 +240,17 @@ function buildChartStyleFormHtml(chartId) {
                 <input type="color" id="chartFillColor" value="${cfg.fillColor}">
             </label>`;
         if (chartId === 'barChart') {
-            const yearComparison = window.carbonCalc?.getYearComparison?.() || {};
-            const years = Object.keys(yearComparison).sort();
-            const stored = prefs.charts.barChart?.colors || defaultPaletteColors(years.length || 2);
+            const years = getBarChartYearLabels();
+            const stored = prefs.charts.barChart?.colors || defaultPaletteColors(years.length);
+            const barYears = prefs.charts.barChart?.barYears || years;
             colorSection += `<p style="margin:12px 0 8px;font-size:13px;color:var(--text-secondary);">Bar colors by year</p>`;
             years.forEach((year, idx) => {
+                const storedIdx = barYears.indexOf(year);
+                const val = storedIdx >= 0 ? stored[storedIdx] : defaultPaletteColors(years.length)[idx];
                 colorSection += `
                     <div class="chart-style-color-row">
                         <span>${year}</span>
-                        <input type="color" data-bar-year="${year}" value="${stored[idx] || defaultPaletteColors(years.length)[idx]}">
+                        <input type="color" data-bar-year="${year}" value="${val}">
                     </div>`;
             });
         }
@@ -208,8 +263,8 @@ function buildChartStyleFormHtml(chartId) {
   return `
         ${globalNote}
         <div class="chart-style-form">
-            <label>Font family
-                <input type="text" id="chartFontFamily" value="${cfg.fontFamily || prefs.fontFamily}" placeholder="Inter, Arial, sans-serif">
+            <label>${appState.currentLanguage === 'pt' ? 'Família de fonte' : 'Font family'}
+                ${buildChartFontFamilySelectHtml(cfg.fontFamily || prefs.fontFamily)}
             </label>
             <label>Font size
                 <input type="number" id="chartFontSize" min="10" max="20" value="${cfg.fontSize ?? prefs.fontSize}">
@@ -591,53 +646,8 @@ function updateBarChart() {
     }
     
     const yearComparison = window.carbonCalc.getYearComparison();
-    let years = Object.keys(yearComparison).sort((a, b) => parseInt(a) - parseInt(b)); // Sort years (ascending)
-
-    // Prefer spreadsheet "2024 Results Graphs" (2024 vs 2023) when present.
-    const has2024 = yearComparison[2024] !== undefined;
-    const has2023 = yearComparison[2023] !== undefined;
-    if (has2024 || has2023) {
-        const preferred = [];
-        if (has2023) preferred.push('2023');
-        if (has2024) preferred.push('2024');
-        years = preferred;
-
-        // If only one preferred year is available, fall back to the closest other year.
-        if (years.length < 2) {
-            const preferredNums = years.map(y => parseInt(y));
-            const remaining = Object.keys(yearComparison)
-                .map(y => parseInt(y))
-                .filter(y => !preferredNums.includes(y))
-                .sort((a, b) => a - b);
-            if (remaining.length > 0) {
-                // Take the nearest previous year (smaller than preferred latest), otherwise just the first.
-                const latestPreferred = Math.max.apply(null, preferredNums);
-                const candidate = remaining.filter(y => y < latestPreferred).pop() ?? remaining[0];
-                years.push(String(candidate));
-                years = years.sort((a, b) => parseInt(a) - parseInt(b));
-            }
-        }
-    }
-
-    const values = years.map(year => yearComparison[year] || 0); // Get values in same order
-    
-    // Debug logging
-    console.log('Year Comparison Data:', yearComparison);
-    console.log('Years:', years);
-    console.log('Values:', values);
-    
-    // Ensure we have at least some data
-    if (years.length === 0 || values.length === 0) {
-        console.log('No year data found for bar chart');
-        // Create default data
-        const currentYear = new Date().getFullYear();
-        years.push(currentYear.toString());
-        values.push(0);
-        if (currentYear > 2020) {
-            years.push((currentYear - 1).toString());
-            values.push(0);
-        }
-    }
+    const years = getBarChartYearLabels();
+    const values = years.map((year) => yearComparison[year] || 0);
     
     let colors = barCfg.colors?.length === years.length
         ? barCfg.colors
