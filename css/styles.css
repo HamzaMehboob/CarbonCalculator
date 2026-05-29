@@ -911,9 +911,49 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 0;
     font-size: 13px;
     color: var(--text-secondary);
+}
+
+.conversion-factor-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.conversion-factor-row:last-child {
+    border-bottom: none;
+}
+
+.conversion-factor-label-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.conversion-factor-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.conversion-factor-unit {
+    flex-shrink: 0;
+    min-width: 88px;
+    max-width: 120px;
+    padding: 4px 6px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
 }
 
 .assessment-scope-extras,
@@ -1698,6 +1738,14 @@ body {
 
 .assessment-scope-table th:nth-child(3) {
     width: 200px;
+}
+
+.assessment-scope-table--no-unit th:nth-child(2) {
+    width: 280px;
+}
+
+.assessment-scope-table--no-unit .assessment-scope-value-cell {
+    min-width: 200px;
 }
 
 .assessment-scope-table td {

@@ -589,8 +589,12 @@ function getDefaultFactorUnit(factorKey) {
 
 function syncDataInputRowsForFactor(factorKey, unitValue) {
     if (!factorKey || !unitValue || unitValue === 'none') return;
-    const category = inferFactorCategory(factorKey);
-    const table = document.getElementById(`${category}Table`);
+    const dataCategory =
+        typeof window.dataCategoryForEmissionKey === 'function'
+            ? window.dataCategoryForEmissionKey(factorKey)
+            : 'transport';
+    const unitCategory = resolveUnitCategory(dataCategory);
+    const table = document.getElementById(`${dataCategory}Table`);
     if (!table) return;
     table.querySelectorAll('tr.data-row').forEach((row) => {
         const emissionSel = row.querySelector('.emission-select');
@@ -655,6 +659,16 @@ function createConversionFactorUnitSelect(factorKey) {
     }
     bindConversionFactorUnitSelect(select);
     return select;
+}
+
+function syncAllDataInputRowsFromFactorUnits() {
+    document.querySelectorAll('.conversion-factor-unit').forEach((sel) => {
+        const factorKey = sel.dataset.factorKey;
+        if (!factorKey || !sel.value) return;
+        const stored = readOrgPref(factorUnitStorageKey(factorKey), '');
+        if (!stored || stored === 'none') return;
+        syncDataInputRowsForFactor(factorKey, sel.value);
+    });
 }
 
 function rebuildConversionFactorCheckboxes() {
@@ -789,6 +803,20 @@ let currentCountry = 'UK';
 let currentOutputUnit = readOrgPref('carbonCalcOutputUnit', 'tCO2e');
 let currentReportingYear = Number(readOrgPref('carbonCalcReportingYear', String(BASE_YEAR)));
 
+function getDataInputCategories() {
+    if (Array.isArray(window.DATA_INPUT_CATEGORIES) && window.DATA_INPUT_CATEGORIES.length) {
+        return window.DATA_INPUT_CATEGORIES;
+    }
+    return ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+}
+
+function resolveUnitCategory(dataCategory) {
+    if (typeof window.resolveUnitCategoryForDataTab === 'function') {
+        return window.resolveUnitCategoryForDataTab(dataCategory);
+    }
+    return dataCategory;
+}
+
 function resolveCategoryFromTableId(tableId) {
     if (!tableId) return '';
     return String(tableId).replace('Table', '');
@@ -831,6 +859,36 @@ function getOutputUnit() {
     return currentOutputUnit === 'kgCO2e' ? 'kgCO2e' : 'tCO2e';
 }
 
+function getOutputUnitDisplayLabel() {
+    return getOutputUnit() === 'kgCO2e' ? 'kgCO₂e' : 'tCO₂e';
+}
+
+function getEmissionsColumnHeaderText(lang) {
+    const unit = getOutputUnitDisplayLabel();
+    if (lang === 'pt') return `Emissões (${unit})`;
+    return `Emissions (${unit})`;
+}
+
+function refreshEmissionsUnitLabels() {
+    const lang = window.appState?.currentLanguage || 'en';
+    const headerEn = getEmissionsColumnHeaderText('en');
+    const headerPt = getEmissionsColumnHeaderText('pt');
+    const headerText = lang === 'pt' ? headerPt : headerEn;
+
+    document.querySelectorAll('.emissions-col-header').forEach((th) => {
+        th.textContent = headerText;
+        th.setAttribute('data-en', headerEn);
+        th.setAttribute('data-pt', headerPt);
+    });
+
+    const previewHeader = document.getElementById('inputEmissionsPreviewEmissionsHeader');
+    if (previewHeader) {
+        previewHeader.textContent = headerText;
+        previewHeader.setAttribute('data-en', headerEn);
+        previewHeader.setAttribute('data-pt', headerPt);
+    }
+}
+
 let outputUnitSyncDepth = 0;
 
 function setOutputUnit(unit) {
@@ -847,8 +905,10 @@ function setOutputUnit(unit) {
     } finally {
         outputUnitSyncDepth -= 1;
     }
+    refreshEmissionsUnitLabels();
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof updateInputEmissionsPreview === 'function') updateInputEmissionsPreview();
 }
 
 function formatTonnesForDisplay(tonnes, decimals = 3) {
@@ -914,9 +974,10 @@ function sourceToggleEnabled(sourceKey) {
 
 function getInputRowBaseTotal(row, category) {
     const rowUnit = row.querySelector('.row-unit-select')?.value || '';
+    const unitCategory = resolveUnitCategory(category);
     let total = 0;
     row.querySelectorAll('.month-input').forEach((input) => {
-        total += toBaseUnitValue(category, rowUnit, parseFloat(input.value) || 0);
+        total += toBaseUnitValue(unitCategory, rowUnit, parseFloat(input.value) || 0);
     });
     return total;
 }
@@ -970,10 +1031,11 @@ function calculateRowTotal(row) {
     
     const table = row.closest('table');
     const category = resolveCategoryFromTableId(table?.id);
+    const unitCategory = resolveUnitCategory(category);
     const rowUnit = row.querySelector('.row-unit-select')?.value || '';
     monthInputs.forEach(input => {
         const value = parseFloat(input.value) || 0;
-        total += toBaseUnitValue(category, rowUnit, value);
+        total += toBaseUnitValue(unitCategory, rowUnit, value);
     });
     
     const totalCell = row.querySelector('.total-cell');
@@ -1029,9 +1091,9 @@ function calculateCategoryTotal(table) {
 }
 
 function calculateAllTotals() {
-    const tables = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    const tables = getDataInputCategories();
     let grandTotal = 0;
-    
+
     tables.forEach(category => {
         const table = document.getElementById(`${category}Table`);
         if (table) {
@@ -1043,7 +1105,7 @@ function calculateAllTotals() {
             grandTotal += categoryTotal;
         }
     });
-    
+
     return grandTotal;
 }
 
@@ -1052,14 +1114,11 @@ function calculateAllTotals() {
 // ============================================
 
 function getCategoryTotals() {
-    const totals = {
-        water: 0,
-        energy: 0,
-        waste: 0,
-        transport: 0,
-        refrigerants: 0
-    };
-    
+    const totals = {};
+    getDataInputCategories().forEach((category) => {
+        totals[category] = 0;
+    });
+
     Object.keys(totals).forEach(category => {
         const table = document.getElementById(`${category}Table`);
         if (table) {
@@ -1071,7 +1130,7 @@ function getCategoryTotals() {
             });
         }
     });
-    
+
     return totals;
 }
 
@@ -1081,12 +1140,12 @@ function getCategoryTotals() {
 
 function getMonthlyTotals() {
     const monthlyData = Array(12).fill(0);
-    
-    const tables = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
-    
+    const tables = getDataInputCategories();
+
     tables.forEach(category => {
         const table = document.getElementById(`${category}Table`);
         if (table) {
+            const unitCategory = resolveUnitCategory(category);
             const rows = table.querySelectorAll('.data-row');
             rows.forEach(row => {
                 const monthInputs = row.querySelectorAll('.month-input');
@@ -1096,30 +1155,31 @@ function getMonthlyTotals() {
                 monthInputs.forEach((input, index) => {
                     const value = parseFloat(input.value) || 0;
                     const rowUnit = row.querySelector('.row-unit-select')?.value || '';
-                    const baseValue = toBaseUnitValue(category, rowUnit, value);
+                    const baseValue = toBaseUnitValue(unitCategory, rowUnit, value);
                     const co2e = (baseValue * conversionFactor) / 1000;
                     monthlyData[index] += co2e;
                 });
             });
         }
     });
-    
+
     return monthlyData;
 }
 
 function getMonthlyTotalsByCategory() {
-    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    const categories = getDataInputCategories();
     const result = {};
     categories.forEach((category) => {
         result[category] = Array(12).fill(0);
         const table = document.getElementById(`${category}Table`);
         if (!table) return;
+        const unitCategory = resolveUnitCategory(category);
         table.querySelectorAll('.data-row').forEach((row) => {
             if (!rowMatchesReportingYear(row)) return;
             const conversionFactor = getRowConversionFactor(row, `${category}Table`);
             const rowUnit = row.querySelector('.row-unit-select')?.value || '';
             row.querySelectorAll('.month-input').forEach((input, idx) => {
-                const baseValue = toBaseUnitValue(category, rowUnit, parseFloat(input.value) || 0);
+                const baseValue = toBaseUnitValue(unitCategory, rowUnit, parseFloat(input.value) || 0);
                 result[category][idx] += (baseValue * conversionFactor) / 1000;
             });
         });
@@ -1137,8 +1197,8 @@ function getYearComparison() {
     // First, ensure all rows are calculated
     calculateAllTotals();
     
-    const tables = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
-    
+    const tables = getDataInputCategories();
+
     tables.forEach(category => {
         const table = document.getElementById(`${category}Table`);
         if (table) {
@@ -1241,8 +1301,8 @@ function getScopeBreakdown() {
     let scope2 = 0; // Indirect energy: electricity
     let scope3 = 0; // Other indirect: water, waste, transport (flights)
     
-    const tables = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
-    
+    const tables = getDataInputCategories();
+
     tables.forEach(category => {
         const table = document.getElementById(`${category}Table`);
         if (table) {
@@ -1312,6 +1372,8 @@ window.carbonCalc = {
     getScopeBreakdown,
     setOutputUnit,
     getOutputUnit,
+    getOutputUnitDisplayLabel,
+    refreshEmissionsUnitLabels,
     setReportingYear,
     getReportingYear,
     formatTonnesForDisplay,
@@ -1346,6 +1408,7 @@ window.carbonCalc = {
     getFactorUnitOptions,
     getDefaultFactorUnit,
     syncDataInputRowsForFactor,
+    syncAllDataInputRowsFromFactorUnits,
     inferFactorCategory,
     inferFactorAssessmentSubgroup,
     getConversionFactors: function () {

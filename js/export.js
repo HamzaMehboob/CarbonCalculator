@@ -114,8 +114,13 @@ function exportToPDF() {
         { name: 'Water', key: 'water', color: [19, 181, 234] },
         { name: 'Energy', key: 'energy', color: [255, 193, 7] },
         { name: 'Waste', key: 'waste', color: [40, 167, 69] },
-        { name: 'Transport', key: 'transport', color: [220, 53, 69] },
-        { name: 'Refrigerants', key: 'refrigerants', color: [108, 117, 125] }
+        { name: 'Company fleet', key: 'transport', color: [220, 53, 69] },
+        { name: 'Business travel', key: 'businessTravel', color: [111, 66, 193] },
+        { name: 'Freighting goods', key: 'freight', color: [253, 126, 20] },
+        { name: 'Staff commute', key: 'staffCommute', color: [32, 201, 151] },
+        { name: 'Working from home', key: 'wfh', color: [13, 110, 253] },
+        { name: 'Materials', key: 'materials', color: [102, 16, 242] },
+        { name: 'Refrigerants', key: 'refrigerants', color: [108, 117, 125] },
     ];
     
     categories.forEach(cat => {
@@ -331,7 +336,7 @@ function exportToExcel() {
     XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
     
     // Export each category as a separate sheet
-    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    const categories = _getExportCategories();
     
     categories.forEach(category => {
         const table = document.getElementById(`${category}Table`);
@@ -737,13 +742,27 @@ function _formatKg(num) {
     return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function _getExportCategories() {
+    return window.DATA_INPUT_CATEGORIES || [
+        'water', 'energy', 'waste', 'transport', 'businessTravel', 'freight',
+        'staffCommute', 'wfh', 'materials', 'refrigerants',
+    ];
+}
+
 function _unitForCategory(categoryKey) {
     switch (categoryKey) {
         case 'water': return 'm³';
         case 'energy': return 'kWh';
         case 'waste': return 'tonnes';
-        case 'transport': return 'km';
-        case 'refrigerants': return 'kg';
+        case 'transport':
+        case 'businessTravel':
+        case 'staffCommute':
+            return 'km';
+        case 'freight': return 'tonne-km';
+        case 'wfh': return 'days';
+        case 'materials':
+        case 'refrigerants':
+            return 'kg';
         default: return '';
     }
 }
@@ -753,8 +772,14 @@ function _categoryLabel(categoryKey) {
         water: 'Water',
         energy: 'Energy',
         waste: 'Waste',
-        transport: 'Transport',
+        transport: 'Company fleet',
+        businessTravel: 'Business travel',
+        freight: 'Freighting goods',
+        staffCommute: 'Staff commute',
+        wfh: 'Working from home',
+        materials: 'Materials',
         refrigerants: 'Refrigerants',
+    };
     };
     return map[categoryKey] || categoryKey;
 }
@@ -809,6 +834,16 @@ function printConversionFactorsReportPDF() {
         : (window.carbonCalc.getConversionFactors()[countryKey] || {})[String(reportYear)] || {};
 
     const unitByKey = (key) => {
+        let inputUnit = '';
+        const unitSel = document.querySelector(
+            `.conversion-factor-unit[data-factor-key="${CSS.escape(key)}"]`
+        );
+        if (unitSel?.value) {
+            inputUnit = unitSel.options[unitSel.selectedIndex]?.textContent || unitSel.value;
+        } else if (window.carbonCalc?.getDefaultFactorUnit) {
+            inputUnit = window.carbonCalc.getDefaultFactorUnit(key);
+        }
+        if (inputUnit) return `kg CO2e per ${inputUnit}`;
         if (key === 'water' || key === 'wastewater') return 'kg CO2e per m³';
         if (key === 'electricity' || key === 'naturalGas' || key === 'diesel') return 'kg CO2e per kWh';
         if (key === 'waste' || key === 'wasteRecycled' || key === 'waste_composted') return 'kg CO2e per tonne';
@@ -897,7 +932,7 @@ function printInputDataSummaryPDF() {
 
     yPos += 10;
 
-    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    const categories = _getExportCategories();
 
     categories.forEach((catKey, catIdx) => {
         const table = document.getElementById(`${catKey}Table`);
@@ -981,7 +1016,7 @@ function printInputEmissionsReportPDF() {
 
     const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
+    const categories = _getExportCategories();
     categories.forEach((catKey, catIdx) => {
         const table = document.getElementById(`${catKey}Table`);
         if (!table) return;

@@ -3,6 +3,27 @@
 // Main Application Logic
 // ============================================
 
+const DEFAULT_DATA_INPUT_KEYS = [
+    'water', 'energy', 'waste', 'transport', 'businessTravel', 'freight',
+    'staffCommute', 'wfh', 'materials', 'refrigerants',
+];
+
+function createEmptySiteData() {
+    const keys =
+        Array.isArray(window.DATA_INPUT_CATEGORIES) && window.DATA_INPUT_CATEGORIES.length
+            ? window.DATA_INPUT_CATEGORIES
+            : DEFAULT_DATA_INPUT_KEYS;
+    const data = {};
+    keys.forEach((key) => {
+        data[key] = [];
+    });
+    return data;
+}
+
+function getDataInputCategoryList() {
+    return window.DATA_INPUT_CATEGORIES || DEFAULT_DATA_INPUT_KEYS;
+}
+
 // Global State
 const appState = {
     currentLanguage: 'en',
@@ -14,13 +35,7 @@ const appState = {
             name: 'Headquarters',
             companyName: 'My Company',
             notes: '',
-            data: {
-                water: [],
-                energy: [],
-                waste: [],
-                transport: [],
-                refrigerants: []
-            },
+            data: createEmptySiteData(),
             financials: {
                 bankBalance: 0,
                 savingsBalance: 0,
@@ -50,8 +65,13 @@ const TAB_QUESTION_PROMPTS = {
     water: 'Water tab: include meter source, estimated readings, and any anomalies.',
     energy: 'Energy tab: include billing period type (calendar/financial), tariff notes, and kWh data source.',
     waste: 'Waste tab: include weighing source, uplift frequency, and conversion assumptions.',
-    transport: 'Transport tab: include business/staff travel assumptions and mileage evidence source.',
-    refrigerants: 'Refrigerants tab: include top-up records, service sheets, and gas type evidence.'
+    transport: 'Company fleet tab: include vehicle types, mileage evidence, and fuel card data sources.',
+    businessTravel: 'Business travel tab: include flights, rail, hotel stays, and expense report sources.',
+    freight: 'Freighting goods tab: include tonne-km or shipment records and carrier data.',
+    staffCommute: 'Staff commute tab: include survey method, average distances, and working days.',
+    wfh: 'Working from home tab: include remote working days/hours and occupancy assumptions.',
+    materials: 'Materials tab: include purchase records, weights, and material types.',
+    refrigerants: 'Refrigerants tab: include top-up records, service sheets, and gas type evidence.',
 };
 const QA_CHECKLIST_KEY = 'qaChecklistState';
 const QA_ALLOWED_EMAIL = 'rd.hamza@isys.sa';
@@ -173,7 +193,7 @@ function createDefaultSitesState(companyName) {
             name: 'Headquarters',
             companyName: name,
             notes: '',
-            data: { water: [], energy: [], waste: [], transport: [], refrigerants: [] },
+            data: createEmptySiteData(),
             financials: {
                 bankBalance: 0,
                 savingsBalance: 0,
@@ -244,6 +264,9 @@ function bindAssessmentScopeExtras() {
 
     if (window.carbonCalc?.rebuildConversionFactorCheckboxes) {
         window.carbonCalc.rebuildConversionFactorCheckboxes();
+    }
+    if (window.carbonCalc?.syncAllDataInputRowsFromFactorUnits) {
+        window.carbonCalc.syncAllDataInputRowsFromFactorUnits();
     }
 }
 window.bindAssessmentScopeExtras = bindAssessmentScopeExtras;
@@ -383,9 +406,8 @@ async function getChatbotReply(message) {
 }
 
 function detectAnomaliesSummary() {
-    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
     const issues = [];
-    categories.forEach((cat) => {
+    getDataInputCategoryList().forEach((cat) => {
         const table = document.getElementById(`${cat}Table`);
         if (!table) return;
         table.querySelectorAll('.data-row').forEach((row, idx) => {
@@ -423,6 +445,11 @@ const CATEGORY_DEFAULT_UNITS = {
     energy: 'kwh',
     waste: 'tonnes',
     transport: 'km',
+    businessTravel: 'km',
+    freight: 'tonne_km',
+    staffCommute: 'km',
+    wfh: 'day',
+    materials: 'kg',
     refrigerants: 'kg',
 };
 
@@ -1042,7 +1069,7 @@ function setActiveTab(tabName) {
         if (window.renderInvoicesTable) {
             window.renderInvoicesTable();
         }
-    } else if (['water', 'energy', 'waste', 'transport', 'refrigerants'].includes(tabName)) {
+    } else if (getDataInputCategoryList().includes(tabName)) {
         updateTabQuestionUI(tabName);
     }
 }
@@ -1129,13 +1156,7 @@ document.getElementById('addSiteBtn')?.addEventListener('click', function() {
             name: siteName.trim(),
             companyName: localStorage.getItem('companyName') || 'My Company',
             notes: localStorage.getItem('companyNotes') || '',
-            data: {
-                water: [],
-                energy: [],
-                waste: [],
-                transport: [],
-                refrigerants: []
-            },
+            data: createEmptySiteData(),
             financials: {
                 bankBalance: 0,
                 savingsBalance: 0,
@@ -1337,20 +1358,22 @@ function resetAccountsData() {
 
 function addDataRow(category) {
     const table = document.getElementById(`${category}Table`);
+    if (!table) return;
     const tbody = table.querySelector('tbody');
-    
+
     const row = document.createElement('tr');
     row.className = 'data-row';
-    
-    // Build emission type selector based on category
+
+    const meta = window.DATA_TAB_META?.[category];
     const reportYear = window.carbonCalc?.getReportingYear?.() || 2025;
-    const emissionSelectHtml = getEmissionSelectHtml(category, null, reportYear);
-    const defaultEmissionKey = null;
+    const defaultEmissionKey = meta?.defaultEmission || null;
+    const emissionSelectHtml = getEmissionSelectHtml(category, defaultEmissionKey, reportYear);
     const defaultUnit = getPreferredUnitForCategory(category, defaultEmissionKey);
+    const placeholder = meta?.placeholder || 'Description';
 
     row.innerHTML = `
         <td>${emissionSelectHtml}</td>
-        <td><input type="text" placeholder="Description"></td>
+        <td><input type="text" placeholder="${placeholder}"></td>
         <td>${getUnitSelectHtml(category, defaultUnit, defaultEmissionKey)}</td>
         <td><input type="number" value="2025" min="2020" max="2030"></td>
         <td><input type="number" step="0.01" min="0" class="month-input" data-month="0"></td>
@@ -1384,8 +1407,12 @@ function addDataRow(category) {
 }
 
 function getPreferredUnitForCategory(category, emissionKey) {
+    const unitCategory =
+        typeof window.resolveUnitCategoryForDataTab === 'function'
+            ? window.resolveUnitCategoryForDataTab(category)
+            : category;
     if (window.AssessmentScopeUnits?.resolvePreferredUnit) {
-        const resolved = window.AssessmentScopeUnits.resolvePreferredUnit(category, emissionKey);
+        const resolved = window.AssessmentScopeUnits.resolvePreferredUnit(unitCategory, emissionKey);
         if (resolved) return resolved;
     }
     const keyMap = {
@@ -1393,18 +1420,32 @@ function getPreferredUnitForCategory(category, emissionKey) {
         energy: 'energyUnit',
         waste: 'wasteUnit',
         transport: 'transportUnit',
+        businessTravel: 'businessTravelUnit',
+        freight: 'businessTravelUnit',
+        staffCommute: 'transportUnit',
+        wfh: 'wfhUnit',
+        materials: 'materialsUnit',
         refrigerants: 'refrigerantsUnit',
     };
-    const key = keyMap[category];
+    const key = keyMap[category] || keyMap[unitCategory];
     if (!key) return CATEGORY_DEFAULT_UNITS[category] || '';
     const scoped =
         typeof getOrgLocalItem === 'function' ? getOrgLocalItem(key, '') : localStorage.getItem(key);
-    return scoped || CATEGORY_DEFAULT_UNITS[category] || '';
+    return scoped || CATEGORY_DEFAULT_UNITS[category] || CATEGORY_DEFAULT_UNITS[unitCategory] || '';
+}
+
+function filterEmissionOptionsForCategory(options, category) {
+    if (typeof window.emissionKeyBelongsToDataCategory !== 'function') return options;
+    return options.filter((opt) => window.emissionKeyBelongsToDataCategory(opt.key, category));
 }
 
 function getUnitSelectHtml(category, selectedUnit, emissionKey) {
+    const unitCategory =
+        typeof window.resolveUnitCategoryForDataTab === 'function'
+            ? window.resolveUnitCategoryForDataTab(category)
+            : category;
     let options;
-    if (category === 'energy' && emissionKey && window.AssessmentScopeUnits?.getEnergyUnitOptions) {
+    if (unitCategory === 'energy' && emissionKey && window.AssessmentScopeUnits?.getEnergyUnitOptions) {
         options = window.AssessmentScopeUnits.getEnergyUnitOptions(emissionKey);
     } else {
         const unitsByCategory = {
@@ -1414,7 +1455,7 @@ function getUnitSelectHtml(category, selectedUnit, emissionKey) {
             transport: [['km', 'km'], ['miles', 'miles'], ['passenger_km', 'passenger-km'], ['tonne_km', 'tonne-km'], ['night', 'night'], ['day', 'day']],
             refrigerants: [['kg', 'kg'], ['g', 'g'], ['lbs', 'lbs']],
         };
-        options = unitsByCategory[category] || [['unit', 'unit']];
+        options = unitsByCategory[unitCategory] || [['unit', 'unit']];
     }
     const normalized = selectedUnit || CATEGORY_DEFAULT_UNITS[category] || options[0][0];
     let html = `<select class="row-unit-select" data-category="${category}">`;
@@ -1427,15 +1468,21 @@ function getUnitSelectHtml(category, selectedUnit, emissionKey) {
 
 // Build emission type dropdown HTML per category (options from conversion_factor_catalog via carbonCalc)
 function getEmissionSelectHtml(category, selectedKey, year) {
+    const catalogCategory =
+        typeof window.resolveUnitCategoryForDataTab === 'function'
+            ? window.resolveUnitCategoryForDataTab(category)
+            : category;
+
     if (window.carbonCalc && typeof window.carbonCalc.getCatalogEmissionOptions === 'function') {
         const catalogOpts = window.carbonCalc.getCatalogEmissionOptions(
-            category,
+            catalogCategory,
             year || (window.carbonCalc.getReportingYear && window.carbonCalc.getReportingYear())
         );
-        if (catalogOpts.length > 0) {
-            const defaultSelected = selectedKey || catalogOpts[0].key;
+        const filtered = filterEmissionOptionsForCategory(catalogOpts, category);
+        if (filtered.length > 0) {
+            const defaultSelected = selectedKey || filtered[0].key;
             let html = `<select class="emission-select" data-category="${category}">`;
-            catalogOpts.forEach((opt) => {
+            filtered.forEach((opt) => {
                 const selectedAttr = opt.key === defaultSelected ? 'selected' : '';
                 html += `<option value="${opt.key}" ${selectedAttr} data-en="${opt.labelEn}" data-pt="${opt.labelPt}">${opt.labelEn}</option>`;
             });
@@ -1561,7 +1608,7 @@ function getEmissionSelectHtml(category, selectedKey, year) {
         ]
     };
 
-    const options = optionsByCategory[category] || [];
+    const options = filterEmissionOptionsForCategory(optionsByCategory[catalogCategory] || [], category);
     const defaultSelected = selectedKey || (options[0] ? options[0].key : '');
 
     let html = `<select class="emission-select" data-category="${category}">`;
@@ -1739,8 +1786,12 @@ function loadSiteData(siteId) {
     const siteNotes = site.notes !== undefined ? site.notes : getOrgLocalItem('companyNotes', '');
     document.getElementById('companyNotes').value = siteNotes;
     
+    if (typeof window.ensureDefaultSiteData === 'function') {
+        window.ensureDefaultSiteData(site);
+    }
+
     // Clear all tables
-    ['water', 'energy', 'waste', 'transport', 'refrigerants'].forEach(category => {
+    getDataInputCategoryList().forEach(category => {
         const table = document.getElementById(`${category}Table`);
         if (table) {
             const tbody = table.querySelector('tbody');
@@ -1803,7 +1854,26 @@ function loadRowData(row, data) {
     if (emissionSelect && data.emissionType) {
         emissionSelect.value = data.emissionType;
     }
-    if (unitSelect && data.unit) {
+    const category = row.closest('table')?.id?.replace(/Table$/, '');
+    const emissionKey = emissionSelect?.value || data.emissionType || null;
+    if (unitSelect && emissionKey && category) {
+        const preferred = getPreferredUnitForCategory(category, emissionKey);
+        const factorUnitKey = `factorUnit_${emissionKey}`;
+        const explicitFactorUnit =
+            typeof getOrgLocalItem === 'function' ? getOrgLocalItem(factorUnitKey, '') : '';
+        if (
+            explicitFactorUnit &&
+            explicitFactorUnit !== 'none' &&
+            preferred &&
+            Array.from(unitSelect.options).some((o) => o.value === preferred)
+        ) {
+            unitSelect.value = preferred;
+        } else if (data.unit && Array.from(unitSelect.options).some((o) => o.value === data.unit)) {
+            unitSelect.value = data.unit;
+        } else if (preferred && Array.from(unitSelect.options).some((o) => o.value === preferred)) {
+            unitSelect.value = preferred;
+        }
+    } else if (unitSelect && data.unit) {
         unitSelect.value = data.unit;
     }
     
@@ -1838,7 +1908,7 @@ function saveCurrentSiteData() {
     }
     
     // Save data for each category
-    ['water', 'energy', 'waste', 'transport', 'refrigerants'].forEach(category => {
+    getDataInputCategoryList().forEach(category => {
         const table = document.getElementById(`${category}Table`);
         if (table) {
             const rows = table.querySelectorAll('.data-row');
@@ -1920,17 +1990,21 @@ function updateInputEmissionsPreview() {
     const body = document.getElementById('inputEmissionsPreviewBody');
     if (!body || !window.carbonCalc?.getRowConversionFactor) return;
 
-    const categories = ['water', 'energy', 'waste', 'transport', 'refrigerants'];
     const categoryLabel = {
         water: 'Water',
         energy: 'Energy',
         waste: 'Waste',
-        transport: 'Transport',
-        refrigerants: 'Refrigerants'
+        transport: 'Company fleet',
+        businessTravel: 'Business travel',
+        freight: 'Freighting goods',
+        staffCommute: 'Staff commute',
+        wfh: 'Working from home',
+        materials: 'Materials',
+        refrigerants: 'Refrigerants',
     };
 
     const lines = [];
-    categories.forEach((category) => {
+    getDataInputCategoryList().forEach((category) => {
         const table = document.getElementById(`${category}Table`);
         if (!table) return;
         table.querySelectorAll('.data-row').forEach((row) => {
@@ -1946,6 +2020,7 @@ function updateInputEmissionsPreview() {
                   );
             const factor = window.carbonCalc.getRowConversionFactor(row, `${category}Table`);
             const kg = inputTotal * factor;
+            const tonnes = kg / 1000;
             lines.push({
                 category: categoryLabel[category] || category,
                 emissionType,
@@ -1953,7 +2028,7 @@ function updateInputEmissionsPreview() {
                 year,
                 inputTotal,
                 factor,
-                kg
+                tonnes,
             });
         });
     });
@@ -1963,7 +2038,11 @@ function updateInputEmissionsPreview() {
         return;
     }
 
-    body.innerHTML = lines.map((line) => `
+    body.innerHTML = lines.map((line) => {
+        const emissionsDisplay = line.factor > 0 && window.carbonCalc?.formatTonnesForDisplay
+            ? window.carbonCalc.formatTonnesForDisplay(line.tonnes)
+            : (line.factor > 0 ? `${line.tonnes.toFixed(3)} tCO₂e` : 'N/A');
+        return `
         <tr>
             <td>${line.category}</td>
             <td>${line.emissionType}</td>
@@ -1971,9 +2050,10 @@ function updateInputEmissionsPreview() {
             <td>${line.year}</td>
             <td>${line.inputTotal.toFixed(2)}</td>
             <td>${line.factor > 0 ? line.factor.toFixed(6).replace(/\.?0+$/, '') : 'N/A'}</td>
-            <td>${line.factor > 0 ? line.kg.toFixed(2) : 'N/A'}</td>
+            <td>${emissionsDisplay}</td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 }
 
 // Open cash transaction modal
@@ -2483,6 +2563,9 @@ async function initializeApp() {
     }
 
     initializeTabs();
+    if (typeof window.initTransportSubTabs === 'function') {
+        window.initTransportSubTabs();
+    }
 
     if (window.AssessmentScopeForm?.init) {
         window.AssessmentScopeForm.init();
@@ -2629,6 +2712,9 @@ async function initializeApp() {
                 });
             }
         }
+        if (window.carbonCalc?.refreshEmissionsUnitLabels) {
+            window.carbonCalc.refreshEmissionsUnitLabels();
+        }
     } catch (err) {
         console.error('Error syncing calculation context controls', err);
     }
@@ -2762,6 +2848,9 @@ function updateLanguage() {
 
     if (typeof window.refreshCarbonPaletteLabels === 'function') {
         window.refreshCarbonPaletteLabels();
+    }
+    if (window.carbonCalc?.refreshEmissionsUnitLabels) {
+        window.carbonCalc.refreshEmissionsUnitLabels();
     }
 }
 

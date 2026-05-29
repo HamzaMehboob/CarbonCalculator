@@ -248,8 +248,8 @@
                         <div class="toolbar-stack">
                             <label for="outputUnitSelect" data-en="Output unit" data-pt="Unidade de saída">Output unit</label>
                             <select id="outputUnitSelect" class="toolbar-control toolbar-select">
-                                <option value="tCO2e" selected>tCO2e</option>
-                                <option value="kgCO2e">kgCO2e</option>
+                                <option value="tCO2e" selected data-en="Tonnes (tCO₂e)" data-pt="Toneladas (tCO₂e)">Tonnes (tCO₂e)</option>
+                                <option value="kgCO2e" data-en="Kilograms (kgCO₂e)" data-pt="Quilogramas (kgCO₂e)">Kilograms (kgCO₂e)</option>
                             </select>
                         </div>
                     </div>
@@ -271,7 +271,22 @@
                                 <i class="fas fa-trash"></i> <span data-en="Waste" data-pt="Resíduos">Waste</span>
                             </button>
                             <button class="tab-btn" data-tab="transport">
-                                <i class="fas fa-car"></i> <span data-en="Transport" data-pt="Transporte">Transport</span>
+                                <i class="fas fa-car"></i> <span data-en="Company Fleet" data-pt="Frota">Company Fleet</span>
+                            </button>
+                            <button class="tab-btn" data-tab="businessTravel">
+                                <i class="fas fa-plane"></i> <span data-en="Business Travel" data-pt="Viagens de Negócios">Business Travel</span>
+                            </button>
+                            <button class="tab-btn" data-tab="freight">
+                                <i class="fas fa-truck-loading"></i> <span data-en="Freighting Goods" data-pt="Frete">Freighting Goods</span>
+                            </button>
+                            <button class="tab-btn" data-tab="staffCommute">
+                                <i class="fas fa-bus"></i> <span data-en="Staff Commute" data-pt="Deslocamento">Staff Commute</span>
+                            </button>
+                            <button class="tab-btn" data-tab="wfh">
+                                <i class="fas fa-home"></i> <span data-en="Working from Home" data-pt="Trabalho Remoto">Working from Home</span>
+                            </button>
+                            <button class="tab-btn" data-tab="materials">
+                                <i class="fas fa-boxes"></i> <span data-en="Materials" data-pt="Materiais">Materials</span>
                             </button>
                             <button class="tab-btn" data-tab="refrigerants">
                                 <i class="fas fa-snowflake"></i> <span data-en="Refrigerants" data-pt="Refrigerantes">Refrigerants</span>
@@ -410,7 +425,7 @@
                                             <th data-en="Year" data-pt="Ano">Year</th>
                                             <th data-en="Input total" data-pt="Total de entrada">Input total</th>
                                             <th data-en="Factor" data-pt="Fator">Factor</th>
-                                            <th data-en="Emissions (kgCO2e)" data-pt="Emissões (kgCO2e)">Emissions (kgCO2e)</th>
+                                            <th id="inputEmissionsPreviewEmissionsHeader" class="emissions-col-header" data-en="Emissions (kgCO2e)" data-pt="Emissões (kgCO2e)">Emissions (kgCO2e)</th>
                                         </tr>
                                     </thead>
                                     <tbody id="inputEmissionsPreviewBody">
@@ -487,7 +502,7 @@
                                         <th>Nov</th>
                                         <th>Dec</th>
                                         <th data-en="Total (m³)" data-pt="Total (m³)">Total (m³)</th>
-                                        <th>tCO₂e</th>
+                                        <th class="emissions-col-header" data-en="Emissions (tCO₂e)" data-pt="Emissões (tCO₂e)">Emissions (tCO₂e)</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -566,7 +581,7 @@
                                         <th>Nov</th>
                                         <th>Dec</th>
                                         <th data-en="Total (kWh)" data-pt="Total (kWh)">Total (kWh)</th>
-                                        <th>tCO₂e</th>
+                                        <th class="emissions-col-header" data-en="Emissions (tCO₂e)" data-pt="Emissões (tCO₂e)">Emissions (tCO₂e)</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -648,7 +663,7 @@
                                         <th>Nov</th>
                                         <th>Dec</th>
                                         <th data-en="Total (tonnes)" data-pt="Total (ton)">Total (tonnes)</th>
-                                        <th>tCO₂e</th>
+                                        <th class="emissions-col-header" data-en="Emissions (tCO₂e)" data-pt="Emissões (tCO₂e)">Emissions (tCO₂e)</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -699,10 +714,10 @@
                         </div>
                     </div>
 
-                    <!-- Transport Tab -->
+                    <!-- Company Fleet Tab -->
                     <div class="tab-content" data-content="transport">
                         <div class="tab-header">
-                            <h2 data-en="Transport" data-pt="Transporte">Transport</h2>
+                            <h2 data-en="Company Fleet" data-pt="Frota da Empresa">Company Fleet</h2>
                             <div class="tab-actions">
                                 <button class="btn-secondary" onclick="addDataRow('transport')">
                                     <i class="fas fa-plus"></i> <span data-en="Add new line" data-pt="Adicionar linha">Add new line</span>
@@ -730,7 +745,7 @@
                                         <th>Nov</th>
                                         <th>Dec</th>
                                         <th data-en="Total (km)" data-pt="Total (km)">Total (km)</th>
-                                        <th>tCO₂e</th>
+                                        <th class="emissions-col-header" data-en="Emissions (tCO₂e)" data-pt="Emissões (tCO₂e)">Emissions (tCO₂e)</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -741,20 +756,6 @@
                                                 <option value="transport_petrol" selected data-en="Company vehicles - petrol" data-pt="Veículos - gasolina">Company vehicles - petrol</option>
                                                 <option value="transport_diesel" data-en="Company vehicles - diesel" data-pt="Veículos - diesel">Company vehicles - diesel</option>
                                                 <option value="transport_electric" data-en="Company vehicles - electric" data-pt="Veículos - elétrico">Company vehicles - electric</option>
-                                                <option value="flights_short" data-en="Flights - short-haul" data-pt="Voos - curta distância">Flights - short-haul</option>
-                                                <option value="flights_medium" data-en="Flights - medium-haul" data-pt="Voos - média distância">Flights - medium-haul</option>
-                                                <option value="flights_long" data-en="Flights - long-haul" data-pt="Voos - longa distância">Flights - long-haul</option>
-                                                <option value="business_travel_rail" data-en="Business travel - rail" data-pt="Viagem de negócios - trem">Business travel - rail</option>
-                                                <option value="business_travel_hotel_night" data-en="Business travel - hotel stay" data-pt="Viagem de negócios - hospedagem">Business travel - hotel stay</option>
-                                                <option value="freight_road_tonne_km" data-en="Freighting goods - road" data-pt="Frete de mercadorias - rodoviário">Freighting goods - road</option>
-                                                <option value="freight_air_tonne_km" data-en="Freighting goods - air" data-pt="Frete de mercadorias - aéreo">Freighting goods - air</option>
-                                                <option value="freight_sea_tonne_km" data-en="Freighting goods - sea" data-pt="Frete de mercadorias - marítimo">Freighting goods - sea</option>
-                                                <option value="staff_commute_car_km" data-en="Staff commute - car" data-pt="Deslocamento de equipe - carro">Staff commute - car</option>
-                                                <option value="staff_commute_bus_km" data-en="Staff commute - bus" data-pt="Deslocamento de equipe - ônibus">Staff commute - bus</option>
-                                                <option value="staff_commute_rail_km" data-en="Staff commute - rail" data-pt="Deslocamento de equipe - trem">Staff commute - rail</option>
-                                                <option value="wfh_day" data-en="Working from home" data-pt="Trabalho remoto">Working from home</option>
-                                                <option value="materials_paper_kg" data-en="Materials - paper" data-pt="Materiais - papel">Materials - paper</option>
-                                                <option value="materials_steel_kg" data-en="Materials - steel" data-pt="Materiais - aço">Materials - steel</option>
                                             </select>
                                         </td>
                                         <td><input type="text" placeholder="Company vehicles" value="Company vehicles"></td>
@@ -789,7 +790,7 @@
                             </table>
                         </div>
                         <div class="category-summary">
-                            <span data-en="Total Transport Emissions:" data-pt="Total de Emissões de Transporte:">Total Transport Emissions:</span>
+                            <span data-en="Total Company Fleet Emissions:" data-pt="Total de Emissões da Frota:">Total Company Fleet Emissions:</span>
                             <strong id="transportTotal">0.000 tCO₂e</strong>
                         </div>
                     </div>
@@ -825,7 +826,7 @@
                                         <th>Nov</th>
                                         <th>Dec</th>
                                         <th data-en="Total (kg)" data-pt="Total (kg)">Total (kg)</th>
-                                        <th>tCO₂e</th>
+                                        <th class="emissions-col-header" data-en="Emissions (tCO₂e)" data-pt="Emissões (tCO₂e)">Emissions (tCO₂e)</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -1368,6 +1369,7 @@
     <script src="js/org-preferences.js"></script>
     <script src="js/general-info.js"></script>
     <script src="js/assessment-scope-form.js"></script>
+    <script src="js/data-input-categories.js"></script>
     <script src="js/app.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/invoices.js"></script>

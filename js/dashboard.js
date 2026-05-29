@@ -208,7 +208,9 @@ function updateKPIs() {
     const lastYearElement = document.getElementById('lastYearEmissions');
     if (lastYearElement) {
         if (previousYear && yearComparison[previousYear] !== undefined) {
-            lastYearElement.textContent = `${previousYearValue.toFixed(3)} tCO₂e`;
+            lastYearElement.textContent = window.carbonCalc?.formatTonnesForDisplay
+                ? window.carbonCalc.formatTonnesForDisplay(previousYearValue)
+                : `${previousYearValue.toFixed(3)} tCO₂e`;
             // Update label if exists
             const lastYearLabel = lastYearElement.parentElement.querySelector('h3');
             if (lastYearLabel) {
@@ -216,7 +218,9 @@ function updateKPIs() {
                 lastYearLabel.innerHTML = labelText.replace(/\d{4}/, previousYear) || `Last Year (${previousYear})`;
             }
         } else {
-            lastYearElement.textContent = '0.000 tCO₂e';
+            lastYearElement.textContent = window.carbonCalc?.formatTonnesForDisplay
+                ? window.carbonCalc.formatTonnesForDisplay(0)
+                : '0.000 tCO₂e';
         }
     }
     
@@ -226,8 +230,8 @@ function updateKPIs() {
     }
 
     const calcContext = document.getElementById('dashboardCalcContext');
-    if (calcContext && window.carbonCalc?.getReportingYear && window.carbonCalc?.getOutputUnit) {
-        calcContext.textContent = `Year: ${window.carbonCalc.getReportingYear()} | Unit: ${window.carbonCalc.getOutputUnit()}`;
+    if (calcContext && window.carbonCalc?.getReportingYear && window.carbonCalc?.getOutputUnitDisplayLabel) {
+        calcContext.textContent = `Year: ${window.carbonCalc.getReportingYear()} | Unit: ${window.carbonCalc.getOutputUnitDisplayLabel()}`;
     }
     
     // Update change indicator
@@ -293,8 +297,13 @@ function updatePieChart() {
             water: appState.currentLanguage === 'en' ? 'Water' : 'Água',
             energy: appState.currentLanguage === 'en' ? 'Energy' : 'Energia',
             waste: appState.currentLanguage === 'en' ? 'Waste' : 'Resíduos',
-            transport: appState.currentLanguage === 'en' ? 'Transport' : 'Transporte',
-            refrigerants: appState.currentLanguage === 'en' ? 'Refrigerants' : 'Refrigerantes'
+            transport: appState.currentLanguage === 'en' ? 'Company fleet' : 'Frota',
+            businessTravel: appState.currentLanguage === 'en' ? 'Business travel' : 'Viagens de negócios',
+            freight: appState.currentLanguage === 'en' ? 'Freighting goods' : 'Frete',
+            staffCommute: appState.currentLanguage === 'en' ? 'Staff commute' : 'Deslocamento',
+            wfh: appState.currentLanguage === 'en' ? 'Working from home' : 'Trabalho remoto',
+            materials: appState.currentLanguage === 'en' ? 'Materials' : 'Materiais',
+            refrigerants: appState.currentLanguage === 'en' ? 'Refrigerants' : 'Refrigerantes',
         };
         return translations[key] || key;
     });
@@ -429,7 +438,9 @@ function updateBarChart() {
         data: {
             labels: years,
             datasets: [{
-                label: appState.currentLanguage === 'en' ? 'Total Emissions (tCO₂e)' : 'Emissões Totais (tCO₂e)',
+                label: appState.currentLanguage === 'en'
+                    ? `Total Emissions (${chartLabelForUnit()})`
+                    : `Emissões Totais (${chartLabelForUnit()})`,
                 data: values.map(convertTonnesToDisplayValue),
                 backgroundColor: colors.length === years.length ? colors : generateYearColors(years.length),
                 borderWidth: 0,
@@ -520,7 +531,9 @@ function updateLineChart() {
         data: {
             labels: monthNames,
             datasets: [{
-                label: appState.currentLanguage === 'en' ? 'Monthly Emissions (tCO₂e)' : 'Emissões Mensais (tCO₂e)',
+                label: appState.currentLanguage === 'en'
+                    ? `Monthly Emissions (${chartLabelForUnit()})`
+                    : `Emissões Mensais (${chartLabelForUnit()})`,
                 data: monthlyData.map(convertTonnesToDisplayValue),
                 borderColor: prefs.primaryColor || ct?.lineBorder || '#0EA5E9',
                 backgroundColor: ct?.lineFill || 'rgba(14, 165, 233, 0.1)',

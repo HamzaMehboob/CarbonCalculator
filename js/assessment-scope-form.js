@@ -122,6 +122,7 @@
             titleEn: 'Organisation Details',
             titlePt: 'Detalhes da Organização',
             col3: 'description',
+            hideUnitColumn: true,
             rows: [
                 {
                     labelEn: 'Organisation Name (Client/owner)',
@@ -153,6 +154,7 @@
             titleEn: 'General NOTES — All assets or clearly state which assets',
             titlePt: 'NOTAS GERAIS — Todos os ativos ou indicar claramente quais ativos',
             col3: 'description',
+            hideUnitColumn: true,
             rows: [
                 {
                     labelEn: 'Extra note to the reports 1',
@@ -409,6 +411,7 @@
             titleEn: 'Standards Policies in Place (All assets or clearly state which assets)?',
             titlePt: 'Normas e políticas em vigor (todos os ativos ou indicar quais)?',
             col3: 'yesno',
+            hideUnitColumn: true,
             rows: [
                 {
                     labelEn: 'Environment Policy (accredited to ISO 14001)',
@@ -455,6 +458,7 @@
             titleEn: 'International Standards',
             titlePt: 'Normas Internacionais',
             col3: 'yesno',
+            hideUnitColumn: true,
             rows: [
                 { labelEn: 'Eco Audit action plan', labelPt: 'Plano de ação Eco Audit', type: 'yesno', key: 'intlEcoAuditActionPlan' },
                 { labelEn: 'BREEAM In-use Part 2', labelPt: 'BREEAM In-use Parte 2', type: 'yesno', key: 'intlBreeamInUse' },
@@ -657,7 +661,7 @@
         if (emissionKey && typeof global.getOrgLocalItem === 'function') {
             const factorUnit = global.getOrgLocalItem(`factorUnit_${emissionKey}`, '');
             if (factorUnit && factorUnit !== 'none') {
-                return mapAssessmentUnitToRowUnit(category, factorUnit, emissionKey);
+                return factorUnit;
             }
         }
         return resolveCategoryPreferredUnit(category, emissionKey);
@@ -805,11 +809,8 @@
             if (control.dataset.unitSync) {
                 syncCategoryUnits(control.dataset.unitSync, val);
             }
-            if (control.classList.contains('assessment-scope-unit')) {
-                if (key !== 'assessmentCalculationUnit') {
-                    syncFactorUnitSelectsFromCategoryUnit(key, val);
-                }
-                refreshConversionFactorHeadings();
+            if (control.classList.contains('assessment-scope-unit') && key !== 'assessmentCalculationUnit') {
+                syncFactorUnitSelectsFromCategoryUnit(key, val);
             }
             recalcIfNeeded(control);
         };
@@ -888,20 +889,25 @@
             wrap.appendChild(title);
 
             const table = el('table', 'assessment-scope-table');
+            if (section.hideUnitColumn) {
+                table.classList.add('assessment-scope-table--no-unit');
+            }
             const thead = el('thead');
             const headRow = el('tr');
             const col3Label = section.col3 === 'yesno' ? '(Yes or No)' : 'Description';
             const col3LabelPt = section.col3 === 'yesno' ? '(Sim ou Não)' : 'Descrição';
-            ['', 'Unit', col3Label].forEach((text, i) => {
+            const headerCols = section.hideUnitColumn ? ['', col3Label] : ['', 'Unit', col3Label];
+            headerCols.forEach((text, i) => {
                 const th = el('th');
-                if (i === 0) th.textContent = '';
-                else if (i === 1) {
+                if (i === 0) {
+                    th.textContent = '';
+                } else if (!section.hideUnitColumn && text === 'Unit') {
                     th.textContent = 'Unit';
                     th.setAttribute('data-en', 'Unit');
                     th.setAttribute('data-pt', 'Unidade');
                 } else {
-                    th.textContent = col3Label;
-                    th.setAttribute('data-en', col3Label);
+                    th.textContent = text;
+                    th.setAttribute('data-en', text);
                     th.setAttribute('data-pt', col3LabelPt);
                 }
                 headRow.appendChild(th);
@@ -916,7 +922,7 @@
                 appendBilingualLabel(labelTd, row.labelEn, row.labelPt);
                 tr.appendChild(labelTd);
 
-                const unitTd = el('td', 'assessment-scope-unit-cell');
+                const unitTd = section.hideUnitColumn ? null : el('td', 'assessment-scope-unit-cell');
                 const valueTd = el('td', 'assessment-scope-value-cell');
                 const col3 = row.col3 || section.col3;
 
@@ -932,13 +938,17 @@
                     valueTd.textContent = '—';
                     valueTd.classList.add('assessment-scope-na');
                 } else if (row.type === 'yesno') {
-                    unitTd.textContent = '—';
-                    unitTd.classList.add('assessment-scope-na');
+                    if (unitTd) {
+                        unitTd.textContent = '—';
+                        unitTd.classList.add('assessment-scope-na');
+                    }
                     const yn = createYesNoSelect(row.key);
                     valueTd.appendChild(yn);
                 } else if (col3 === 'description' || row.type === 'text' || row.type === 'textarea' || row.type === 'number') {
-                    unitTd.textContent = '—';
-                    unitTd.classList.add('assessment-scope-na');
+                    if (unitTd) {
+                        unitTd.textContent = '—';
+                        unitTd.classList.add('assessment-scope-na');
+                    }
                     let control;
                     if (row.type === 'textarea') {
                         control = el('textarea', 'assessment-scope-input');
@@ -962,7 +972,7 @@
                     valueTd.appendChild(control);
                 }
 
-                tr.appendChild(unitTd);
+                if (unitTd) tr.appendChild(unitTd);
                 tr.appendChild(valueTd);
                 tbody.appendChild(tr);
             });
