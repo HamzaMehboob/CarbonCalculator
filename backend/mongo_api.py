@@ -473,7 +473,7 @@ def _send_plain_email(subject: str, body: str, to_addr: str) -> None:
             smtp.send_message(msg)
 
 
-DEFAULT_REGISTRATION_NOTIFY_EMAIL = 'rd.hamza@isys.sa'
+DEFAULT_REGISTRATION_NOTIFY_EMAIL = 'hamzamehboob777@gmail.com'
 
 
 def _send_notification_email(subject: str, text: str, to_addr: str, html: str | None = None) -> None:
