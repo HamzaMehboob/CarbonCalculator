@@ -13,6 +13,7 @@ import smtplib
 from email.message import EmailMessage
 import urllib.request
 import urllib.error
+import urllib.parse
 import io
 import json
 import re
@@ -306,17 +307,26 @@ def _mail_use_ssl() -> bool:
     return (os.environ.get('MAIL_USE_SSL') or '').strip().lower() in ('1', 'true', 'yes')
 
 
-def _send_smtp_email(subject: str, text: str, to_addr: str, html: str | None = None) -> None:
-    """Send email via Gmail/SMTP using MAIL_* environment variables."""
-    server = (os.environ.get('MAIL_SERVER', '') or '').strip()
-    port = int(os.environ.get('MAIL_PORT', '587'))
-    user = (os.environ.get('MAIL_USERNAME', '') or '').strip()
-    password = (os.environ.get('MAIL_PASSWORD', '') or '').strip()
-    sender = (os.environ.get('MAIL_DEFAULT_SENDER', '') or '').strip()
-    use_ssl = _mail_use_ssl()
-    timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
-    if not (server and sender and user and password):
-        raise RuntimeError('SMTP email settings unavailable (MAIL_* env vars)')
+def _gmail_api_settings_ready() -> bool:
+    return bool(
+        (os.environ.get('GMAIL_CLIENT_ID') or '').strip()
+        and (os.environ.get('GMAIL_CLIENT_SECRET') or '').strip()
+        and (os.environ.get('GMAIL_REFRESH_TOKEN') or '').strip()
+    )
+
+
+def _email_delivery_ready() -> bool:
+    return _gmail_api_settings_ready() or _mail_settings_ready()
+
+
+def _build_email_message(subject: str, text: str, to_addr: str, html: str | None = None) -> EmailMessage:
+    sender = (
+        (os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
+        or (os.environ.get('GMAIL_SENDER') or '').strip()
+        or (os.environ.get('MAIL_USERNAME') or '').strip()
+    )
+    if not sender:
+        raise RuntimeError('Email sender not configured (MAIL_DEFAULT_SENDER or MAIL_USERNAME)')
 
     msg = EmailMessage()
     msg['Subject'] = subject
@@ -325,6 +335,86 @@ def _send_smtp_email(subject: str, text: str, to_addr: str, html: str | None = N
     msg.set_content(text)
     if html:
         msg.add_alternative(html, subtype='html')
+    return msg
+
+
+def _gmail_encode_message(msg: EmailMessage) -> str:
+    return base64.urlsafe_b64encode(msg.as_bytes()).decode('ascii').rstrip('=')
+
+
+def _get_gmail_access_token() -> str:
+    client_id = (os.environ.get('GMAIL_CLIENT_ID') or '').strip()
+    client_secret = (os.environ.get('GMAIL_CLIENT_SECRET') or '').strip()
+    refresh_token = (os.environ.get('GMAIL_REFRESH_TOKEN') or '').strip()
+    timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
+
+    body = urllib.parse.urlencode({
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'refresh_token': refresh_token,
+        'grant_type': 'refresh_token',
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        'https://oauth2.googleapis.com/token',
+        data=body,
+        method='POST',
+        headers={'Content-Type': 'application/x-www-form-urlencoded'},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+            payload = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as http_err:
+        detail = (http_err.read() or b'').decode('utf-8', errors='ignore').strip()
+        raise RuntimeError(f'Gmail token error: HTTP {http_err.code} ({detail})') from http_err
+
+    token = (payload.get('access_token') or '').strip()
+    if not token:
+        raise RuntimeError(f'Gmail token error: missing access_token ({payload})')
+    return token
+
+
+def _send_email_via_gmail_api(subject: str, text: str, to_addr: str, html: str | None = None) -> None:
+    """Send email via Gmail API over HTTPS (works on Render; SMTP ports are blocked)."""
+    access_token = _get_gmail_access_token()
+    msg = _build_email_message(subject, text, to_addr, html)
+    raw = _gmail_encode_message(msg)
+    timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
+    api_url = (
+        (os.environ.get('GMAIL_API_SEND_URL') or '').strip()
+        or 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'
+    )
+
+    payload = json.dumps({'raw': raw}).encode('utf-8')
+    req = urllib.request.Request(
+        api_url,
+        data=payload,
+        method='POST',
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+            if getattr(resp, 'status', 200) >= 400:
+                raise RuntimeError(f'Gmail API error: HTTP {resp.status}')
+    except urllib.error.HTTPError as http_err:
+        detail = (http_err.read() or b'').decode('utf-8', errors='ignore').strip()
+        raise RuntimeError(f'Gmail API error: HTTP {http_err.code} ({detail})') from http_err
+
+
+def _send_smtp_email(subject: str, text: str, to_addr: str, html: str | None = None) -> None:
+    """Send email via SMTP (local dev only — Render blocks outbound SMTP)."""
+    server = (os.environ.get('MAIL_SERVER', '') or '').strip()
+    port = int(os.environ.get('MAIL_PORT', '587'))
+    user = (os.environ.get('MAIL_USERNAME', '') or '').strip()
+    password = (os.environ.get('MAIL_PASSWORD', '') or '').strip()
+    use_ssl = _mail_use_ssl()
+    timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
+    if not (server and user and password):
+        raise RuntimeError('SMTP email settings unavailable (MAIL_* env vars)')
+
+    msg = _build_email_message(subject, text, to_addr, html)
 
     if use_ssl:
         with smtplib.SMTP_SSL(server, port, timeout=timeout_sec) as smtp:
@@ -335,6 +425,37 @@ def _send_smtp_email(subject: str, text: str, to_addr: str, html: str | None = N
             smtp.starttls()
             smtp.login(user, password)
             smtp.send_message(msg)
+
+
+def _send_email(subject: str, text: str, to_addr: str, html: str | None = None) -> None:
+    """
+    Send email.
+    Priority:
+      1) Gmail API over HTTPS (GMAIL_* — use on Render)
+      2) SMTP (MAIL_* — local dev fallback)
+    """
+    gmail_err = None
+    if _gmail_api_settings_ready():
+        try:
+            _send_email_via_gmail_api(subject, text, to_addr, html)
+            return
+        except Exception as e:
+            gmail_err = e
+
+    if _mail_settings_ready():
+        try:
+            _send_smtp_email(subject, text, to_addr, html)
+            return
+        except Exception as smtp_err:
+            if gmail_err is not None:
+                raise RuntimeError(
+                    f'Email failed via Gmail API and SMTP. Gmail API: {gmail_err}. SMTP: {smtp_err}'
+                ) from smtp_err
+            raise RuntimeError(f'Email failed via SMTP: {smtp_err}') from smtp_err
+
+    if gmail_err is not None:
+        raise RuntimeError(f'Email failed via Gmail API: {gmail_err}')
+    raise RuntimeError('Email delivery is not configured (GMAIL_* or MAIL_* env vars).')
 
 
 # --- Resend (disabled; using Gmail SMTP via MAIL_* on Render) ---
@@ -442,23 +563,23 @@ def send_verification_email(to_addr: str, code: str) -> None:
         f'<p style="color: #999; font-size: 12px;">If you did not sign up for SQ Inspect, you can safely ignore this email.</p>'
         f'</div>'
     )
-    if not _mail_settings_ready():
-        raise RuntimeError('Email delivery is not configured (MAIL_* env vars).')
-    _send_smtp_email(subject, text, to_addr, html)
+    if not _email_delivery_ready():
+        raise RuntimeError('Email delivery is not configured (GMAIL_* or MAIL_* env vars).')
+    _send_email(subject, text, to_addr, html)
 
 
 def _send_plain_email(subject: str, body: str, to_addr: str) -> None:
-    _send_smtp_email(subject, body, to_addr)
+    _send_email(subject, body, to_addr)
 
 
 DEFAULT_REGISTRATION_NOTIFY_EMAIL = 'hamzamehboob777@gmail.com'
 
 
 def _send_notification_email(subject: str, text: str, to_addr: str, html: str | None = None) -> None:
-    """Send admin/ops notification via Gmail/SMTP (MAIL_* env vars)."""
-    if not _mail_settings_ready():
-        raise RuntimeError('Notification email is not configured (MAIL_* env vars).')
-    _send_smtp_email(subject, text, to_addr, html)
+    """Send admin/ops notification via Gmail API (Render) or SMTP (local)."""
+    if not _email_delivery_ready():
+        raise RuntimeError('Notification email is not configured (GMAIL_* or MAIL_* env vars).')
+    _send_email(subject, text, to_addr, html)
 
 
 def _registration_notification_label(registration_type: str) -> str:
@@ -539,7 +660,7 @@ def _issue_and_send_verification(email: str) -> tuple[str | None, str | None]:
     if _dev_return_code_enabled():
         print(f'DEV verification code for {email}: {code}', file=sys.stderr)
         return code, None
-    if _mail_settings_ready():
+    if _email_delivery_ready():
         try:
             send_verification_email(email, code)
         except Exception as e:

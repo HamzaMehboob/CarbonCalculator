@@ -58,6 +58,39 @@ def test_registration_notification_default_recipient(monkeypatch):
     assert sent['to'] == api.DEFAULT_REGISTRATION_NOTIFY_EMAIL
 
 
+def test_gmail_api_settings_ready(monkeypatch):
+    monkeypatch.delenv('GMAIL_CLIENT_ID', raising=False)
+    monkeypatch.delenv('GMAIL_CLIENT_SECRET', raising=False)
+    monkeypatch.delenv('GMAIL_REFRESH_TOKEN', raising=False)
+    assert api._gmail_api_settings_ready() is False
+
+    monkeypatch.setenv('GMAIL_CLIENT_ID', 'id')
+    monkeypatch.setenv('GMAIL_CLIENT_SECRET', 'secret')
+    monkeypatch.setenv('GMAIL_REFRESH_TOKEN', 'refresh')
+    assert api._gmail_api_settings_ready() is True
+
+
+def test_send_email_prefers_gmail_api(monkeypatch):
+    monkeypatch.setenv('GMAIL_CLIENT_ID', 'id')
+    monkeypatch.setenv('GMAIL_CLIENT_SECRET', 'secret')
+    monkeypatch.setenv('GMAIL_REFRESH_TOKEN', 'refresh')
+    monkeypatch.setenv('MAIL_DEFAULT_SENDER', 'SQ Audit <sender@example.com>')
+
+    calls = {'gmail': 0, 'smtp': 0}
+
+    def fake_gmail(subject, text, to_addr, html=None):
+        calls['gmail'] += 1
+
+    def fake_smtp(subject, text, to_addr, html=None):
+        calls['smtp'] += 1
+
+    monkeypatch.setattr(api, '_send_email_via_gmail_api', fake_gmail)
+    monkeypatch.setattr(api, '_send_smtp_email', fake_smtp)
+    api._send_email('Subject', 'Body', 'ops@example.com')
+    assert calls['gmail'] == 1
+    assert calls['smtp'] == 0
+
+
 def test_chatbot_core_handlers():
     assert 'Factor suggestion' in api.chatbot_assist('Suggest factor for electricity')
     assert 'Anomaly guidance' in api.chatbot_assist('detect anomaly')
