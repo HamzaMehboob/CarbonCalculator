@@ -307,6 +307,10 @@ def _mail_use_ssl() -> bool:
     return (os.environ.get('MAIL_USE_SSL') or '').strip().lower() in ('1', 'true', 'yes')
 
 
+def _is_render_hosted() -> bool:
+    return (os.environ.get('RENDER') or '').strip().lower() in ('true', '1', 'yes')
+
+
 def _gmail_api_settings_ready() -> bool:
     return bool(
         (os.environ.get('GMAIL_CLIENT_ID') or '').strip()
@@ -316,7 +320,18 @@ def _gmail_api_settings_ready() -> bool:
 
 
 def _email_delivery_ready() -> bool:
-    return _gmail_api_settings_ready() or _mail_settings_ready()
+    return _gmail_api_settings_ready() or _resend_settings_ready() or (
+        _mail_settings_ready() and not _is_render_hosted()
+    )
+
+
+def _email_config_status() -> dict:
+    return {
+        'render_hosted': _is_render_hosted(),
+        'gmail_api': _gmail_api_settings_ready(),
+        'resend': _resend_settings_ready(),
+        'smtp': _mail_settings_ready() and not _is_render_hosted(),
+    }
 
 
 def _build_email_message(subject: str, text: str, to_addr: str, html: str | None = None) -> EmailMessage:
@@ -431,10 +446,13 @@ def _send_email(subject: str, text: str, to_addr: str, html: str | None = None) 
     """
     Send email.
     Priority:
-      1) Gmail API over HTTPS (GMAIL_* — use on Render)
-      2) SMTP (MAIL_* — local dev fallback)
+      1) Gmail API over HTTPS (GMAIL_*)
+      2) Resend over HTTPS (RESEND_*)
+      3) SMTP (MAIL_* — local dev only; blocked on Render)
     """
     gmail_err = None
+    resend_err = None
+
     if _gmail_api_settings_ready():
         try:
             _send_email_via_gmail_api(subject, text, to_addr, html)
@@ -442,101 +460,113 @@ def _send_email(subject: str, text: str, to_addr: str, html: str | None = None) 
         except Exception as e:
             gmail_err = e
 
-    if _mail_settings_ready():
+    if _resend_settings_ready():
+        try:
+            _send_email_via_resend(to_addr, subject, text, html)
+            return
+        except Exception as e:
+            resend_err = e
+
+    if _mail_settings_ready() and not _is_render_hosted():
         try:
             _send_smtp_email(subject, text, to_addr, html)
             return
         except Exception as smtp_err:
+            errors = []
             if gmail_err is not None:
-                raise RuntimeError(
-                    f'Email failed via Gmail API and SMTP. Gmail API: {gmail_err}. SMTP: {smtp_err}'
-                ) from smtp_err
-            raise RuntimeError(f'Email failed via SMTP: {smtp_err}') from smtp_err
+                errors.append(f'Gmail API: {gmail_err}')
+            if resend_err is not None:
+                errors.append(f'Resend: {resend_err}')
+            errors.append(f'SMTP: {smtp_err}')
+            raise RuntimeError('Email failed via ' + '; '.join(errors)) from smtp_err
 
+    if _is_render_hosted():
+        raise RuntimeError(
+            'Email failed on Render (SMTP ports are blocked). '
+            f'Gmail API: {gmail_err or "not configured — set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN"}. '
+            f'Resend: {resend_err or "not configured — set RESEND_API_KEY and RESEND_FROM on a verified domain"}.'
+        )
+
+    if gmail_err is not None and resend_err is not None:
+        raise RuntimeError(f'Email failed. Gmail API: {gmail_err}. Resend: {resend_err}')
     if gmail_err is not None:
         raise RuntimeError(f'Email failed via Gmail API: {gmail_err}')
-    raise RuntimeError('Email delivery is not configured (GMAIL_* or MAIL_* env vars).')
+    if resend_err is not None:
+        raise RuntimeError(f'Email failed via Resend: {resend_err}')
+    raise RuntimeError('Email delivery is not configured (GMAIL_*, RESEND_*, or MAIL_* env vars).')
 
 
-# --- Resend (disabled; using Gmail SMTP via MAIL_* on Render) ---
-# def _resend_settings_ready() -> bool:
-#     return bool(
-#         (os.environ.get('RESEND_API_KEY') or '').strip()
-#         and (
-#             (os.environ.get('RESEND_FROM') or '').strip()
-#             or (os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
-#         )
-#     )
-#
-#
-# def _send_email_via_resend(to_addr: str, subject: str, text: str, html: str | None = None) -> None:
-#     """
-#     Send email using Resend HTTPS API.
-#     Required env:
-#       - RESEND_API_KEY
-#       - RESEND_FROM (or MAIL_DEFAULT_SENDER fallback)
-#     Optional:
-#       - RESEND_API_URL (defaults to https://api.resend.com/emails)
-#       - MAIL_TIMEOUT_SECONDS
-#     """
-#     api_key = (os.environ.get('RESEND_API_KEY') or '').strip()
-#     from_addr = (os.environ.get('RESEND_FROM') or os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
-#     api_url = (os.environ.get('RESEND_API_URL') or 'https://api.resend.com/emails').strip()
-#     timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
-#
-#     payload = {
-#         'from': from_addr,
-#         'to': [to_addr],
-#         'subject': subject,
-#         'text': text,
-#     }
-#     if html:
-#         payload['html'] = html
-#     raw = json.dumps(payload).encode('utf-8')
-#     req = urllib.request.Request(
-#         api_url,
-#         data=raw,
-#         method='POST',
-#         headers={
-#             'Authorization': f'Bearer {api_key}',
-#             'Content-Type': 'application/json',
-#             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-#         },
-#     )
-#     try:
-#         with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-#             status = getattr(resp, 'status', 200)
-#             if status >= 400:
-#                 raise RuntimeError(f'Resend API error: HTTP {status}')
-#     except urllib.error.HTTPError as http_err:
-#         body = ''
-#         try:
-#             body = (http_err.read() or b'').decode('utf-8', errors='ignore').strip()
-#         except Exception:
-#             body = ''
-#         detail = f' ({body})' if body else ''
-#         raise RuntimeError(f'Resend API error: HTTP {http_err.code}{detail}') from http_err
-#
-#
-# def _send_verification_email_via_resend(to_addr: str, code: str) -> None:
-#     subject = 'Welcome to SQ Inspect - Your Verification Code'
-#     text = (
-#         f'Welcome to SQ Inspect!\n\n'
-#         f'We are thrilled to have you on board. To complete your signup and get started, please use the following verification code:\n\n'
-#         f'{code}\n\n'
-#         f'This code expires in 15 minutes. If you did not sign up for SQ Inspect, you can safely ignore this email.\n'
-#     )
-#     html = (
-#         f'<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">'
-#         f'<h2 style="color: #2E7D32;">Welcome to SQ Inspect!</h2>'
-#         f'<p>We are thrilled to have you on board. To complete your signup and get started, please use the verification code below:</p>'
-#         f'<div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 5px; border-radius: 8px; margin: 20px 0; color: #111;">{escape(code)}</div>'
-#         f'<p style="color: #555; font-size: 14px;">This code expires in <strong>15 minutes</strong>.</p>'
-#         f'<hr style="border: none; border-top: 1px solid #eaeaea; margin: 30px 0;" />'
-#         f'<p style="color: #999; font-size: 12px;">If you did not sign up for SQ Inspect, you can safely ignore this email.</p>'
-#         f'</div>'
-#     )
-#     _send_email_via_resend(to_addr, subject, text, html)
+def _resend_settings_ready() -> bool:
+    return bool(
+        (os.environ.get('RESEND_API_KEY') or '').strip()
+        and (
+            (os.environ.get('RESEND_FROM') or '').strip()
+            or (os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
+        )
+    )
+
+
+def _send_email_via_resend(to_addr: str, subject: str, text: str, html: str | None = None) -> None:
+    """Send email using Resend HTTPS API (works on Render)."""
+    api_key = (os.environ.get('RESEND_API_KEY') or '').strip()
+    from_addr = (os.environ.get('RESEND_FROM') or os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
+    api_url = (os.environ.get('RESEND_API_URL') or 'https://api.resend.com/emails').strip()
+    timeout_sec = float(os.environ.get('MAIL_TIMEOUT_SECONDS', '8'))
+
+    payload = {
+        'from': from_addr,
+        'to': [to_addr],
+        'subject': subject,
+        'text': text,
+    }
+    if html:
+        payload['html'] = html
+    raw = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(
+        api_url,
+        data=raw,
+        method='POST',
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+            status = getattr(resp, 'status', 200)
+            if status >= 400:
+                raise RuntimeError(f'Resend API error: HTTP {status}')
+    except urllib.error.HTTPError as http_err:
+        body = ''
+        try:
+            body = (http_err.read() or b'').decode('utf-8', errors='ignore').strip()
+        except Exception:
+            body = ''
+        detail = f' ({body})' if body else ''
+        raise RuntimeError(f'Resend API error: HTTP {http_err.code}{detail}') from http_err
+
+
+# --- Resend verification helper (optional) ---
+def _send_verification_email_via_resend(to_addr: str, code: str) -> None:
+    subject = 'Welcome to SQ Inspect - Your Verification Code'
+    text = (
+        f'Welcome to SQ Inspect!\n\n'
+        f'We are thrilled to have you on board. To complete your signup and get started, please use the following verification code:\n\n'
+        f'{code}\n\n'
+        f'This code expires in 15 minutes. If you did not sign up for SQ Inspect, you can safely ignore this email.\n'
+    )
+    html = (
+        f'<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">'
+        f'<h2 style="color: #2E7D32;">Welcome to SQ Inspect!</h2>'
+        f'<p>We are thrilled to have you on board. To complete your signup and get started, please use the verification code below:</p>'
+        f'<div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 5px; border-radius: 8px; margin: 20px 0; color: #111;">{escape(code)}</div>'
+        f'<p style="color: #555; font-size: 14px;">This code expires in <strong>15 minutes</strong>.</p>'
+        f'<hr style="border: none; border-top: 1px solid #eaeaea; margin: 30px 0;" />'
+        f'<p style="color: #999; font-size: 12px;">If you did not sign up for SQ Inspect, you can safely ignore this email.</p>'
+        f'</div>'
+    )
+    _send_email_via_resend(to_addr, subject, text, html)
 # --- end Resend ---
 
 
@@ -1023,7 +1053,13 @@ def chatbot_assist(message: str, context: dict | None = None) -> str:
 @app.route('/', methods=['GET'])
 def home():
     db_status = "connected" if get_db() is not None else "disconnected"
-    return jsonify({"status": "healthy", "db": db_status, "service": "Carbon Calculator API"}), 200
+    email_status = _email_config_status()
+    return jsonify({
+        "status": "healthy",
+        "db": db_status,
+        "service": "Carbon Calculator API",
+        "email": email_status,
+    }), 200
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
@@ -1635,6 +1671,9 @@ def generate_final_report_docx():
         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         headers={'Content-Disposition': f'attachment; filename=\"{file_name}\"'}
     )
+
+
+print(f'INFO: email config: {_email_config_status()}', file=sys.stderr)
 
 
 if __name__ == '__main__':

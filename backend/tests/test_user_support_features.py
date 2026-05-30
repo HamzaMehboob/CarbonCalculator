@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
@@ -76,7 +78,7 @@ def test_send_email_prefers_gmail_api(monkeypatch):
     monkeypatch.setenv('GMAIL_REFRESH_TOKEN', 'refresh')
     monkeypatch.setenv('MAIL_DEFAULT_SENDER', 'SQ Audit <sender@example.com>')
 
-    calls = {'gmail': 0, 'smtp': 0}
+    calls = {'gmail': 0, 'smtp': 0, 'resend': 0}
 
     def fake_gmail(subject, text, to_addr, html=None):
         calls['gmail'] += 1
@@ -84,11 +86,31 @@ def test_send_email_prefers_gmail_api(monkeypatch):
     def fake_smtp(subject, text, to_addr, html=None):
         calls['smtp'] += 1
 
+    def fake_resend(to_addr, subject, text, html=None):
+        calls['resend'] += 1
+
     monkeypatch.setattr(api, '_send_email_via_gmail_api', fake_gmail)
     monkeypatch.setattr(api, '_send_smtp_email', fake_smtp)
+    monkeypatch.setattr(api, '_send_email_via_resend', fake_resend)
     api._send_email('Subject', 'Body', 'ops@example.com')
     assert calls['gmail'] == 1
     assert calls['smtp'] == 0
+    assert calls['resend'] == 0
+
+
+def test_send_email_skips_smtp_on_render(monkeypatch):
+    monkeypatch.setenv('RENDER', 'true')
+    monkeypatch.setenv('MAIL_SERVER', 'smtp.gmail.com')
+    monkeypatch.setenv('MAIL_PORT', '587')
+    monkeypatch.setenv('MAIL_USERNAME', 'user@example.com')
+    monkeypatch.setenv('MAIL_PASSWORD', 'secret')
+    monkeypatch.setenv('MAIL_DEFAULT_SENDER', 'Test <user@example.com>')
+
+    monkeypatch.setattr(api, '_gmail_api_settings_ready', lambda: False)
+    monkeypatch.setattr(api, '_resend_settings_ready', lambda: False)
+
+    with pytest.raises(RuntimeError, match='SMTP ports are blocked'):
+        api._send_email('Subject', 'Body', 'ops@example.com')
 
 
 def test_chatbot_core_handlers():
