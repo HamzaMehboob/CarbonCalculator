@@ -906,7 +906,8 @@ body {
 
 .tab-questions-card .tab-question-notes {
     display: block;
-    width: 100%;
+    width: 50%;
+    max-width: 100%;
     min-height: 120px;
     padding: 10px 14px;
     border: 2px solid var(--border-color);
