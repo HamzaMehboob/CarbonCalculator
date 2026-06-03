@@ -448,6 +448,45 @@ const UI_KEY_TO_CATALOG_KEY = Object.fromEntries(
     Object.entries(CATALOG_UI_KEY_FOR_BACKEND).map(([catalog, ui]) => [ui, catalog])
 );
 
+/** One dropdown entry per logical emission type (legacy + catalog aliases → canonical key). */
+const EMISSION_OPTION_CANONICAL = {
+    waste: 'waste_landfill',
+    wasteRecycled: 'waste_to_recycling',
+    waste_composted: 'waste_to_composting',
+    waste_incineration: 'waste_to_energy',
+    waste_recycled: 'waste_to_recycling',
+    water_supply: 'water',
+    water_treatment: 'wastewater',
+    electricity_grid: 'electricity',
+    natural_gas: 'naturalGas',
+    heating_oil: 'diesel',
+};
+
+function getCanonicalEmissionOptionKey(key) {
+    const k = String(key || '').trim();
+    if (!k) return k;
+    return EMISSION_OPTION_CANONICAL[k] || k;
+}
+
+function dedupeEmissionOptions(options) {
+    if (!Array.isArray(options)) return [];
+    const byCanonical = new Map();
+    options.forEach((opt) => {
+        const rawKey = String(opt?.key || '').trim();
+        if (!rawKey) return;
+        const canonical = getCanonicalEmissionOptionKey(rawKey);
+        if (byCanonical.has(canonical)) return;
+        byCanonical.set(canonical, {
+            key: canonical,
+            labelEn: opt.labelEn || getFactorDisplayLabel(canonical),
+            labelPt: opt.labelPt || getFactorDisplayLabel(canonical),
+        });
+    });
+    return Array.from(byCanonical.values()).sort((a, b) =>
+        a.labelEn.localeCompare(b.labelEn)
+    );
+}
+
 function humanizeFactorKey(key) {
     return String(key || '')
         .replace(/_/g, ' ')
@@ -551,7 +590,6 @@ function getFactorDisplayLabel(key) {
 /** Emission dropdown options from loaded conversion_factor_catalog for country/year */
 function getCatalogEmissionOptions(category, year) {
     const bucket = resolveUiFactorBucket(year || getReportingYear());
-    const seen = new Set();
     const options = [];
     Object.keys(bucket).forEach((key) => {
         const n = Number(bucket[key]);
@@ -562,16 +600,13 @@ function getCatalogEmissionOptions(category, year) {
                 ? window.dataCategoryForEmissionKey(uiKey)
                 : inferFactorCategory(uiKey);
         if (dataCategory !== category) return;
-        if (seen.has(uiKey)) return;
-        seen.add(uiKey);
         options.push({
             key: uiKey,
             labelEn: getFactorDisplayLabel(uiKey),
             labelPt: getFactorDisplayLabel(uiKey),
         });
     });
-    options.sort((a, b) => a.labelEn.localeCompare(b.labelEn));
-    return options;
+    return dedupeEmissionOptions(options);
 }
 
 function factorUnitStorageKey(factorKey) {
@@ -2376,6 +2411,8 @@ window.carbonCalc = {
     mergeApiCatalogFactors,
     mergeApiOrganizationFactors,
     getCatalogEmissionOptions,
+    getCanonicalEmissionOptionKey,
+    dedupeEmissionOptions,
     rebuildConversionFactorCheckboxes,
     getFactorDisplayLabel,
     factorUnitStorageKey,

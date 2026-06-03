@@ -61,16 +61,6 @@ async function handleAddUser(e) {
         return;
     }
 
-    const normalizedUsername = payload.username.toLowerCase();
-    if (!/^[a-z0-9._-]{3,32}$/.test(normalizedUsername)) {
-        if (errorEl) {
-            errorEl.textContent =
-                'Username must be 3–32 characters: lowercase letters, numbers, dots, underscores, or hyphens.';
-        }
-        return;
-    }
-    payload.username = normalizedUsername;
-
     const token = localStorage.getItem('authToken');
     try {
         const response = await apiFetch('/users', {

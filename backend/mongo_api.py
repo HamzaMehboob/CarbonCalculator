@@ -274,8 +274,13 @@ def _normalize_phone(phone: str | None) -> str | None:
     return value or None
 
 
+_USERNAME_MAX_LEN = 128
+
+
 def _is_valid_username(username: str) -> bool:
-    return bool(re.match(r'^[a-z0-9._-]{3,32}$', username or ''))
+    """Username required on org user create; only length limits (no character set rules)."""
+    u = (username or '').strip()
+    return 1 <= len(u) <= _USERNAME_MAX_LEN
 
 
 def _is_strong_password(password: str) -> bool:
@@ -802,6 +807,7 @@ def _find_user_by_login(users_col, identifier: str):
 _ALLOWED_ROW_UNITS = {
     'water': {'m3', 'million_litres', 'litres', 'gallons'},
     'energy': {'kwh', 'mwh', 'gj', 'mj', 'therms'},
+    'transmissionDistribution': {'kwh', 'mwh', 'gj', 'mj', 'therms'},
     'waste': {'tonnes', 'kg', 'lbs'},
     'transport': {'km', 'miles', 'passenger_km', 'tonne_km', 'night', 'day'},
     'businessTravel': {'km', 'miles', 'passenger_km', 'tonne_km', 'night', 'day'},
@@ -814,6 +820,7 @@ _ALLOWED_ROW_UNITS = {
 _DEFAULT_ROW_UNIT = {
     'water': 'm3',
     'energy': 'kwh',
+    'transmissionDistribution': 'kwh',
     'waste': 'tonnes',
     'transport': 'km',
     'businessTravel': 'km',
@@ -1317,8 +1324,8 @@ def org_users():
     email = _normalize_email(payload.get('email'))
     phone = _normalize_phone(payload.get('phone'))
 
-    if not username or not _is_valid_username(username):
-        return jsonify({"msg": "Username must be 3-32 chars (a-z, 0-9, ., _, -)"}), 400
+    if not username or not _is_valid_username(payload.get('username')):
+        return jsonify({"msg": f"Username is required (max {_USERNAME_MAX_LEN} characters)."}), 400
     if not password or not confirm_password:
         return jsonify({"msg": "Missing password fields"}), 400
     if password != confirm_password:
@@ -1424,8 +1431,8 @@ def org_user_update_delete(username: str):
 
     if "username" in payload:
         new_username = _normalize_username(payload.get("username"))
-        if not new_username or not _is_valid_username(new_username):
-            return jsonify({"msg": "Username must be 3-32 chars (a-z, 0-9, ., _, -)"}), 400
+        if not new_username or not _is_valid_username(payload.get("username")):
+            return jsonify({"msg": f"Username is required (max {_USERNAME_MAX_LEN} characters)."}), 400
         existing = _find_user_by_username(users_col, new_username)
         if existing and existing.get("_id") != target_user.get("_id"):
             return jsonify({"msg": "Username already exists"}), 400

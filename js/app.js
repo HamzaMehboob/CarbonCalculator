@@ -602,6 +602,14 @@ const CATEGORY_DEFAULT_UNITS = {
 };
 
 function clearAuthSession() {
+    // Persist org site cache before clearing auth (backup if server sync missed).
+    if (appState.loggedIn && appState.sites && Object.keys(appState.sites).length) {
+        try {
+            saveSitesToLocalStorage();
+        } catch (_e) {
+            /* ignore */
+        }
+    }
     appState.loggedIn = false;
     knownUserProfile = null;
     localStorage.removeItem('loggedIn');
@@ -610,10 +618,7 @@ function clearAuthSession() {
     localStorage.removeItem('authToken');
     localStorage.removeItem(SESSION_EXPIRES_AT_KEY);
     localStorage.removeItem(SESSION_LAST_ACTIVITY_KEY);
-    // Clear site data (old single-user key + new org-scoped keys)
     localStorage.removeItem(LEGACY_SITES_CACHE_KEY);
-    const orgId = localStorage.getItem('organizationId') || 'default';
-    localStorage.removeItem(`carbonCalcSites_${orgId}`);
     localStorage.removeItem(LAST_LOADED_ORG_KEY);
     localStorage.removeItem('organizationId');
     localStorage.removeItem('organizationName');
@@ -636,7 +641,17 @@ function isSessionExpired() {
     return Date.now() > expiresAt;
 }
 
-function forceLogoutForExpiredSession(showMessage = true) {
+async function forceLogoutForExpiredSession(showMessage = true) {
+    try {
+        if (appState.loggedIn) {
+            if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
+            if (typeof window.flushSiteDataSave === 'function') {
+                await window.flushSiteDataSave({ silent: true, keepalive: true });
+            }
+        }
+    } catch (err) {
+        console.error('Could not save data before session expiry:', err);
+    }
     clearAuthSession();
     const loginScreen = document.getElementById('loginScreen');
     const mainApp = document.getElementById('mainApp');
@@ -671,7 +686,7 @@ function startSessionMonitor() {
 
     setInterval(() => {
         if (appState.loggedIn && isSessionExpired()) {
-            forceLogoutForExpiredSession(true);
+            void forceLogoutForExpiredSession(true);
         }
     }, 60000);
 }
@@ -1049,7 +1064,6 @@ async function loadUserDataFromBackend() {
                 }
             }
             saveSitesToLocalStorage();
-            rebuildSitesUIFromState();
             sitesLoaded = true;
 
             const serverPrefs = data.org_preferences;
@@ -1149,6 +1163,14 @@ async function saveUserDataToBackend(options) {
 
     const token = getActiveAuthToken();
     if (!token) return false;
+
+    if (typeof saveCurrentSiteData === 'function') {
+        saveCurrentSiteData();
+    }
+    if (siteDataSaveTimer) {
+        clearTimeout(siteDataSaveTimer);
+        siteDataSaveTimer = null;
+    }
 
     const keepalive = options && options.keepalive === true;
     const silent = options && options.silent === true;
@@ -1667,6 +1689,19 @@ function filterEmissionOptionsForCategory(options, category) {
     return options.filter((opt) => window.emissionKeyBelongsToDataCategory(opt.key, category));
 }
 
+function dedupeEmissionSelectOptions(options) {
+    if (window.carbonCalc?.dedupeEmissionOptions) {
+        return window.carbonCalc.dedupeEmissionOptions(options);
+    }
+    const seen = new Set();
+    return (options || []).filter((opt) => {
+        const k = opt?.key;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+    });
+}
+
 function getUnitSelectHtml(category, selectedUnit, emissionKey) {
     let options;
     if (window.AssessmentScopeUnits?.getDataInputUnitOptions) {
@@ -1779,12 +1814,17 @@ function getEmissionSelectHtml(category, selectedKey, year) {
             category,
             year || (window.carbonCalc.getReportingYear && window.carbonCalc.getReportingYear())
         );
-        const filtered = filterEmissionOptionsForCategory(catalogOpts, category);
+        const filtered = dedupeEmissionSelectOptions(
+            filterEmissionOptionsForCategory(catalogOpts, category)
+        );
+        const defaultSelected =
+            window.carbonCalc?.getCanonicalEmissionOptionKey?.(selectedKey) || selectedKey;
         if (filtered.length > 0) {
-            const defaultSelected = selectedKey || filtered[0].key;
+            const resolvedDefault =
+                filtered.find((o) => o.key === defaultSelected)?.key || filtered[0].key;
             let html = `<select class="emission-select" data-category="${category}">`;
             filtered.forEach((opt) => {
-                const selectedAttr = opt.key === defaultSelected ? 'selected' : '';
+                const selectedAttr = opt.key === resolvedDefault ? 'selected' : '';
                 html += `<option value="${opt.key}" ${selectedAttr} data-en="${opt.labelEn}" data-pt="${opt.labelPt}">${opt.labelEn}</option>`;
             });
             html += '</select>';
@@ -1917,15 +1957,22 @@ function getEmissionSelectHtml(category, selectedKey, year) {
         ]
     };
 
-    const options = filterEmissionOptionsForCategory(
-        optionsByCategory[category] || optionsByCategory[catalogCategory] || [],
-        category
+    const options = dedupeEmissionSelectOptions(
+        filterEmissionOptionsForCategory(
+            optionsByCategory[category] || optionsByCategory[catalogCategory] || [],
+            category
+        )
     );
-    const defaultSelected = selectedKey || (options[0] ? options[0].key : '');
+    const defaultSelected =
+        window.carbonCalc?.getCanonicalEmissionOptionKey?.(selectedKey) ||
+        selectedKey ||
+        (options[0] ? options[0].key : '');
+    const resolvedDefault =
+        options.find((o) => o.key === defaultSelected)?.key || options[0]?.key || '';
 
     let html = `<select class="emission-select" data-category="${category}">`;
     options.forEach(opt => {
-        const selectedAttr = opt.key === defaultSelected ? 'selected' : '';
+        const selectedAttr = opt.key === resolvedDefault ? 'selected' : '';
         html += `<option value="${opt.key}" ${selectedAttr} data-en="${opt.labelEn}" data-pt="${opt.labelPt}">${opt.labelEn}</option>`;
     });
     html += '</select>';
@@ -2160,14 +2207,18 @@ function loadSiteData(siteId) {
     }, 200);
 }
 
-const WASTE_EMISSION_LEGACY_MAP = {
-    waste: 'waste_landfill',
-    wasteRecycled: 'waste_to_recycling',
-    waste_composted: 'waste_to_composting',
-};
-
 function migrateWasteEmissionType(emissionType) {
-    return WASTE_EMISSION_LEGACY_MAP[emissionType] || emissionType;
+    if (window.carbonCalc?.getCanonicalEmissionOptionKey) {
+        return window.carbonCalc.getCanonicalEmissionOptionKey(emissionType);
+    }
+    const legacy = {
+        waste: 'waste_landfill',
+        wasteRecycled: 'waste_to_recycling',
+        waste_composted: 'waste_to_composting',
+        waste_incineration: 'waste_to_energy',
+        waste_recycled: 'waste_to_recycling',
+    };
+    return legacy[emissionType] || emissionType;
 }
 
 function loadRowData(row, data) {
@@ -2185,7 +2236,7 @@ function loadRowData(row, data) {
 
     let emissionType = data.emissionType;
     const category = row.closest('table')?.id?.replace(/Table$/, '');
-    if (category === 'waste' && emissionType) {
+    if (emissionType) {
         emissionType = migrateWasteEmissionType(emissionType);
         data.emissionType = emissionType;
     }
@@ -2922,6 +2973,15 @@ async function initializeApp() {
         console.error('Could not sync organization data from server:', syncErr);
     }
 
+    initializeTabs();
+    if (typeof window.initDynamicDataTabs === 'function') {
+        window.initDynamicDataTabs();
+    } else if (typeof window.initTransportSubTabs === 'function') {
+        window.initTransportSubTabs();
+    }
+
+    rebuildSitesUIFromState();
+
     const savedCompanyName = getOrgLocalItem('companyName', localStorage.getItem('companyName') || 'My Company');
     if (savedCompanyName) {
         const companyInput = document.getElementById('companyNameInput');
@@ -2972,13 +3032,6 @@ async function initializeApp() {
         } catch (_e) {
             appState.hiddenWidgets = [];
         }
-    }
-
-    initializeTabs();
-    if (typeof window.initDynamicDataTabs === 'function') {
-        window.initDynamicDataTabs();
-    } else if (typeof window.initTransportSubTabs === 'function') {
-        window.initTransportSubTabs();
     }
 
     if (window.AssessmentScopeForm?.init) {
@@ -3053,14 +3106,6 @@ async function initializeApp() {
     if (typeof updateDashboard === 'function') {
         updateDashboard();
     }
-    
-    // Ensure current site data is fully loaded after a short delay
-    setTimeout(() => {
-        if (appState.currentSite && appState.sites[appState.currentSite]) {
-            loadSiteData(appState.currentSite);
-            updateInputEmissionsPreview();
-        }
-    }, 100);
     
     // Attach listeners to existing rows
     document.querySelectorAll('.data-row').forEach(row => {
@@ -3227,13 +3272,15 @@ window.addEventListener('DOMContentLoaded', function() {
         document.getElementById('mainApp').style.display = 'none';
     }
 
-    window.addEventListener('beforeunload', () => {
+    const flushOnPageExit = () => {
         if (!appState.loggedIn) return;
         if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
         if (typeof window.flushSiteDataSave === 'function') {
             window.flushSiteDataSave({ keepalive: true, silent: true });
         }
-    });
+    };
+    window.addEventListener('beforeunload', flushOnPageExit);
+    window.addEventListener('pagehide', flushOnPageExit);
 });
 
 // ============================================
