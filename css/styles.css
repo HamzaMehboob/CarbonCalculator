@@ -927,18 +927,13 @@ body {
 }
 
 .conversion-factor-group {
-    flex: 1;
+    flex: 1 1 220px;
     min-width: 220px;
+    max-width: 440px;
     background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 10px;
     padding: 12px 14px;
-}
-
-.conversion-factor-group h3 {
-    font-size: 14px;
-    color: var(--text-primary);
-    margin-bottom: 8px;
 }
 
 .conversion-factor-group-header {
@@ -958,16 +953,21 @@ body {
     padding: 4px 6px;
 }
 
-.conversion-factor-group-actions {
+.conversion-factor-group-title-wrap {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    user-select: none;
 }
 
 .conversion-factor-group-select-all {
     width: 16px;
     height: 16px;
+    margin-top: 8px;
+    flex-shrink: 0;
     cursor: pointer;
     accent-color: var(--primary-color);
 }
@@ -987,6 +987,10 @@ body {
     font-weight: 600;
     color: var(--text-secondary);
     margin: 0 0 6px;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.35;
 }
 
 .chart-header-actions {
@@ -1057,16 +1061,21 @@ body {
     text-align: left;
 }
 
-.conversion-factor-group-header h3 {
-    margin: 0;
+.conversion-factor-group-heading {
+    display: block;
     flex: 1;
-    min-width: 100px;
+    min-width: 0;
+    margin: 0;
     font-size: 14px;
     font-weight: 700;
     color: #fff;
     padding: 8px 12px;
     background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-dark) 100%);
     border-radius: 6px;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.35;
 }
 
 .conversion-factor-group-unit {
@@ -1096,7 +1105,7 @@ body {
 
 .conversion-factor-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
     padding: 6px 0;
@@ -1109,7 +1118,7 @@ body {
 
 .conversion-factor-label-wrap {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     flex: 1;
     min-width: 0;
@@ -1117,18 +1126,25 @@ body {
     color: var(--text-secondary);
 }
 
+.conversion-factor-label-wrap input[type="checkbox"] {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
 .conversion-factor-label {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.35;
 }
 
 .conversion-factor-unit {
     flex-shrink: 0;
     min-width: 88px;
     max-width: 120px;
+    margin-top: 2px;
     padding: 4px 6px;
     font-size: 12px;
     border-radius: 6px;

@@ -733,28 +733,30 @@ function rebuildConversionFactorCheckboxes() {
         toggleBtn.setAttribute('aria-expanded', 'true');
         toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
 
-        const h3 = document.createElement('h3');
-        h3.textContent = titles.en;
-        h3.setAttribute('data-en', titles.en);
-        h3.setAttribute('data-pt', titles.pt);
+        const titleWrap = document.createElement('label');
+        titleWrap.className = 'conversion-factor-group-title-wrap';
 
-        const actions = document.createElement('div');
-        actions.className = 'conversion-factor-group-actions';
         const groupSelectAll = document.createElement('input');
         groupSelectAll.type = 'checkbox';
         groupSelectAll.className = 'conversion-factor-group-select-all';
         groupSelectAll.setAttribute('aria-label', `Select all in ${titles.en}`);
-        groupSelectAll.title = 'Select all in this group';
-        actions.appendChild(groupSelectAll);
+
+        const h3 = document.createElement('span');
+        h3.className = 'conversion-factor-group-heading';
+        h3.textContent = titles.en;
+        h3.setAttribute('data-en', titles.en);
+        h3.setAttribute('data-pt', titles.pt);
+
+        titleWrap.appendChild(groupSelectAll);
+        titleWrap.appendChild(h3);
 
         header.appendChild(toggleBtn);
-        header.appendChild(h3);
+        header.appendChild(titleWrap);
         if (window.AssessmentScopeUnits?.createConversionFactorGroupUnitSelect) {
             header.appendChild(
                 window.AssessmentScopeUnits.createConversionFactorGroupUnitSelect(subgroup)
             );
         }
-        header.appendChild(actions);
         group.appendChild(header);
 
         const body = document.createElement('div');
