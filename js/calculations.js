@@ -21,7 +21,8 @@ const SOURCE_TO_CATEGORY = {
     wastewater: 'water',
     water_reuse: 'water',
     electricity: 'energy',
-    electricity_transmission_distribution: 'energy',
+    electricity_transmission_distribution: 'transmissionDistribution',
+    td_district_heat_steam: 'transmissionDistribution',
     naturalGas: 'energy',
     diesel: 'energy',
     lpg: 'energy',
@@ -127,7 +128,8 @@ const COUNTRY_BASE_FACTORS_2025 = {
     UK: {
         water: 0.1913, wastewater: 0.17088, water_reuse: 0.028,
         electricity: 0.177,
-        electricity_transmission_distribution: 0.0183,
+        electricity_transmission_distribution: 0.01853,
+        td_district_heat_steam: 0.00945,
         naturalGas: 0.18296, diesel: 0.24411, lpg: 0.214, coal: 0.317,
         waste: 467.0, wasteRecycled: 21.3, waste_composted: 8.8,
         waste_landfill: 467.0, waste_to_energy: 21.28, waste_to_recycling: 21.3, waste_to_composting: 8.8,
@@ -411,7 +413,8 @@ const CATALOG_FACTOR_LABELS_EN = {
     wastewater: 'Waste water',
     water_reuse: 'Reused water',
     electricity: 'Electricity (grid)',
-    electricity_transmission_distribution: 'Electricity (transmission & distribution)',
+    electricity_transmission_distribution: 'T&D — UK electricity',
+    td_district_heat_steam: 'T&D — district heat & steam',
     naturalGas: 'Natural gas',
     diesel: 'Diesel / heating oil',
     transport_petrol: 'Company vehicles (petrol)',
@@ -456,6 +459,9 @@ function inferFactorCategory(key) {
     if (['water', 'wastewater', 'water_reuse', 'water_supply', 'water_treatment'].includes(k)) {
         return 'water';
     }
+    if (['electricity_transmission_distribution', 'td_district_heat_steam'].includes(k)) {
+        return 'transmissionDistribution';
+    }
     if (['electricity', 'naturalGas', 'diesel', 'lpg', 'coal', 'electricity_grid', 'natural_gas', 'heating_oil'].includes(k)) {
         return 'energy';
     }
@@ -472,8 +478,11 @@ function inferFactorCategory(key) {
 function inferFactorAssessmentSubgroup(key) {
     const k = String(key || '');
     const ui = CATALOG_UI_KEY_FOR_BACKEND[k] || k;
-    if (['electricity', 'electricity_grid', 'electricity_transmission_distribution'].includes(ui)) {
-        return ui === 'electricity_transmission_distribution' ? 'electricity_td' : 'electricity';
+    if (['electricity_transmission_distribution', 'td_district_heat_steam'].includes(ui)) {
+        return 'electricity_td';
+    }
+    if (['electricity', 'electricity_grid'].includes(ui)) {
+        return 'electricity';
     }
     if (['naturalGas', 'diesel', 'lpg', 'coal', 'natural_gas', 'heating_oil'].includes(ui)) {
         return 'gas_energy';
@@ -1674,6 +1683,12 @@ function factorWithDefaults(bucket, key, defaults) {
 }
 
 function sourceToggleEnabled(sourceKey) {
+    if (
+        sourceKey === 'electricity_transmission_distribution' ||
+        sourceKey === 'td_district_heat_steam'
+    ) {
+        return readOrgPref('elecDistLossIncluded', 'true') !== 'false';
+    }
     if (sourceKey === 'business_travel_hotel_night') {
         return readOrgPref('hotelStayEnabled', 'true') !== 'false';
     }
@@ -1727,6 +1742,8 @@ function getRowConversionFactor(row, tableId) {
             return factorWithDefaults(bucket, 'water', defaults);
         case 'energyTable':
             return factorWithDefaults(bucket, 'electricity', defaults);
+        case 'transmissionDistributionTable':
+            return factorWithDefaults(bucket, 'electricity_transmission_distribution', defaults);
         case 'wasteTable':
             return factorWithDefaults(bucket, 'waste', defaults);
         case 'transportTable':
@@ -2242,7 +2259,10 @@ function getScopeBreakdown() {
 
                     if (scope1Keys.has(emissionType) || emissionType.startsWith('refrigerant_')) {
                         scope1 += co2Value;
-                    } else if (emissionType === 'electricity_transmission_distribution') {
+                    } else if (
+                        emissionType === 'electricity_transmission_distribution' ||
+                        emissionType === 'td_district_heat_steam'
+                    ) {
                         scope3 += co2Value;
                     } else if (emissionType === 'electricity') {
                         scope2 += co2Value;

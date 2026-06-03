@@ -13,13 +13,30 @@
     const DATA_INPUT_CATEGORIES = [
         'water',
         'energy',
+        'transmissionDistribution',
         'waste',
         'transport',
         ...TRANSPORT_SUB_CATEGORIES,
         'refrigerants',
     ];
 
+    const DYNAMIC_DATA_TAB_CATEGORIES = [
+        'transmissionDistribution',
+        ...TRANSPORT_SUB_CATEGORIES,
+    ];
+
     const TAB_META = {
+        transmissionDistribution: {
+            titleEn: 'Transmission and Distribution',
+            titlePt: 'Transmissão e Distribuição',
+            icon: 'fa-network-wired',
+            summaryEn: 'Total Transmission & Distribution Emissions:',
+            summaryPt: 'Total de Emissões de Transmissão e Distribuição:',
+            totalColEn: 'Total (kWh)',
+            totalColPt: 'Total (kWh)',
+            defaultEmission: 'electricity_transmission_distribution',
+            placeholder: 'T&D losses',
+        },
         transport: {
             titleEn: 'Company Fleet',
             titlePt: 'Frota da Empresa',
@@ -102,6 +119,11 @@
                 return 'water';
             }
             if (
+                ['electricity_transmission_distribution', 'td_district_heat_steam'].includes(k)
+            ) {
+                return 'transmissionDistribution';
+            }
+            if (
                 ['electricity', 'naturalGas', 'diesel', 'lpg', 'coal', 'electricity_grid', 'natural_gas', 'heating_oil'].includes(k)
             ) {
                 return 'energy';
@@ -142,7 +164,35 @@
         if (TRANSPORT_SUB_CATEGORIES.includes(dataCategory) || dataCategory === 'transport') {
             return 'transport';
         }
+        if (dataCategory === 'transmissionDistribution') {
+            return 'energy';
+        }
         return dataCategory;
+    }
+
+    function migrateTransmissionDistributionFromEnergy(site) {
+        if (!site?.data) return;
+        if (!Array.isArray(site.data.transmissionDistribution)) {
+            site.data.transmissionDistribution = [];
+        }
+        if (site.data._transmissionDistributionMigrated) return;
+
+        const energy = Array.isArray(site.data.energy) ? site.data.energy : [];
+        const moved = [];
+        const kept = [];
+        energy.forEach((row) => {
+            const et = row?.emissionType;
+            if (et === 'electricity_transmission_distribution' || et === 'td_district_heat_steam') {
+                moved.push(row);
+            } else {
+                kept.push(row);
+            }
+        });
+        if (moved.length) {
+            site.data.transmissionDistribution.push(...moved);
+            site.data.energy = kept;
+        }
+        site.data._transmissionDistributionMigrated = true;
     }
 
     function migrateLegacyTransportData(site) {
@@ -181,9 +231,10 @@
             if (!Array.isArray(site.data[key])) site.data[key] = [];
         });
         migrateLegacyTransportData(site);
+        migrateTransmissionDistributionFromEnergy(site);
     }
 
-    function buildTransportSubTabPanel(category) {
+    function buildDynamicDataTabPanel(category) {
         const meta = TAB_META[category];
         if (!meta) return null;
 
@@ -231,17 +282,25 @@
         return panel;
     }
 
-    function initTransportSubTabs() {
+    function initDynamicDataTabs() {
         const host = document.getElementById('tabsContent');
         if (!host) return;
 
         const refrigerantsPanel = host.querySelector('[data-content="refrigerants"]');
-        TRANSPORT_SUB_CATEGORIES.forEach((category) => {
+        const energyPanel = host.querySelector('[data-content="energy"]');
+
+        DYNAMIC_DATA_TAB_CATEGORIES.forEach((category) => {
             if (host.querySelector(`[data-content="${category}"]`)) return;
-            const panel = buildTransportSubTabPanel(category);
-            if (panel && refrigerantsPanel) {
+            const panel = buildDynamicDataTabPanel(category);
+            if (!panel) return;
+
+            if (category === 'transmissionDistribution' && energyPanel?.nextSibling) {
+                host.insertBefore(panel, energyPanel.nextSibling);
+            } else if (category === 'transmissionDistribution' && energyPanel) {
+                energyPanel.insertAdjacentElement('afterend', panel);
+            } else if (refrigerantsPanel) {
                 host.insertBefore(panel, refrigerantsPanel);
-            } else if (panel) {
+            } else {
                 host.appendChild(panel);
             }
         });
@@ -253,11 +312,14 @@
 
     global.DATA_INPUT_CATEGORIES = DATA_INPUT_CATEGORIES;
     global.TRANSPORT_SUB_CATEGORIES = TRANSPORT_SUB_CATEGORIES;
+    global.DYNAMIC_DATA_TAB_CATEGORIES = DYNAMIC_DATA_TAB_CATEGORIES;
     global.DATA_TAB_META = TAB_META;
     global.dataCategoryForEmissionKey = dataCategoryForEmissionKey;
     global.emissionKeyBelongsToDataCategory = emissionKeyBelongsToDataCategory;
     global.resolveUnitCategoryForDataTab = resolveUnitCategoryForDataTab;
     global.migrateLegacyTransportData = migrateLegacyTransportData;
+    global.migrateTransmissionDistributionFromEnergy = migrateTransmissionDistributionFromEnergy;
     global.ensureDefaultSiteData = ensureDefaultSiteData;
-    global.initTransportSubTabs = initTransportSubTabs;
+    global.initDynamicDataTabs = initDynamicDataTabs;
+    global.initTransportSubTabs = initDynamicDataTabs;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -126,6 +126,11 @@ function exportToPDF() {
     const categories = [
         { name: 'Water', key: 'water', color: [19, 181, 234] },
         { name: 'Energy', key: 'energy', color: [255, 193, 7] },
+        {
+            name: 'Transmission & distribution',
+            key: 'transmissionDistribution',
+            color: [255, 159, 64],
+        },
         { name: 'Waste', key: 'waste', color: [40, 167, 69] },
         { name: 'Company fleet', key: 'transport', color: [220, 53, 69] },
         { name: 'Business travel', key: 'businessTravel', color: [111, 66, 193] },
@@ -757,7 +762,7 @@ function _formatKg(num) {
 
 function _getExportCategories() {
     return window.DATA_INPUT_CATEGORIES || [
-        'water', 'energy', 'waste', 'transport', 'businessTravel', 'freight',
+        'water', 'energy', 'transmissionDistribution', 'waste', 'transport', 'businessTravel', 'freight',
         'staffCommute', 'wfh', 'materials', 'refrigerants',
     ];
 }
@@ -765,7 +770,9 @@ function _getExportCategories() {
 function _unitForCategory(categoryKey) {
     switch (categoryKey) {
         case 'water': return 'm³';
-        case 'energy': return 'kWh';
+        case 'energy':
+        case 'transmissionDistribution':
+            return 'kWh';
         case 'waste': return 'tonnes';
         case 'transport':
         case 'businessTravel':
@@ -784,6 +791,7 @@ function _categoryLabel(categoryKey) {
     const map = {
         water: 'Water',
         energy: 'Energy',
+        transmissionDistribution: 'Transmission & distribution',
         waste: 'Waste',
         transport: 'Company fleet',
         businessTravel: 'Business travel',
@@ -792,7 +800,6 @@ function _categoryLabel(categoryKey) {
         wfh: 'Working from home',
         materials: 'Materials',
         refrigerants: 'Refrigerants',
-    };
     };
     return map[categoryKey] || categoryKey;
 }

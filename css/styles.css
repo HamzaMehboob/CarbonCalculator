@@ -893,7 +893,8 @@ body {
 
 /* Data input — per-tab additional questions */
 .tab-questions-card {
-    width: 100%;
+    width: 50%;
+    max-width: 100%;
     margin-top: 12px;
     margin-bottom: 16px;
 }
@@ -906,8 +907,7 @@ body {
 
 .tab-questions-card .tab-question-notes {
     display: block;
-    width: 50%;
-    max-width: 100%;
+    width: 100%;
     min-height: 120px;
     padding: 10px 14px;
     border: 2px solid var(--border-color);

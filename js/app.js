@@ -4,7 +4,7 @@
 // ============================================
 
 const DEFAULT_DATA_INPUT_KEYS = [
-    'water', 'energy', 'waste', 'transport', 'businessTravel', 'freight',
+    'water', 'energy', 'transmissionDistribution', 'waste', 'transport', 'businessTravel', 'freight',
     'staffCommute', 'wfh', 'materials', 'refrigerants',
 ];
 
@@ -164,6 +164,8 @@ let sessionMonitorStarted = false;
 const TAB_QUESTION_PROMPTS = {
     water: 'Water tab: include meter source, estimated readings, and any anomalies.',
     energy: 'Energy tab: include billing period type (calendar/financial), tariff notes, and kWh data source.',
+    transmissionDistribution:
+        'Transmission & distribution tab: UK electricity T&D losses and district heat & steam (kWh), per datasheet.',
     waste: 'Waste tab: include weighing source, uplift frequency, and conversion assumptions.',
     transport: 'Company fleet tab: include vehicle types, mileage evidence, and fuel card data sources.',
     businessTravel: 'Business travel tab: include flights, rail, hotel stays, and expense report sources.',
@@ -1770,11 +1772,6 @@ function getEmissionSelectHtml(category, selectedKey, year) {
         ],
         energy: [
             { key: 'electricity', labelEn: 'Electricity (grid)', labelPt: 'Eletricidade (rede)' },
-            {
-                key: 'electricity_transmission_distribution',
-                labelEn: 'Electricity (transmission & distribution)',
-                labelPt: 'Eletricidade (transmissão e distribuição)',
-            },
             { key: 'naturalGas', labelEn: 'Natural gas', labelPt: 'Gás natural' },
             { key: 'diesel', labelEn: 'Diesel (generator/boiler)', labelPt: 'Diesel (gerador/caldeira)' },
             { key: 'lpg', labelEn: 'LPG', labelPt: 'GLP' },
@@ -2325,6 +2322,7 @@ function updateInputEmissionsPreview() {
     const categoryLabel = {
         water: 'Water',
         energy: 'Energy',
+        transmissionDistribution: 'Transmission & distribution',
         waste: 'Waste',
         transport: 'Company fleet',
         businessTravel: 'Business travel',
@@ -2919,7 +2917,9 @@ async function initializeApp() {
     }
 
     initializeTabs();
-    if (typeof window.initTransportSubTabs === 'function') {
+    if (typeof window.initDynamicDataTabs === 'function') {
+        window.initDynamicDataTabs();
+    } else if (typeof window.initTransportSubTabs === 'function') {
         window.initTransportSubTabs();
     }
 

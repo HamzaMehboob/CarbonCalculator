@@ -89,6 +89,7 @@
     const SYNC_GROUP_TABLE = {
         energy_electricity: 'energyTable',
         energy_gas: 'energyTable',
+        energy_td: 'transmissionDistributionTable',
         water_supply: 'waterTable',
         water_wastewater: 'waterTable',
         waste: 'wasteTable',
@@ -103,6 +104,7 @@
     /** Maps conversion-factor subgroups to assessment-scope unit storage keys. */
     const SUBGROUP_UNIT_STORAGE_KEYS = {
         electricity: 'electricityUnit',
+        electricity_td: 'elecDistLossUnit',
         gas_energy: 'gasUnit',
         water: 'waterUnit',
         wastewater: 'wasteWaterUnit',
@@ -122,6 +124,10 @@
     /** Allowed quantity units per assessment / conversion-factor group (datasheet). */
     const ASSESSMENT_QUANTITY_UNIT_OPTIONS = {
         electricity: [
+            { value: 'kwh', labelEn: 'kWh', labelPt: 'kWh' },
+            NO_UNIT_OPTION,
+        ],
+        electricity_td: [
             { value: 'kwh', labelEn: 'kWh', labelPt: 'kWh' },
             NO_UNIT_OPTION,
         ],
@@ -672,6 +678,13 @@
             typeof global.getOrgLocalItem === 'function'
                 ? global.getOrgLocalItem(key, fallback)
                 : fallback;
+        if (category === 'transmissionDistribution') {
+            return mapAssessmentUnitToRowUnit(
+                'energy',
+                get('elecDistLossUnit', get('electricityUnit', 'kwh')),
+                emissionKey
+            );
+        }
         if (category === 'energy' && emissionKey) {
             if (isGasEmission(emissionKey)) {
                 return mapAssessmentUnitToRowUnit('energy', get('gasUnit', 'kwh'), emissionKey);
