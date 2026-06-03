@@ -1742,8 +1742,33 @@ function bindRowUnitSelect(row, unitSelect) {
     });
 }
 
+const TRANSMISSION_DISTRIBUTION_EMISSION_OPTIONS = [
+    {
+        key: 'electricity_transmission_distribution',
+        labelEn: 'T&D — UK electricity',
+        labelPt: 'T&D — eletricidade UK',
+    },
+    {
+        key: 'td_district_heat_steam',
+        labelEn: 'T&D — district heat & steam',
+        labelPt: 'T&D — calor distrital e vapor',
+    },
+];
+
 // Build emission type dropdown HTML per category (options from conversion_factor_catalog via carbonCalc)
 function getEmissionSelectHtml(category, selectedKey, year) {
+    if (category === 'transmissionDistribution') {
+        const defaultSelected =
+            selectedKey || TRANSMISSION_DISTRIBUTION_EMISSION_OPTIONS[0].key;
+        let html = `<select class="emission-select" data-category="${category}">`;
+        TRANSMISSION_DISTRIBUTION_EMISSION_OPTIONS.forEach((opt) => {
+            const selectedAttr = opt.key === defaultSelected ? 'selected' : '';
+            html += `<option value="${opt.key}" ${selectedAttr} data-en="${opt.labelEn}" data-pt="${opt.labelPt}">${opt.labelEn}</option>`;
+        });
+        html += '</select>';
+        return html;
+    }
+
     const catalogCategory =
         typeof window.resolveUnitCategoryForDataTab === 'function'
             ? window.resolveUnitCategoryForDataTab(category)

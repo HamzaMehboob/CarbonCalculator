@@ -109,9 +109,19 @@
         const k = String(emissionKey || '');
         if (!k) return 'transport';
 
+        if (
+            ['electricity_transmission_distribution', 'td_district_heat_steam'].includes(k)
+        ) {
+            return 'transmissionDistribution';
+        }
+
         if (global.carbonCalc?.inferFactorCategory) {
             const baseCategory = global.carbonCalc.inferFactorCategory(k);
-            if (['water', 'energy', 'waste', 'refrigerants'].includes(baseCategory)) {
+            if (
+                ['water', 'energy', 'waste', 'refrigerants', 'transmissionDistribution'].includes(
+                    baseCategory
+                )
+            ) {
                 return baseCategory;
             }
         } else {
