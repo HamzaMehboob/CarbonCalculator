@@ -5,6 +5,8 @@
 
 const SUPPORTED_YEARS = [2020, 2021, 2022, 2023, 2024, 2025];
 const BASE_YEAR = 2025;
+const CHART_YEAR_ABS_MIN = 1990;
+const CHART_YEAR_ABS_MAX = 2100;
 
 const UNIT_TO_BASE_MULTIPLIER = {
     water: { m3: 1, million_litres: 1000, litres: 0.001, gallons: 0.00454609, ft3: 0.0283168 },
@@ -971,16 +973,85 @@ function normalizeRowYear(rawYear) {
     return BASE_YEAR;
 }
 
+/** Years available for reporting-year / factor lookup (catalog + row display years). */
+function getAvailableFactorYears() {
+    const yearSet = new Set(SUPPORTED_YEARS);
+    const countryBucket = CONVERSION_FACTORS[currentCountry] || CONVERSION_FACTORS.UK || {};
+    Object.keys(countryBucket).forEach((k) => {
+        const y = parseInt(k, 10);
+        if (Number.isFinite(y) && y >= CHART_YEAR_ABS_MIN && y <= CHART_YEAR_ABS_MAX) {
+            yearSet.add(y);
+        }
+    });
+    getDataInputCategories().forEach((category) => {
+        const table = document.getElementById(`${category}Table`);
+        if (!table) return;
+        table.querySelectorAll('.row-display-year, input[type="number"]:not(.month-input)').forEach((input) => {
+            const y = parseInt(input.value, 10);
+            if (Number.isFinite(y) && y >= CHART_YEAR_ABS_MIN && y <= CHART_YEAR_ABS_MAX) {
+                yearSet.add(y);
+            }
+        });
+    });
+    return Array.from(yearSet).sort((a, b) => a - b);
+}
+
+function normalizeReportingYear(rawYear) {
+    const y = Number(rawYear);
+    const available = getAvailableFactorYears();
+    if (Number.isInteger(y) && available.includes(y)) return y;
+    if (Number.isInteger(y) && y >= CHART_YEAR_ABS_MIN && y <= CHART_YEAR_ABS_MAX) return y;
+    return BASE_YEAR;
+}
+
+/** Calendar/financial year used for conversion factors (not row display year). */
+function getFactorLookupYear() {
+    return getReportingYear();
+}
+
 function getReportingYear() {
-    return normalizeRowYear(currentReportingYear);
+    return normalizeReportingYear(currentReportingYear);
+}
+
+function syncReportingYearSelects() {
+    const year = String(getReportingYear());
+    ['reportingYearSelect', 'reportingYearGeneralSelect'].forEach((id) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        if (!Array.from(sel.options).some((o) => o.value === year)) {
+            const opt = document.createElement('option');
+            opt.value = year;
+            opt.textContent = year;
+            sel.appendChild(opt);
+        }
+        sel.value = year;
+    });
+}
+
+function refreshReportingYearSelectOptions() {
+    const years = getAvailableFactorYears();
+    const current = String(getReportingYear());
+    ['reportingYearSelect', 'reportingYearGeneralSelect'].forEach((id) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join('');
+        const next = years.map(String).includes(current)
+            ? current
+            : String(years[years.length - 1] || BASE_YEAR);
+        sel.value = next;
+        if (next !== current) {
+            currentReportingYear = normalizeReportingYear(next);
+        }
+    });
 }
 
 function setReportingYear(year) {
-    currentReportingYear = normalizeRowYear(year);
+    currentReportingYear = normalizeReportingYear(year);
     writeOrgPref('carbonCalcReportingYear', String(currentReportingYear));
     if (typeof window.setOrgLocalItem === 'function') {
         window.setOrgLocalItem('carbonCalcReportingYear', String(currentReportingYear));
     }
+    syncReportingYearSelects();
     syncReportingPeriodLabelToDOM();
     rebuildConversionFactorCheckboxes();
     calculateAllTotals();
@@ -994,7 +1065,7 @@ function hydrateReportingPeriodFromPrefs(prefs) {
             prefs.reportingPeriodType === 'financial_uk' ? 'financial_uk' : 'calendar';
     }
     if (prefs.carbonCalcReportingYear) {
-        currentReportingYear = normalizeRowYear(prefs.carbonCalcReportingYear);
+        currentReportingYear = normalizeReportingYear(prefs.carbonCalcReportingYear);
     }
 }
 
@@ -1236,11 +1307,10 @@ function getFactorsBucketForYear(year, country) {
 }
 
 function getRowConversionFactor(row, tableId) {
-    const yearRaw = row.querySelector('input[type="number"]:not(.month-input)')?.value;
-    const normalizedYear = normalizeRowYear(yearRaw);
-    const bucket = resolveUiFactorBucket(normalizedYear);
+    const factorYear = getFactorLookupYear();
+    const bucket = resolveUiFactorBucket(factorYear);
     const defaults =
-        (DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'])[String(normalizedYear)] ||
+        (DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'])[String(factorYear)] ||
         (DEFAULT_CONVERSION_FACTORS['UK'] || {})[String(BASE_YEAR)] ||
         {};
 
@@ -1458,8 +1528,6 @@ function getCategoryTotalsForYearRange(minYear, maxYear) {
 
 const CHART_BASELINE_YEAR_MIN = 2020;
 const CHART_BASELINE_YEAR_MAX = 2025;
-const CHART_YEAR_ABS_MIN = 1990;
-const CHART_YEAR_ABS_MAX = 2100;
 
 function isValidChartYear(year) {
     return Number.isFinite(year) && year >= CHART_YEAR_ABS_MIN && year <= CHART_YEAR_ABS_MAX;
@@ -1705,6 +1773,8 @@ function setCountry(country) {
         window.setOrgLocalItem('carbonCalcCountry', currentCountry);
     }
     rebuildConversionFactorCheckboxes();
+    refreshReportingYearSelectOptions();
+    syncReportingYearSelects();
     calculateAllTotals();
     updateDashboard();
 }
@@ -1807,6 +1877,10 @@ window.carbonCalc = {
     refreshEmissionsUnitLabels,
     setReportingYear,
     getReportingYear,
+    getFactorLookupYear,
+    getAvailableFactorYears,
+    syncReportingYearSelects,
+    refreshReportingYearSelectOptions,
     setReportingPeriodType,
     getReportingPeriodType,
     getReportingPeriodLabel,

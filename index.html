@@ -332,10 +332,24 @@
                                     <option value="financial_uk" data-en="Financial year UK (Apr–Mar)" data-pt="Ano fiscal UK (abr–mar)">Financial year UK (Apr–Mar)</option>
                                 </select>
                             </div>
-                            <div class="form-inline-group">
-                                <label data-en="Reporting Period" data-pt="Período de Relato">Reporting Period</label>
-                                <input type="text" id="reportingPeriodInput" placeholder="e.g. Jan–Dec 2024" value="" readonly title="Auto-generated from period type and reporting year"/>
+                            <div class="form-inline-group general-info-reporting-row">
+                                <div class="form-inline-group">
+                                    <label for="reportingYearGeneralSelect" data-en="Reporting year" data-pt="Ano de reporte">Reporting year</label>
+                                    <select id="reportingYearGeneralSelect" class="toolbar-control toolbar-select" title="Conversion factors and report period use this year">
+                                        <option value="2020">2020</option>
+                                        <option value="2021">2021</option>
+                                        <option value="2022">2022</option>
+                                        <option value="2023">2023</option>
+                                        <option value="2024">2024</option>
+                                        <option value="2025" selected>2025</option>
+                                    </select>
+                                </div>
+                                <div class="form-inline-group">
+                                    <label data-en="Reporting Period" data-pt="Período de Relato">Reporting Period</label>
+                                    <input type="text" id="reportingPeriodInput" placeholder="e.g. Jan–Dec 2024" value="" readonly title="Auto-generated from period type and reporting year"/>
+                                </div>
                             </div>
+                            <p class="general-info-hint" data-en="Emission factors always use the reporting year above, not the display year on each data row." data-pt="Os fatores de emissão usam sempre o ano de reporte acima, não o ano de exibição em cada linha.">Emission factors always use the reporting year above, not the display year on each data row.</p>
                             <div class="form-inline-group">
                                 <label data-en="Issue Date" data-pt="Data de Emissão">Issue Date</label>
                                 <input type="date" id="issueDateInput" value=""/>

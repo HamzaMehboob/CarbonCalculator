@@ -127,8 +127,9 @@
         }
         if (data.carbonCalcReportingYear && global.carbonCalc?.setReportingYear) {
             global.carbonCalc.setReportingYear(data.carbonCalcReportingYear);
-            const yr = document.getElementById('reportingYearSelect');
-            if (yr) yr.value = String(data.carbonCalcReportingYear);
+            if (global.carbonCalc.syncReportingYearSelects) {
+                global.carbonCalc.syncReportingYearSelects();
+            }
         }
         if (data.carbonCalcOutputUnit && global.carbonCalc?.setOutputUnit) {
             global.carbonCalc.setOutputUnit(data.carbonCalcOutputUnit);

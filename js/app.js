@@ -2994,17 +2994,22 @@ async function initializeApp() {
 
     // Sync calculation context controls (reporting year + output unit)
     try {
-        const reportingYearSelect = document.getElementById('reportingYearSelect');
-        if (reportingYearSelect && window.carbonCalc?.getReportingYear) {
-            reportingYearSelect.value = String(window.carbonCalc.getReportingYear());
-            if (reportingYearSelect.dataset.bound !== '1') {
-                reportingYearSelect.dataset.bound = '1';
-                reportingYearSelect.addEventListener('change', () => {
-                    if (window.carbonCalc?.setReportingYear) {
-                        window.carbonCalc.setReportingYear(reportingYearSelect.value);
-                    }
-                });
-            }
+        if (window.carbonCalc?.refreshReportingYearSelectOptions) {
+            window.carbonCalc.refreshReportingYearSelectOptions();
+        }
+        const bindReportingYearSelect = (selectEl) => {
+            if (!selectEl || selectEl.dataset.bound === '1') return;
+            selectEl.dataset.bound = '1';
+            selectEl.addEventListener('change', () => {
+                if (window.carbonCalc?.setReportingYear) {
+                    window.carbonCalc.setReportingYear(selectEl.value);
+                }
+            });
+        };
+        bindReportingYearSelect(document.getElementById('reportingYearSelect'));
+        bindReportingYearSelect(document.getElementById('reportingYearGeneralSelect'));
+        if (window.carbonCalc?.syncReportingYearSelects) {
+            window.carbonCalc.syncReportingYearSelects();
         }
         const reportingPeriodTypeSelect = document.getElementById('reportingPeriodTypeSelect');
         if (reportingPeriodTypeSelect && window.carbonCalc?.setReportingPeriodType) {

@@ -791,6 +791,25 @@ body {
     max-width: 720px;
 }
 
+.general-info-reporting-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+    align-items: flex-end;
+}
+
+.general-info-reporting-row > .form-inline-group {
+    flex: 1 1 200px;
+    min-width: 180px;
+}
+
+.general-info-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: -4px 0 16px;
+    line-height: 1.45;
+}
+
 .general-info-meta-title {
     margin: 0 0 12px;
     font-size: 15px;
