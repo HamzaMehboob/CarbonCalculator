@@ -18,12 +18,10 @@ import mongo_api as api  # noqa: E402
 
 def test_load_yellow_map_length_and_keys():
     m = api._load_yellow_numeric_field_map()
-    assert len(m) == 34
-    assert m[5] == "grand_total_kg"
-    assert m[16] == "grand_total_kg"
-    assert m[33] == "grand_total_kg"
-    assert m[0] == "project_number"
-    assert m[19] == "scope3_kg"
+    assert len(m) == 21
+    assert m[0] == "natural_gas_scope_kg"
+    assert m[4] == "electricity_emissions_kg"
+    assert m[20] == "waste_to_recycling_kg"
 
 
 def test_narrative_overrides_escape_xml():
@@ -42,8 +40,8 @@ def test_png_from_minimal_data_url():
 
 
 @pytest.mark.skipif(
-    not (REPO_ROOT / "requirements" / "Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx").exists(),
-    reason="Selby Word template not present",
+    not (REPO_ROOT / "requirements" / "Carbon emissions statement report template.docx").exists(),
+    reason="Carbon statement Word template not present",
 )
 def test_build_final_report_docx_smoke():
     payload = {
@@ -66,6 +64,22 @@ def test_build_final_report_docx_smoke():
         "organization_profile": "Custom profile line.",
         "scope_streams_summary": "Streams: electric only.",
         "assessment_period_detail": "Jan 2025 to Dec 2025",
+        "reporting_year": "2025",
+        "org_registered_address": "1 Test Street",
+        "performance_rows": {
+            "natural_gas": {
+                "usage": "1,000 kWh",
+                "factor": "0.18 kg CO2e / kWh",
+                "emissions_kg": 100,
+                "scope_kg": 100,
+            },
+            "electricity": {
+                "usage": "2,000 kWh",
+                "factor": "0.21 kg CO2e / kWh",
+                "emissions_kg": 200,
+                "scope_kg": 200,
+            },
+        },
     }
     docx, fname = api.build_final_report_docx_bytes(payload)
     assert fname.startswith("Final_Report_TestOrgLtd")
@@ -73,13 +87,14 @@ def test_build_final_report_docx_smoke():
     zf = zipfile.ZipFile(io.BytesIO(docx))
     assert "word/document.xml" in zf.namelist()
     inner = zf.read("word/document.xml").decode("utf-8", errors="ignore")
-    assert "TestOrgLtd" in inner
-    assert "Selby Trust" not in inner
+    assert "TestOrgLtd" not in inner  # carbon statement template has no Selby placeholders
     assert "450,000.00" in inner
     assert "P-99" in inner
-    assert "Custom profile line." in inner
-    assert "Streams: electric only." in inner
-    assert "Jan 2025 to Dec 2025" in inner
+    assert "1 Test Street" in inner
+    assert "2025/2026" in inner
+    import re
+    parts = re.findall(r"<w:t[^>]*>([^<]*)</w:t>", inner)
+    assert "".join(parts).strip()
     img = zf.read("word/media/image1.png")
     assert img.startswith(b"\x89PNG")
 
@@ -113,5 +128,6 @@ def test_final_report_yellow_map_json_valid():
     p = BACKEND_ROOT / "final_report_yellow_map.json"
     data = json.loads(p.read_text(encoding="utf-8"))
     fields = data["fields"]
-    assert fields.count("grand_total_kg") == 3
-    assert all(f is None or isinstance(f, str) for f in fields)
+    assert len(fields) == 21
+    assert fields[0] == "natural_gas_scope_kg"
+    assert all(isinstance(f, str) for f in fields)

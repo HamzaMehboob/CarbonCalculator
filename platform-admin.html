@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Admin</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box" style="max-width: 900px;">
+            <div class="login-header">
+                <img src="assets/SQImpact_v2.png" alt="SQ Impact" style="width: 280px; max-width: 100%; margin-bottom: 8px;">
+                <p>Platform administration</p>
+                <h3 id="adminUserHeading" style="margin-top: 8px;"></h3>
+            </div>
+
+            <div class="card p-4" style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 10px;">Consultants</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                    Add consultant accounts. They can add organizations to their workbench and edit data (they cannot delete organizations).
+                </p>
+                <form id="addConsultantForm">
+                    <div class="form-group">
+                        <label for="consultantFullName">Full name</label>
+                        <input type="text" id="consultantFullName" placeholder="Consultant name">
+                    </div>
+                    <div class="form-group">
+                        <label for="consultantEmail">Email (optional)</label>
+                        <input type="email" id="consultantEmail" placeholder="consultant@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="consultantUsername">Username</label>
+                        <input type="text" id="consultantUsername" required placeholder="login name" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="consultantPassword">Password</label>
+                        <input type="password" id="consultantPassword" required placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label for="consultantConfirmPassword">Confirm password</label>
+                        <input type="password" id="consultantConfirmPassword" required placeholder="••••••••">
+                    </div>
+                    <div id="consultantFormError" class="error-message" role="alert"></div>
+                    <div id="consultantFormSuccess" class="success-message" style="color: var(--success-color);"></div>
+                    <button type="submit" class="btn-primary">Add consultant</button>
+                </form>
+                <div id="consultantsError" class="error-message" role="alert" style="margin-top: 12px;"></div>
+                <div class="table-wrapper" style="max-height: 220px; overflow: auto; margin-top: 12px;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Workbench</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consultantsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card p-4">
+                <h3 style="margin-bottom: 10px;">Organizations</h3>
+                <form id="addOrgForm" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px;">
+                    <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                        <label for="newOrgName">New organization name</label>
+                        <input type="text" id="newOrgName" required placeholder="Organization name">
+                    </div>
+                    <button type="submit" class="btn-primary">Add organization</button>
+                </form>
+                <div id="orgsError" class="error-message" role="alert"></div>
+                <div id="orgsSuccess" class="success-message" style="color: var(--success-color);"></div>
+                <div class="table-wrapper" style="max-height: 320px; overflow: auto; margin-top: 12px;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orgsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px;">
+                <button id="adminLogoutBtn" type="button" class="btn-link">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api-config.js?v=20260603"></script>
+    <script src="js/platform-admin.js?v=20260603"></script>
+</body>
+</html>

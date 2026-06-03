@@ -7,6 +7,7 @@ from pathlib import Path
 
 NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 W_MAIN = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+ET.register_namespace("w", W_MAIN)
 
 
 def main() -> None:

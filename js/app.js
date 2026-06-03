@@ -80,6 +80,7 @@ function applyUserSessionFromLogin(user) {
     localStorage.setItem('userName', user.full_name || '');
     localStorage.setItem('isOrgAdmin', user.is_org_admin ? 'true' : 'false');
     localStorage.setItem('isPlatformAdmin', user.is_platform_admin ? 'true' : 'false');
+    localStorage.setItem('isConsultant', user.is_consultant ? 'true' : 'false');
     if (user.email) localStorage.setItem('userEmail', user.email);
 }
 
@@ -146,8 +147,19 @@ function completeLoginFlow(user) {
 
 function enterMainAppAfterLogin(user) {
     const allowOrgMainApp = localStorage.getItem('orgOpenMainApp') === 'true';
-    const isPlatformAdmin = localStorage.getItem('isPlatformAdmin') === 'true';
-    if (user && user.is_org_admin && !isPlatformAdmin && !allowOrgMainApp) {
+    const isPlatformAdmin =
+        user?.is_platform_admin || localStorage.getItem('isPlatformAdmin') === 'true';
+    const isConsultant = user?.is_consultant || localStorage.getItem('isConsultant') === 'true';
+
+    if (isPlatformAdmin && !allowOrgMainApp) {
+        window.location.href = 'platform-admin.html';
+        return;
+    }
+    if (isConsultant && !allowOrgMainApp) {
+        window.location.href = 'consultant-workbench.html';
+        return;
+    }
+    if (user && user.is_org_admin && !isPlatformAdmin && !isConsultant && !allowOrgMainApp) {
         window.location.href = 'organization-users.html';
         return;
     }
@@ -624,6 +636,12 @@ function clearAuthSession() {
     localStorage.removeItem('organizationName');
     localStorage.removeItem('userName');
     localStorage.removeItem('isOrgAdmin');
+    localStorage.removeItem('isPlatformAdmin');
+    localStorage.removeItem('isConsultant');
+    localStorage.removeItem('orgOpenMainApp');
+    if (typeof clearOrgAdminMainAppUnlock === 'function') {
+        clearOrgAdminMainAppUnlock();
+    }
 }
 
 function touchSession() {
@@ -1252,6 +1270,15 @@ document.getElementById('logoutBtn')?.addEventListener('click', async function()
 
 document.getElementById('orgUserSettingsBtn')?.addEventListener('click', function() {
     window.location.href = 'organization-users.html';
+});
+
+document.getElementById('switchOrgBtn')?.addEventListener('click', function() {
+    localStorage.removeItem('orgOpenMainApp');
+    if (typeof clearOrgAdminMainAppUnlock === 'function') {
+        clearOrgAdminMainAppUnlock();
+    }
+    const isPlatformAdmin = localStorage.getItem('isPlatformAdmin') === 'true';
+    window.location.href = isPlatformAdmin ? 'platform-admin.html' : 'consultant-workbench.html';
 });
 
 // ============================================
@@ -2961,9 +2988,15 @@ async function initializeApp() {
     }
     
     const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
+    const isPlatformAdmin = localStorage.getItem('isPlatformAdmin') === 'true';
+    const isConsultant = localStorage.getItem('isConsultant') === 'true';
     const orgUserSettingsBtn = document.getElementById('orgUserSettingsBtn');
     if (orgUserSettingsBtn) {
-        orgUserSettingsBtn.style.display = isOrgAdmin ? 'inline-flex' : 'none';
+        orgUserSettingsBtn.style.display = isOrgAdmin && !isPlatformAdmin && !isConsultant ? 'inline-flex' : 'none';
+    }
+    const switchOrgBtn = document.getElementById('switchOrgBtn');
+    if (switchOrgBtn) {
+        switchOrgBtn.style.display = isPlatformAdmin || isConsultant ? 'inline-flex' : 'none';
     }
 
     // MongoDB is source of truth for sites + org_preferences (General Info, Assessment Scope)
@@ -3244,8 +3277,18 @@ window.addEventListener('DOMContentLoaded', function() {
             return;
         }
         const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
+        const isPlatformAdmin = localStorage.getItem('isPlatformAdmin') === 'true';
+        const isConsultant = localStorage.getItem('isConsultant') === 'true';
         const allowOrgMainApp = localStorage.getItem('orgOpenMainApp') === 'true';
-        if (isOrgAdmin && !allowOrgMainApp) {
+        if (isPlatformAdmin && !allowOrgMainApp) {
+            window.location.href = 'platform-admin.html';
+            return;
+        }
+        if (isConsultant && !allowOrgMainApp) {
+            window.location.href = 'consultant-workbench.html';
+            return;
+        }
+        if (isOrgAdmin && !isPlatformAdmin && !isConsultant && !allowOrgMainApp) {
             window.location.href = 'organization-users.html';
             return;
         }

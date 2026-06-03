@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultant Workbench</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box" style="max-width: 900px;">
+            <div class="login-header">
+                <img src="assets/SQImpact_v2.png" alt="SQ Impact" style="width: 280px; max-width: 100%; margin-bottom: 8px;">
+                <p>Consultant workbench</p>
+                <h3 id="consultantUserHeading" style="margin-top: 8px;"></h3>
+            </div>
+
+            <div class="card p-4" style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 10px;">My workbench</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 10px;">
+                    Open an organization to view and edit its carbon data. Remove only removes it from your workbench.
+                </p>
+                <div id="workbenchError" class="error-message" role="alert"></div>
+                <div class="table-wrapper" style="max-height: 240px; overflow: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Organization</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workbenchTableBody"></tbody>
+                    </table>
+                </div>
+                <p id="workbenchEmpty" style="color: var(--text-secondary); margin-top: 10px; display: none;">
+                    No organizations in your workbench yet. Add one from the list below.
+                </p>
+            </div>
+
+            <div class="card p-4">
+                <h3 style="margin-bottom: 10px;">All organizations</h3>
+                <div id="allOrgsError" class="error-message" role="alert"></div>
+                <div class="table-wrapper" style="max-height: 320px; overflow: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allOrgsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+                <button id="consultantLogoutBtn" type="button" class="btn-link">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api-config.js?v=20260603"></script>
+    <script src="js/consultant-workbench.js?v=20260603"></script>
+</body>
+</html>

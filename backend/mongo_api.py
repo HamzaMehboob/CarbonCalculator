@@ -3,6 +3,7 @@ from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
 from pymongo import MongoClient
+from bson import ObjectId
 import datetime
 import os
 import sys
@@ -29,11 +30,20 @@ try:
 except ImportError:
     Image = None
 
-# First embedded image in the ECO AUDIT template (client branding area).
+_W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+ET.register_namespace('w', _W_NS)
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_CARBON_STATEMENT_TEMPLATE = (
+    _REPO_ROOT / 'requirements' / 'Carbon emissions statement report template.docx'
+)
+_SELBY_TEMPLATE = _REPO_ROOT / 'requirements' / 'Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx'
+
+# First embedded image in report templates (client branding area).
 _DOCX_CLIENT_LOGO_PART = 'word/media/image1.png'
 _YELLOW_MAP_JSON = Path(__file__).resolve().parent / 'final_report_yellow_map.json'
 
-# Optional narrative fragments in the Selby template; values come from the JSON payload keys.
+# Optional narrative fragments in the legacy Selby template.
 _DOCX_NARRATIVE_SNIPPETS = (
     ('is a community centre located in the London Borough of Haringey.', 'organization_profile'),
     (
@@ -41,6 +51,10 @@ _DOCX_NARRATIVE_SNIPPETS = (
         'scope_streams_summary',
     ),
     ('March 2022 to April 2023', 'assessment_period_detail'),
+)
+
+_CARBON_STATEMENT_BASELINE_NEEDLE = (
+    'This report is based on the data collected across the 2024/25 financial year.'
 )
 
 
@@ -775,6 +789,47 @@ def _user_memberships(user: dict | None) -> list:
     return []
 
 
+def _is_consultant(user: dict | None) -> bool:
+    return bool(user and user.get('is_consultant'))
+
+
+def _find_org_by_id(orgs_col, org_id: str | None):
+    if not org_id or orgs_col is None:
+        return None
+    oid = str(org_id).strip()
+    if not oid:
+        return None
+    doc = orgs_col.find_one({'_id': oid})
+    if doc:
+        return doc
+    try:
+        if ObjectId.is_valid(oid):
+            doc = orgs_col.find_one({'_id': ObjectId(oid)})
+            if doc:
+                return doc
+    except Exception:
+        pass
+    return orgs_col.find_one({'name': oid})
+
+
+def _org_id_str(doc: dict | None) -> str | None:
+    if not doc:
+        return None
+    raw = doc.get('_id')
+    return str(raw) if raw is not None else None
+
+
+def _org_doc_to_api(doc: dict | None) -> dict | None:
+    if not doc:
+        return None
+    out = {k: v for k, v in doc.items() if k != '_id'}
+    oid = _org_id_str(doc)
+    if oid:
+        out['id'] = oid
+        out['_id'] = oid
+    return out
+
+
 def _resolve_request_organization_id(user: dict | None) -> str | None:
     if not user:
         return None
@@ -789,6 +844,8 @@ def _resolve_request_organization_id(user: dict | None) -> str | None:
             m.get('organization_id') == active for m in memberships
         ):
             return active
+    if _is_consultant(user):
+        return None
     return user.get('active_organization_id') or user.get('organization_id')
 
 
@@ -1238,18 +1295,24 @@ def login():
         identity = user.get('email') or user.get('username')
         access_token = create_access_token(identity=identity)
 
+        is_platform_admin = bool(user.get('is_platform_admin'))
+        is_consultant = _is_consultant(user)
         org_id = user.get("organization_id")
         org_name = user.get("organization_name") or user.get("company_name")
         if not org_name and org_id:
-            org_doc = orgs_col.find_one({"_id": org_id}) or orgs_col.find_one({"name": org_id})
+            org_doc = _find_org_by_id(orgs_col, str(org_id))
             if org_doc:
                 org_name = org_doc.get("name")
 
         memberships = _user_memberships(user)
-        default_org = memberships[0] if memberships else None
-        if default_org:
-            org_id = default_org.get('organization_id') or org_id
-            org_name = default_org.get('organization_name') or org_name
+        if not is_platform_admin:
+            default_org = memberships[0] if memberships else None
+            if default_org:
+                org_id = default_org.get('organization_id') or org_id
+                org_name = default_org.get('organization_name') or org_name
+        else:
+            org_id = None
+            org_name = None
 
         return jsonify({
             "access_token": access_token,
@@ -1261,7 +1324,8 @@ def login():
                 "organization_id": org_id,
                 "organization_name": org_name,
                 "is_org_admin": bool(user.get('is_org_admin')),
-                "is_platform_admin": bool(user.get('is_platform_admin')),
+                "is_platform_admin": is_platform_admin,
+                "is_consultant": is_consultant,
                 "memberships": memberships,
             }
         }), 200
@@ -1549,7 +1613,8 @@ def handle_factors():
     current_identity = get_jwt_identity()
     users_col = get_users_col()
     user = _find_user_by_login(users_col, current_identity) if users_col is not None else None
-    if not user or not user.get("organization_id"):
+    org_id = _resolve_request_organization_id(user)
+    if not org_id:
         return jsonify({"msg": "Organization is not linked to this account."}), 400
 
     factors = list_catalog_factor_documents()
@@ -1629,78 +1694,321 @@ def _docx_with_document_xml(template_bytes: bytes, document_xml_bytes: bytes, lo
     return out_buf.getvalue()
 
 
-def build_final_report_docx_bytes(payload: dict) -> tuple[bytes, str]:
-    """
-    Build the final report .docx from the Selby ECO AUDIT template and JSON payload.
+def _wtag(name: str) -> str:
+    return f'{{{_W_NS}}}{name}'
 
-    Returns (file_bytes, suggested_filename). Raises FileNotFoundError if the template is missing.
-    """
-    organization_name = payload.get('organization_name') or payload.get('company_name') or 'Organization'
-    site_name = payload.get('site_name') or 'Site'
 
+def _resolve_final_report_template() -> Path:
+    if _CARBON_STATEMENT_TEMPLATE.is_file():
+        return _CARBON_STATEMENT_TEMPLATE
+    if _SELBY_TEMPLATE.is_file():
+        return _SELBY_TEMPLATE
+    raise FileNotFoundError(
+        'No final report template found. Add requirements/Carbon emissions statement report template.docx'
+    )
+
+
+def _format_kg(value: float) -> str:
+    return f'{float(value):,.2f}'
+
+
+def _format_scope_pct(part_kg: float, total_kg: float) -> str:
+    if total_kg <= 0:
+        return '0.0%'
+    return f'{(100.0 * float(part_kg) / float(total_kg)):.1f}%'
+
+
+def _element_has_yellow_highlight(el: ET.Element) -> bool:
+    for child in el.iter():
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag != 'highlight':
+            continue
+        val = child.attrib.get(_wtag('val')) or child.attrib.get('val')
+        if val == 'yellow':
+            return True
+    return False
+
+
+def _set_cell_text(tc: ET.Element, text: str) -> None:
+    """Replace all text in a table cell with a single paragraph."""
+    text = str(text or '')
+    for child in list(tc):
+        tc.remove(child)
+    p = ET.SubElement(tc, _wtag('p'))
+    r = ET.SubElement(p, _wtag('r'))
+    t = ET.SubElement(r, _wtag('t'))
+    if text.startswith(' ') or text.endswith(' '):
+        t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+    t.text = text
+
+
+def _cell_text(tc: ET.Element) -> str:
+    return ''.join((node.text or '') for node in tc.iter() if node.tag == _wtag('t')).strip()
+
+
+def _yellow_highlight_text_nodes(root: ET.Element) -> list[ET.Element]:
+    """All w:t nodes inside yellow-highlighted paragraphs (document order)."""
+    nodes: list[ET.Element] = []
+    for el in root.iter():
+        if el.tag != _wtag('p'):
+            continue
+        if not _element_has_yellow_highlight(el):
+            continue
+        for t in el.iter():
+            if t.tag == _wtag('t'):
+                nodes.append(t)
+    return nodes
+
+
+def _performance_values_from_payload(payload: dict) -> dict[str, str]:
+    """Map yellow-field keys to display strings for the performance table."""
+    perf = payload.get('performance_rows') if isinstance(payload.get('performance_rows'), dict) else {}
     totals_kg = payload.get('totals_kg') or {}
     scope_kg = payload.get('scope_kg') or {}
 
-    water_kg = float(totals_kg.get('water', 0))
-    energy_kg = float(totals_kg.get('energy', 0))
-    waste_kg = float(totals_kg.get('waste', 0))
-    transport_kg = float(totals_kg.get('transport', 0))
-    refrigerants_kg = float(totals_kg.get('refrigerants', 0))
-    grand_total_kg = float(payload.get('grand_total_kg', water_kg + energy_kg + waste_kg + transport_kg + refrigerants_kg))
+    def row(key: str) -> dict:
+        raw = perf.get(key) if isinstance(perf.get(key), dict) else {}
+        return raw if isinstance(raw, dict) else {}
 
-    scope1_kg = float(scope_kg.get('scope1', 0))
-    scope2_kg = float(scope_kg.get('scope2', 0))
-    scope3_kg = float(scope_kg.get('scope3', 0))
+    def pick_num(key: str, field: str, fallback: float = 0.0) -> float:
+        raw = row(key).get(field, fallback)
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return float(fallback)
 
+    def pick_str(key: str, field: str, fallback: str = '') -> str:
+        val = row(key).get(field)
+        if val is None or val == '':
+            return fallback
+        return str(val)
+
+    natural_kg = pick_num('natural_gas', 'emissions_kg', scope_kg.get('scope1', 0) * 0.5)
+    electricity_kg = pick_num('electricity', 'emissions_kg', totals_kg.get('energy', 0) * 1000 * 0.5)
+    td_kg = pick_num('electricity_td', 'emissions_kg', 0)
+    water_kg = pick_num('water', 'emissions_kg', totals_kg.get('water', 0) * 1000 * 0.5)
+    wastewater_kg = pick_num('wastewater', 'emissions_kg', totals_kg.get('water', 0) * 1000 * 0.5)
+    waste_energy_kg = pick_num('waste_to_energy', 'emissions_kg', 0)
+    waste_recycling_kg = pick_num('waste_to_recycling', 'emissions_kg', totals_kg.get('waste', 0) * 1000 * 0.5)
+
+    return {
+        'natural_gas_scope_kg': _format_kg(pick_num('natural_gas', 'scope_kg', natural_kg)),
+        'natural_gas_emissions_kg': _format_kg(natural_kg),
+        'electricity_usage': pick_str('electricity', 'usage', '0 kWh'),
+        'electricity_factor': pick_str('electricity', 'factor', ''),
+        'electricity_emissions_kg': _format_kg(electricity_kg),
+        'electricity_scope_kg': _format_kg(pick_num('electricity', 'scope_kg', electricity_kg)),
+        'td_usage': pick_str('electricity_td', 'usage', pick_str('electricity', 'usage', '0 kWh')),
+        'td_factor': pick_str('electricity_td', 'factor', ''),
+        'td_emissions_kg': _format_kg(td_kg),
+        'water_usage': pick_str('water', 'usage', '0 m3'),
+        'water_factor': pick_str('water', 'factor', ''),
+        'water_emissions_kg': _format_kg(water_kg),
+        'wastewater_usage': pick_str('wastewater', 'usage', pick_str('water', 'usage', '0 m3')),
+        'wastewater_factor': pick_str('wastewater', 'factor', ''),
+        'wastewater_emissions_kg': _format_kg(wastewater_kg),
+        'waste_to_energy_usage': pick_str('waste_to_energy', 'usage', '0 tonnes'),
+        'waste_to_energy_factor': pick_str('waste_to_energy', 'factor', ''),
+        'waste_to_energy_kg': _format_kg(waste_energy_kg),
+        'waste_to_recycling_usage': pick_str('waste_to_recycling', 'usage', '0 tonnes'),
+        'waste_to_recycling_factor': pick_str('waste_to_recycling', 'factor', ''),
+        'waste_to_recycling_kg': _format_kg(waste_recycling_kg),
+    }
+
+
+def _fill_carbon_statement_tables(root: ET.Element, payload: dict, grand_total_kg: float) -> None:
+    """Fill report-detail and performance tables in the carbon statement template."""
+    tables = list(root.iter(_wtag('tbl')))
+    if not tables:
+        return
+
+    project_number = (payload.get('project_number') or '').strip()
+    reporting_period = (payload.get('reporting_period') or '').strip()
+    org_address = (payload.get('org_registered_address') or '').strip()
+    version = (payload.get('version') or '1.0').strip()
+    issue_date = (payload.get('issue_date') or '').strip()
+
+    if len(tables) > 0:
+        detail = tables[0]
+        rows = detail.findall(f'.//{_wtag("tr")}')
+        if len(rows) > 0 and len(rows[0].findall(_wtag('tc'))) > 1:
+            _set_cell_text(rows[0].findall(_wtag('tc'))[1], project_number)
+        if len(rows) > 1 and len(rows[1].findall(_wtag('tc'))) > 1:
+            _set_cell_text(rows[1].findall(_wtag('tc'))[1], reporting_period)
+        if len(rows) > 2 and len(rows[2].findall(_wtag('tc'))) > 1:
+            _set_cell_text(rows[2].findall(_wtag('tc'))[1], org_address)
+
+    if len(tables) > 1:
+        control = tables[1]
+        rows = control.findall(f'.//{_wtag("tr")}')
+        if rows:
+            cells = rows[0].findall(_wtag('tc'))
+            if len(cells) > 0:
+                _set_cell_text(cells[0], f'Version {version}' if version else '')
+            if len(cells) > 1:
+                _set_cell_text(cells[1], issue_date)
+
+    perf_values = _performance_values_from_payload(payload)
+    row_labels = {
+        'Natural gas used for company facilities': 'natural_gas',
+        'Electricity used for company facilities': 'electricity',
+        'Electricity (transmission and distribution)': 'electricity_td',
+        'Water use': 'water',
+        'Wastewater': 'wastewater',
+        'Waste (to energy)': 'waste_to_energy',
+        'Waste (to recycling)': 'waste_to_recycling',
+    }
+
+    perf_table = None
+    for tbl in tables:
+        text = ''.join((t.text or '') for t in tbl.iter() if t.tag == _wtag('t'))
+        if 'Carbon Emission Source' in text and 'Usage Data' in text:
+            perf_table = tbl
+            break
+    if perf_table is None and len(tables) > 3:
+        perf_table = tables[3]
+
+    if perf_table is not None:
+        perf_rows = payload.get('performance_rows') if isinstance(payload.get('performance_rows'), dict) else {}
+        for tr in perf_table.findall(f'.//{_wtag("tr")}'):
+            cells = tr.findall(_wtag('tc'))
+            if len(cells) < 5:
+                continue
+            label = _cell_text(cells[1] if len(cells) > 1 else cells[0])
+            if 'Total gross CO2' in label:
+                _set_cell_text(cells[-1], _format_kg(grand_total_kg))
+                continue
+            key = row_labels.get(label)
+            if not key:
+                continue
+            row_data = perf_rows.get(key) if isinstance(perf_rows.get(key), dict) else {}
+            usage = row_data.get('usage') or perf_values.get(
+                {'electricity_td': 'td_usage', 'waste_to_energy': 'waste_to_energy_usage',
+                 'waste_to_recycling': 'waste_to_recycling_usage'}.get(key, f'{key}_usage'),
+                '',
+            )
+            factor = row_data.get('factor') or perf_values.get(
+                {'electricity_td': 'td_factor', 'waste_to_energy': 'waste_to_energy_factor',
+                 'waste_to_recycling': 'waste_to_recycling_factor'}.get(key, f'{key}_factor'),
+                '',
+            )
+            emissions_key = {
+                'natural_gas': 'natural_gas_emissions_kg',
+                'electricity': 'electricity_emissions_kg',
+                'electricity_td': 'td_emissions_kg',
+                'water': 'water_emissions_kg',
+                'wastewater': 'wastewater_emissions_kg',
+                'waste_to_energy': 'waste_to_energy_kg',
+                'waste_to_recycling': 'waste_to_recycling_kg',
+            }.get(key, '')
+            emissions_raw = row_data.get('emissions_kg')
+            if emissions_raw is None:
+                emissions_disp = perf_values.get(emissions_key, '0')
+            else:
+                try:
+                    emissions_disp = _format_kg(float(emissions_raw))
+                except (TypeError, ValueError):
+                    emissions_disp = str(emissions_raw)
+            scope_raw = row_data.get('scope_kg')
+            if scope_raw is None:
+                scope_field = 'natural_gas_scope_kg' if key == 'natural_gas' else (
+                    'electricity_scope_kg' if key == 'electricity' else emissions_key
+                )
+                scope_disp = perf_values.get(scope_field, emissions_disp)
+            else:
+                try:
+                    scope_disp = _format_kg(float(scope_raw))
+                except (TypeError, ValueError):
+                    scope_disp = str(scope_raw)
+            if len(cells) > 2 and usage:
+                _set_cell_text(cells[2], str(usage))
+            if len(cells) > 3 and factor:
+                _set_cell_text(cells[3], str(factor))
+            if len(cells) > 4:
+                _set_cell_text(cells[4], emissions_disp)
+            if len(cells) > 5:
+                _set_cell_text(cells[5], scope_disp)
+
+
+def _apply_carbon_statement_text_replacements(xml_str: str, payload: dict, grand_total_kg: float) -> str:
+    scope_kg = payload.get('scope_kg') or {}
+    scope1 = float(scope_kg.get('scope1', 0))
+    scope2 = float(scope_kg.get('scope2', 0))
+    scope3 = float(scope_kg.get('scope3', 0))
+    total_scope = scope1 + scope2 + scope3
+    reporting_period = (payload.get('reporting_period') or '').strip()
+    reporting_year = str(payload.get('reporting_year') or '').strip()
+    baseline = (payload.get('assessment_base_year') or reporting_year or '').strip()
+    org_profile = (payload.get('organization_profile') or '').strip()
+
+    if reporting_period:
+        xml_str = xml_str.replace(_CARBON_STATEMENT_BASELINE_NEEDLE, escape(
+            f'This report is based on the data collected across the {reporting_period} reporting period.'
+        ))
+    if baseline:
+        xml_str = xml_str.replace('Baseline Year ', f'Baseline Year {escape(baseline)} ')
+    if reporting_year:
+        xml_str = xml_str.replace('Conversion Factor 2024', f'Conversion Factor {escape(reporting_year)}')
+
+    formatted_total = _format_kg(grand_total_kg)
+    xml_str = xml_str.replace('22,436.71', formatted_total)
+
+    xml_str = xml_str.replace('Scope 1: 76.9%', f'Scope 1: {_format_scope_pct(scope1, total_scope)}')
+    xml_str = xml_str.replace('Scope 2: 20.6%', f'Scope 2: {_format_scope_pct(scope2, total_scope)}')
+    xml_str = xml_str.replace('Scope 3: 2.4%', f'Scope 3: {_format_scope_pct(scope3, total_scope)}')
+
+    if org_profile and 'Performance' in xml_str:
+        needle = 'Performance'
+        xml_str = xml_str.replace(needle, escape(org_profile) + needle, 1)
+
+    return xml_str
+
+
+def _apply_yellow_field_map(root: ET.Element, values_by_key: dict[str, str]) -> None:
+    field_map = _load_yellow_numeric_field_map()
+    nodes = _yellow_highlight_text_nodes(root)
+    for idx, node in enumerate(nodes):
+        if idx >= len(field_map):
+            break
+        field_name = field_map[idx]
+        if not field_name:
+            continue
+        val = values_by_key.get(field_name)
+        if val is None or val == '':
+            continue
+        node.text = str(val)
+
+
+def _build_selby_final_report(template_bytes: bytes, payload: dict, logo_png: bytes | None) -> bytes:
+    organization_name = payload.get('organization_name') or payload.get('company_name') or 'Organization'
+    site_name = payload.get('site_name') or 'Site'
+    totals_kg = payload.get('totals_kg') or {}
+    scope_kg = payload.get('scope_kg') or {}
+    grand_total_kg = float(
+        payload.get(
+            'grand_total_kg',
+            sum(float(totals_kg.get(k, 0) or 0) for k in ('water', 'energy', 'waste', 'transport', 'refrigerants')),
+        )
+    )
     issue_date = payload.get('issue_date') or datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y')
     reporting_period = (payload.get('reporting_period') or '').strip()
 
-    logo_payload = payload.get('company_logo_data_url') or payload.get('logo_data_url')
-    logo_png = _png_bytes_from_logo_data_url(logo_payload)
-
-    template_path = Path(__file__).resolve().parent.parent / 'requirements' / 'Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx'
-    if not template_path.exists():
-        raise FileNotFoundError(str(template_path))
-
-    template_bytes = template_path.read_bytes()
     with zipfile.ZipFile(io.BytesIO(template_bytes), 'r') as zin:
-        doc_xml = zin.read('word/document.xml')
+        xml_str = zin.read('word/document.xml').decode('utf-8', errors='ignore')
 
-    xml_str = doc_xml.decode('utf-8', errors='ignore')
     xml_str = xml_str.replace('Selby Trust', organization_name)
     xml_str = xml_str.replace('Selby', site_name)
     if reporting_period:
         xml_str = xml_str.replace('2022/2023', reporting_period)
-
     xml_str = _apply_docx_narrative_overrides(xml_str, payload)
 
-    def _has_yellow_highlight(run_el: ET.Element) -> bool:
-        for child in run_el.iter():
-            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-            if tag == 'highlight':
-                if child.attrib.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val') == 'yellow':
-                    return True
-                if child.attrib.get('w:val') == 'yellow':
-                    return True
-                if child.attrib.get('val') == 'yellow':
-                    return True
-        return False
-
     numeric_pattern = re.compile(r'^[\d,]+(\.\d+)?$')
-
-    try:
-        root = ET.fromstring(xml_str)
-    except ET.ParseError:
-        doc_bytes = xml_str.encode('utf-8')
-        out_bytes = _docx_with_document_xml(template_bytes, doc_bytes, logo_png)
-        file_name = f"Final_Report_{organization_name}_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.docx"
-        return out_bytes, file_name
-
+    root = ET.fromstring(xml_str)
     numeric_nodes: list[ET.Element] = []
     for run in root.iter():
         if run.tag.split('}')[-1] != 'r':
             continue
-        if not _has_yellow_highlight(run):
+        if not _element_has_yellow_highlight(run):
             continue
         for t in list(run):
             if t.tag.split('}')[-1] != 't':
@@ -1709,18 +2017,18 @@ def build_final_report_docx_bytes(payload: dict) -> tuple[bytes, str]:
             if txt and numeric_pattern.match(txt):
                 numeric_nodes.append(t)
 
-    numeric_field_map = _load_yellow_numeric_field_map()
     values_by_key = {
-        'grand_total_kg': grand_total_kg,
-        'scope1_kg': scope1_kg,
-        'scope2_kg': scope2_kg,
-        'scope3_kg': scope3_kg,
-        'water_kg': water_kg,
-        'energy_kg': energy_kg,
-        'waste_kg': waste_kg,
-        'transport_kg': transport_kg,
-        'refrigerants_kg': refrigerants_kg,
+        'grand_total_kg': _format_kg(grand_total_kg),
+        'scope1_kg': _format_kg(scope_kg.get('scope1', 0)),
+        'scope2_kg': _format_kg(scope_kg.get('scope2', 0)),
+        'scope3_kg': _format_kg(scope_kg.get('scope3', 0)),
+        'water_kg': _format_kg(totals_kg.get('water', 0)),
+        'energy_kg': _format_kg(totals_kg.get('energy', 0)),
+        'waste_kg': _format_kg(totals_kg.get('waste', 0)),
+        'transport_kg': _format_kg(totals_kg.get('transport', 0)),
+        'refrigerants_kg': _format_kg(totals_kg.get('refrigerants', 0)),
     }
+    numeric_field_map = _load_yellow_numeric_field_map()
     for idx, node in enumerate(numeric_nodes):
         if idx >= len(numeric_field_map):
             break
@@ -1734,7 +2042,7 @@ def build_final_report_docx_bytes(payload: dict) -> tuple[bytes, str]:
             continue
         if field_name not in values_by_key:
             continue
-        node.text = f"{float(values_by_key[field_name]):,.2f}"
+        node.text = values_by_key[field_name]
 
     for t in root.iter():
         if t.tag.split('}')[-1] != 't':
@@ -1748,8 +2056,54 @@ def build_final_report_docx_bytes(payload: dict) -> tuple[bytes, str]:
 
     body = ET.tostring(root, encoding='utf-8', method='xml')
     doc_bytes = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + body
-    out_bytes = _docx_with_document_xml(template_bytes, doc_bytes, logo_png)
-    file_name = f"Final_Report_{organization_name}_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.docx"
+    return _docx_with_document_xml(template_bytes, doc_bytes, logo_png)
+
+
+def _build_carbon_statement_final_report(template_bytes: bytes, payload: dict, logo_png: bytes | None) -> bytes:
+    totals_kg = payload.get('totals_kg') or {}
+    grand_total_kg = float(
+        payload.get(
+            'grand_total_kg',
+            sum(float(totals_kg.get(k, 0) or 0) for k in (
+                'water', 'energy', 'waste', 'transport', 'refrigerants', 'transmissionDistribution'
+            )),
+        )
+    )
+    with zipfile.ZipFile(io.BytesIO(template_bytes), 'r') as zin:
+        xml_str = zin.read('word/document.xml').decode('utf-8', errors='ignore')
+
+    xml_str = _apply_carbon_statement_text_replacements(xml_str, payload, grand_total_kg)
+    root = ET.fromstring(xml_str)
+    _fill_carbon_statement_tables(root, payload, grand_total_kg)
+    _apply_yellow_field_map(root, _performance_values_from_payload(payload))
+
+    body = ET.tostring(root, encoding='utf-8', method='xml')
+    doc_bytes = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + body
+    return _docx_with_document_xml(template_bytes, doc_bytes, logo_png)
+
+
+def build_final_report_docx_bytes(payload: dict) -> tuple[bytes, str]:
+    """
+    Build the final report .docx from the carbon statement template (preferred) or legacy Selby template.
+
+    Returns (file_bytes, suggested_filename). Raises FileNotFoundError if no template is present.
+    """
+    organization_name = payload.get('organization_name') or payload.get('company_name') or 'Organization'
+    template_path = _resolve_final_report_template()
+    template_bytes = template_path.read_bytes()
+    logo_png = _png_bytes_from_logo_data_url(
+        payload.get('company_logo_data_url') or payload.get('logo_data_url')
+    )
+
+    if template_path.name.lower().startswith('carbon emissions statement'):
+        out_bytes = _build_carbon_statement_final_report(template_bytes, payload, logo_png)
+    else:
+        out_bytes = _build_selby_final_report(template_bytes, payload, logo_png)
+
+    safe_name = re.sub(r'[^\w\-]+', '_', organization_name).strip('_') or 'Organization'
+    file_name = (
+        f'Final_Report_{safe_name}_{datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")}.docx'
+    )
     return out_bytes, file_name
 
 
@@ -1763,9 +2117,88 @@ def _require_platform_admin(users_col):
     return current_user, None
 
 
-@app.route('/api/admin/organizations', methods=['GET'])
+def _require_consultant(users_col):
+    current_identity = get_jwt_identity()
+    current_user = _find_user_by_login(users_col, current_identity) if current_identity else None
+    if not current_user:
+        return None, (jsonify({"msg": "Invalid auth user"}), 401)
+    if not _is_consultant(current_user):
+        return None, (jsonify({"msg": "Consultant access required"}), 403)
+    return current_user, None
+
+
+def _verify_user_password(user: dict | None, password: str) -> bool:
+    if not user or not password:
+        return False
+    stored = user.get('password')
+    if not stored:
+        return False
+    try:
+        return bcrypt.check_password_hash(stored, password)
+    except Exception:
+        return False
+
+
+def _append_consultant_workbench(users_col, user: dict, org_id: str, org_name: str) -> bool:
+    memberships = _user_memberships(user)
+    if any(m.get('organization_id') == org_id for m in memberships):
+        return False
+    entry = {
+        'organization_id': org_id,
+        'organization_name': org_name,
+        'role': 'consultant',
+        'username': user.get('username'),
+    }
+    users_col.update_one({'_id': user['_id']}, {'$push': {'memberships': entry}})
+    return True
+
+
+def _list_organizations_api(orgs_col):
+    docs = list(orgs_col.find({}, {'name': 1, 'created_at': 1}).sort('name', 1))
+    return [_org_doc_to_api(d) for d in docs if _org_doc_to_api(d)]
+
+
+def ensure_default_platform_admin():
+    """Ensure platform admin (username admin / password 12345) exists when seeding is enabled."""
+    if os.environ.get('SEED_PLATFORM_ADMIN', '1').lower() in ('0', 'false', 'no'):
+        return
+    users_col = get_users_col()
+    if users_col is None:
+        return
+    username = 'admin'
+    hashed = bcrypt.generate_password_hash('12345').decode('utf-8')
+    existing = _find_user_by_username(users_col, username)
+    doc = {
+        'username': username,
+        'email': None,
+        'password': hashed,
+        'full_name': 'Platform Admin',
+        'is_platform_admin': True,
+        'is_org_admin': False,
+        'is_consultant': False,
+        'organization_id': None,
+        'organization_name': None,
+        'memberships': [],
+    }
+    if existing:
+        users_col.update_one(
+            {'_id': existing['_id']},
+            {'$set': {
+                'password': hashed,
+                'is_platform_admin': True,
+                'is_org_admin': False,
+                'is_consultant': False,
+            }},
+        )
+    else:
+        doc['created_at'] = utc_now()
+        doc['email_verified'] = True
+        users_col.insert_one(doc)
+
+
+@app.route('/api/admin/organizations', methods=['GET', 'POST'])
 @jwt_required()
-def list_all_organizations():
+def admin_organizations():
     users_col = get_users_col()
     orgs_col = get_orgs_col()
     if users_col is None or orgs_col is None:
@@ -1773,11 +2206,212 @@ def list_all_organizations():
     _admin, err = _require_platform_admin(users_col)
     if err:
         return err
-    docs = list(orgs_col.find({}, {'name': 1, 'created_at': 1}).sort('name', 1))
-    for d in docs:
-        if d.get('_id') is not None:
-            d['_id'] = str(d['_id'])
-    return jsonify({"organizations": docs}), 200
+
+    if request.method == 'GET':
+        return jsonify({"organizations": _list_organizations_api(orgs_col)}), 200
+
+    payload = request.get_json() or {}
+    name = (payload.get('name') or '').strip()
+    if not name:
+        return jsonify({"msg": "Organization name is required"}), 400
+    if orgs_col.find_one({'name': name}):
+        return jsonify({"msg": "An organization with this name already exists"}), 400
+    insert_res = orgs_col.insert_one({'name': name, 'created_at': utc_now()})
+    org_id = str(insert_res.inserted_id)
+    doc = orgs_col.find_one({'_id': insert_res.inserted_id})
+    return jsonify({
+        "msg": "Organization created",
+        "organization": _org_doc_to_api(doc) or {'id': org_id, 'name': name},
+    }), 201
+
+
+@app.route('/api/admin/organizations/<org_id>', methods=['DELETE'])
+@jwt_required()
+def admin_delete_organization(org_id: str):
+    users_col = get_users_col()
+    orgs_col = get_orgs_col()
+    data_col = get_data_col()
+    if users_col is None or orgs_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+    admin_user, err = _require_platform_admin(users_col)
+    if err:
+        return err
+
+    payload = request.get_json() or {}
+    admin_password = payload.get('admin_password') or payload.get('password')
+    if not _verify_user_password(admin_user, admin_password or ''):
+        return jsonify({"msg": "Admin password is incorrect"}), 403
+
+    org_doc = _find_org_by_id(orgs_col, org_id)
+    if not org_doc:
+        return jsonify({"msg": "Organization not found"}), 404
+    oid = _org_id_str(org_doc)
+    if not oid:
+        return jsonify({"msg": "Organization not found"}), 404
+
+    if data_col is not None:
+        data_col.delete_many({'organization_id': oid})
+    users_col.delete_many({'organization_id': oid})
+    users_col.update_many(
+        {},
+        {'$pull': {'memberships': {'organization_id': oid}}},
+    )
+    orgs_col.delete_one({'_id': org_doc['_id']})
+    return jsonify({"msg": "Organization removed"}), 200
+
+
+@app.route('/api/admin/consultants', methods=['GET', 'POST'])
+@jwt_required()
+def admin_consultants():
+    users_col = get_users_col()
+    if users_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+    _admin, err = _require_platform_admin(users_col)
+    if err:
+        return err
+
+    if request.method == 'GET':
+        docs = list(users_col.find(
+            {'is_consultant': True},
+            {
+                '_id': 0,
+                'username': 1,
+                'email': 1,
+                'full_name': 1,
+                'phone': 1,
+                'memberships': 1,
+                'created_at': 1,
+            },
+        ).sort('username', 1))
+        for d in docs:
+            d['workbench_count'] = len(_user_memberships(d))
+        return jsonify({'consultants': docs}), 200
+
+    payload = request.get_json() or {}
+    username = _normalize_username(payload.get('username'))
+    password = payload.get('password')
+    confirm_password = payload.get('confirm_password')
+    if not username or not _is_valid_username(payload.get('username')):
+        return jsonify({"msg": f"Username is required (max {_USERNAME_MAX_LEN} characters)."}), 400
+    if not password or not confirm_password:
+        return jsonify({"msg": "Missing password fields"}), 400
+    if password != confirm_password:
+        return jsonify({"msg": "Passwords do not match"}), 400
+    if not _is_strong_password(password):
+        return jsonify({
+            "msg": "Password must include at least one lowercase letter, one uppercase letter, and one number.",
+        }), 400
+    if _find_user_by_username(users_col, username):
+        return jsonify({"msg": "Username already exists"}), 400
+
+    email = _normalize_email(payload.get('email')) or None
+    phone = _normalize_phone(payload.get('phone'))
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+    users_col.insert_one({
+        'email': email,
+        'username': username,
+        'password': hashed_password,
+        'full_name': payload.get('full_name'),
+        'phone': phone,
+        'is_consultant': True,
+        'is_org_admin': False,
+        'is_platform_admin': False,
+        'organization_id': None,
+        'organization_name': None,
+        'memberships': [],
+        'created_at': utc_now(),
+        'email_verified': True,
+    })
+    return jsonify({
+        'msg': 'Consultant created successfully',
+        'consultant': {
+            'username': username,
+            'email': email,
+            'full_name': payload.get('full_name'),
+            'phone': phone,
+        },
+    }), 201
+
+
+@app.route('/api/admin/consultants/<username>', methods=['DELETE'])
+@jwt_required()
+def admin_delete_consultant(username: str):
+    users_col = get_users_col()
+    if users_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+    _admin, err = _require_platform_admin(users_col)
+    if err:
+        return err
+    target = _find_user_by_username(users_col, username)
+    if not target or not target.get('is_consultant'):
+        return jsonify({"msg": "Consultant not found"}), 404
+    users_col.delete_one({'_id': target['_id']})
+    return jsonify({"msg": "Consultant removed"}), 200
+
+
+@app.route('/api/consultant/organizations', methods=['GET'])
+@jwt_required()
+def consultant_list_organizations():
+    users_col = get_users_col()
+    orgs_col = get_orgs_col()
+    if users_col is None or orgs_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+    consultant, err = _require_consultant(users_col)
+    if err:
+        return err
+    return jsonify({"organizations": _list_organizations_api(orgs_col)}), 200
+
+
+@app.route('/api/consultant/workbench', methods=['GET', 'POST'])
+@jwt_required()
+def consultant_workbench():
+    users_col = get_users_col()
+    orgs_col = get_orgs_col()
+    if users_col is None or orgs_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+    consultant, err = _require_consultant(users_col)
+    if err:
+        return err
+
+    if request.method == 'GET':
+        return jsonify({'workbench': _user_memberships(consultant)}), 200
+
+    payload = request.get_json() or {}
+    org_id = (payload.get('organization_id') or '').strip()
+    if not org_id:
+        return jsonify({"msg": "organization_id is required"}), 400
+    org_doc = _find_org_by_id(orgs_col, org_id)
+    if not org_doc:
+        return jsonify({"msg": "Organization not found"}), 404
+    oid = _org_id_str(org_doc)
+    org_name = org_doc.get('name') or ''
+    added = _append_consultant_workbench(users_col, consultant, oid, org_name)
+    refreshed = users_col.find_one({'_id': consultant['_id']})
+    return jsonify({
+        'msg': 'Organization added to workbench' if added else 'Organization already in workbench',
+        'workbench': _user_memberships(refreshed),
+    }), 200
+
+
+@app.route('/api/consultant/workbench/<org_id>', methods=['DELETE'])
+@jwt_required()
+def consultant_remove_workbench(org_id: str):
+    users_col = get_users_col()
+    if users_col is None:
+        return jsonify({"msg": "Database connection error"}), 503
+    consultant, err = _require_consultant(users_col)
+    if err:
+        return err
+    oid = str(org_id).strip()
+    users_col.update_one(
+        {'_id': consultant['_id']},
+        {'$pull': {'memberships': {'organization_id': oid}}},
+    )
+    refreshed = users_col.find_one({'_id': consultant['_id']})
+    return jsonify({
+        'msg': 'Organization removed from workbench',
+        'workbench': _user_memberships(refreshed),
+    }), 200
 
 
 @app.route('/api/reports/final', methods=['POST'])
@@ -1804,6 +2438,11 @@ def generate_final_report_docx():
 
 
 print(f'INFO: email config: {_email_config_status()}', file=sys.stderr)
+
+try:
+    ensure_default_platform_admin()
+except Exception as _seed_exc:
+    print(f'WARN: could not seed platform admin: {_seed_exc}', file=sys.stderr)
 
 
 if __name__ == '__main__':

@@ -434,7 +434,7 @@ Compatible with:
 - ☐ Custom conversion factors (UI beyond API override)
 - ☐ Mobile responsive improvements
 
-**Final Word report:** requires the template file `requirements/Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx` on the server; without it, the API returns an error (see `backend/tests/test_final_report_docx.py`).
+**Final Word report:** uses `requirements/Carbon emissions statement report template.docx` (dashboard carbon statement layout). Legacy Selby template is used only if the new file is missing. See `backend/tests/test_final_report_docx.py`.
 
 ### Phase 3 (Planned)
 - ☐ API integrations (Xero, SAP, Oracle)

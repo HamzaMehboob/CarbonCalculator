@@ -134,6 +134,9 @@
             global.localStorage.removeItem('organizationName');
             global.localStorage.removeItem('userName');
             global.localStorage.removeItem('isOrgAdmin');
+            global.localStorage.removeItem('isPlatformAdmin');
+            global.localStorage.removeItem('isConsultant');
+            global.localStorage.removeItem('orgOpenMainApp');
             global.localStorage.removeItem('companyName');
             global.localStorage.removeItem('carbonApiBase');
         } catch (_e) {
