@@ -44,18 +44,18 @@ function normalizeAllSitesDataShape() {
 }
 
 function currentSiteStorageKey(orgId) {
-    return `carbonCalcCurrentSite_${orgId || 'default'}`;
+    return `carbonCalcCurrentSite_${orgId || getOrgIdForDataCache()}`;
 }
 
 function persistCurrentSiteId() {
-    const orgId = localStorage.getItem('organizationId') || 'default';
+    const orgId = getOrgIdForDataCache();
     if (appState.currentSite) {
         localStorage.setItem(currentSiteStorageKey(orgId), appState.currentSite);
     }
 }
 
 function restoreCurrentSiteId() {
-    const orgId = localStorage.getItem('organizationId') || 'default';
+    const orgId = getOrgIdForDataCache();
     const saved = localStorage.getItem(currentSiteStorageKey(orgId));
     if (saved && appState.sites && appState.sites[saved]) {
         appState.currentSite = saved;
@@ -74,7 +74,7 @@ function applyCurrentSiteFromOrgPrefs(prefs) {
 }
 
 function readLocalSitesCache(orgId) {
-    const key = `carbonCalcSites_${orgId || 'default'}`;
+    const key = `carbonCalcSites_${orgId || getOrgIdForDataCache()}`;
     const raw = localStorage.getItem(key) || localStorage.getItem(LEGACY_SITES_CACHE_KEY);
     if (!raw) return null;
     try {
@@ -163,9 +163,7 @@ function mergeSiteTabQuestions(targetSite, localSite) {
             targetSite.tabQuestions[key],
             localQ[key]
         );
-        if (merged) {
-            targetSite.tabQuestions[key] = merged;
-        }
+        targetSite.tabQuestions[key] = merged || '';
     });
     return targetSite;
 }
@@ -270,9 +268,42 @@ function ensureSiteTabQuestions(site) {
     }
 }
 
-function tabQuestionsLocalStorageKey(siteId, category) {
-    const orgId = localStorage.getItem('organizationId') || 'default';
-    return `tabQuestions_${orgId}_${siteId}_${category}`;
+function tabQuestionsLocalStorageKey(siteId, category, orgId) {
+    const resolvedOrg = orgId || getOrgIdForDataCache();
+    return `tabQuestions_${resolvedOrg}_${siteId}_${category}`;
+}
+
+function readTabQuestionCachedValue(siteId, category) {
+    const orgCandidates = [
+        localStorage.getItem('organizationId'),
+        localStorage.getItem(LAST_ORG_DATA_CACHE_KEY),
+        'default',
+    ].filter((id, index, arr) => id && arr.indexOf(id) === index);
+    let best = '';
+    orgCandidates.forEach((orgId) => {
+        try {
+            const cached =
+                localStorage.getItem(tabQuestionsLocalStorageKey(siteId, category, orgId)) || '';
+            best = pickBetterTabQuestionValue(category, best, cached);
+        } catch (_e) {
+            /* ignore */
+        }
+    });
+    return best;
+}
+
+/** Write every category's tab notes to org-scoped localStorage (survives logout). */
+function persistAllTabQuestionsToLocalCache(site, siteId) {
+    if (!site || !siteId) return;
+    ensureSiteTabQuestions(site);
+    getDataInputCategoryList().forEach((category) => {
+        const value = normalizeTabQuestionNotesValue(category, site.tabQuestions[category]);
+        try {
+            localStorage.setItem(tabQuestionsLocalStorageKey(siteId, category), value);
+        } catch (_e) {
+            /* ignore quota */
+        }
+    });
 }
 
 /** Which data-input category the shared notes textarea belongs to (water, energy, …). */
@@ -319,12 +350,7 @@ function hydrateTabQuestionsFromLocalCache(site, siteId) {
     if (!site || !siteId) return;
     ensureSiteTabQuestions(site);
     getDataInputCategoryList().forEach((category) => {
-        let cached = '';
-        try {
-            cached = localStorage.getItem(tabQuestionsLocalStorageKey(siteId, category)) || '';
-        } catch (_e) {
-            cached = '';
-        }
+        const cached = readTabQuestionCachedValue(siteId, category);
         const merged = pickBetterTabQuestionValue(
             category,
             site.tabQuestions[category],
@@ -345,6 +371,7 @@ function syncAllTabQuestionsToSite() {
     if (!site) return;
     flushActiveTabQuestionNotes();
     hydrateTabQuestionsFromLocalCache(site, siteId);
+    persistAllTabQuestionsToLocalCache(site, siteId);
 }
 
 function syncTabQuestionsFromDomToSite() {
@@ -456,6 +483,7 @@ function selectOrganizationMembership(membership) {
     localStorage.setItem('organizationId', orgId);
     localStorage.setItem('organizationName', orgName);
     localStorage.setItem('companyName', orgName);
+    rememberOrgIdForDataCache(orgId);
     ensureOrganizationSession(orgId, orgName);
 }
 
@@ -555,7 +583,22 @@ const TAB_QUESTION_PROMPTS = {
 const QA_CHECKLIST_KEY = 'qaChecklistState';
 const QA_ALLOWED_EMAIL = 'rd.hamza@isys.sa';
 const LAST_LOADED_ORG_KEY = 'lastLoadedOrganizationId';
+/** Survives logout so org-scoped site/tab-notes cache keys still resolve after login. */
+const LAST_ORG_DATA_CACHE_KEY = 'lastOrganizationIdForDataCache';
 const LEGACY_SITES_CACHE_KEY = 'carbonCalcSites';
+
+function getOrgIdForDataCache() {
+    return (
+        localStorage.getItem('organizationId') ||
+        localStorage.getItem(LAST_ORG_DATA_CACHE_KEY) ||
+        'default'
+    );
+}
+
+function rememberOrgIdForDataCache(orgId) {
+    if (!orgId) return;
+    localStorage.setItem(LAST_ORG_DATA_CACHE_KEY, orgId);
+}
 
 let knownUserProfile = null;
 
@@ -863,6 +906,7 @@ window.syncToolbarOutputUnitToAssessmentScope = syncToolbarOutputUnitToAssessmen
 
 function ensureOrganizationSession(orgId, companyName) {
     if (!orgId) return;
+    rememberOrgIdForDataCache(orgId);
     const previousOrgId = localStorage.getItem(LAST_LOADED_ORG_KEY);
     if (previousOrgId && previousOrgId !== orgId) {
         clearLegacyGlobalFormCache();
@@ -1044,9 +1088,17 @@ const CATEGORY_DEFAULT_UNITS = {
 };
 
 function clearAuthSession() {
-    // Persist org site cache before clearing auth (backup if server sync missed).
-    const orgIdForCache = localStorage.getItem('organizationId') || 'default';
+    // Persist tab notes + site cache before clearing auth (backup if server sync missed).
+    const orgIdForCache = localStorage.getItem('organizationId') || getOrgIdForDataCache();
+    if (orgIdForCache && orgIdForCache !== 'default') {
+        rememberOrgIdForDataCache(orgIdForCache);
+    }
     if (appState.sites && Object.keys(appState.sites).length) {
+        syncAllTabQuestionsToSite();
+        Object.keys(appState.sites).forEach((siteId) => {
+            const site = appState.sites[siteId];
+            if (site) persistAllTabQuestionsToLocalCache(site, siteId);
+        });
         try {
             localStorage.setItem(
                 `carbonCalcSites_${orgIdForCache}`,
@@ -1492,6 +1544,7 @@ async function loadUserDataFromBackend() {
             const data = await dataResponse.json();
             if (data.organization_id) {
                 localStorage.setItem('organizationId', data.organization_id);
+                rememberOrgIdForDataCache(data.organization_id);
             }
             const companyName =
                 data.org_preferences?.companyName ||
@@ -2591,7 +2644,14 @@ function attachRowListeners(row) {
 // ============================================
 
 function saveSitesToLocalStorage() {
-    const orgId = localStorage.getItem('organizationId') || 'default';
+    const orgId = getOrgIdForDataCache();
+    if (appState.currentSite && appState.sites?.[appState.currentSite]) {
+        flushActiveTabQuestionNotes();
+        persistAllTabQuestionsToLocalCache(
+            appState.sites[appState.currentSite],
+            appState.currentSite
+        );
+    }
     localStorage.setItem(`carbonCalcSites_${orgId}`, JSON.stringify(appState.sites));
 }
 
@@ -2630,7 +2690,7 @@ function rebuildSitesUIFromState() {
 
 function loadSitesFromLocalStorage(options) {
     const rebuildUI = !options || options.rebuildUI !== false;
-    const orgId = localStorage.getItem('organizationId') || 'default';
+    const orgId = getOrgIdForDataCache();
     let saved = localStorage.getItem(`carbonCalcSites_${orgId}`);
     if (!saved) {
         saved = localStorage.getItem(LEGACY_SITES_CACHE_KEY);
