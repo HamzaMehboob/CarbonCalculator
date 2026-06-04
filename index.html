@@ -383,7 +383,7 @@
                             </div>
                             <div class="form-inline-group full-width">
                                 <label data-en="Organisation profile (report narrative)" data-pt="Perfil da organização">Organisation profile (report narrative)</label>
-                                <textarea id="organizationProfileInput" rows="3" placeholder="Replaces the sample description in the Word report when filled."></textarea>
+                                <textarea id="organizationProfileInput" rows="3" placeholder="Optional narrative shown in the Carbon Emission Statement when filled."></textarea>
                             </div>
                         </div>
                         <div class="card p-4" id="general-info-sections-host"></div>
@@ -446,8 +446,8 @@
                                     <i class="fas fa-print"></i> <span data-en="Print Report" data-pt="Imprimir Relatório">Print Report</span>
                                 </button>
                                 <button class="btn-secondary" type="button" onclick="generateFinalReportDOCX()"
-                                        title="Generate final Word report (DOCX)">
-                                    <i class="fas fa-file-word"></i> <span data-en="Final Report" data-pt="Relatório Final">Final Report</span>
+                                        title="Download Carbon Emission Statement (DOCX)">
+                                    <i class="fas fa-file-word"></i> <span data-en="Carbon Emission Statement" data-pt="Relatório de Emissões">Carbon Emission Statement</span>
                                 </button>
                             </div>
                         </div>
@@ -923,10 +923,10 @@
                                 <button class="btn-secondary" onclick="toggleDashboardWidgets()">
                                     <i class="fas fa-cog"></i> <span data-en="Customize" data-pt="Personalizar">Customize</span>
                                 </button>
-                                <button class="btn-export-pdf" onclick="exportToPDF()" title="Export to PDF">
-                                    <i class="fas fa-file-pdf"></i>
+                                <button class="btn-export-pdf" onclick="exportToPDF()" title="Download Carbon Emission Statement (DOCX)">
+                                    <i class="fas fa-file-word"></i>
                                 </button>
-                                <button class="btn-export-excel" onclick="exportToExcel()" title="Export to Excel">
+                                <button class="btn-export-excel" onclick="exportToExcel()" title="Export emissions data to Excel">
                                     <i class="fas fa-file-excel"></i>
                                 </button>
                             </div>
@@ -1090,10 +1090,10 @@
                                 <button class="btn-secondary" onclick="toggleDashboardWidgets()">
                                     <i class="fas fa-cog"></i> <span data-en="Customize" data-pt="Personalizar">Customize</span>
                                 </button>
-                                <button class="btn-export-pdf" onclick="exportToPDF()" title="Export to PDF">
-                                    <i class="fas fa-file-pdf"></i>
+                                <button class="btn-export-pdf" onclick="exportToPDF()" title="Download Carbon Emission Statement (DOCX)">
+                                    <i class="fas fa-file-word"></i>
                                 </button>
-                                <button class="btn-export-excel" onclick="exportToExcel()" title="Export to Excel">
+                                <button class="btn-export-excel" onclick="exportToExcel()" title="Export emissions data to Excel">
                                     <i class="fas fa-file-excel"></i>
                                 </button>
                                 <button class="btn-secondary" onclick="exportFactorsToExcel()" title="Export Factors Excel">
@@ -1431,6 +1431,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="js/theme-palettes.js"></script>
     <script src="js/calculations.js"></script>
     <script src="js/org-preferences.js"></script>
