@@ -73,16 +73,22 @@ function readLocalSitesCache(orgId) {
     }
 }
 
+function categoryRowsHaveMonthData(rows) {
+    if (!Array.isArray(rows)) return false;
+    return rows.some((row) => {
+        const months = Array.isArray(row?.months) ? row.months : [];
+        return months.some((v) => Number(v) > 0);
+    });
+}
+
 function isDataInputRowMeaningful(row) {
     if (!row || typeof row !== 'object') return false;
-    if (String(row.description || '').trim()) return true;
-    if (row.emissionType) return true;
     const months = Array.isArray(row.months) ? row.months : [];
     return months.some((v) => Number(v) > 0);
 }
 
 function isDataInputCategoryMeaningful(rows) {
-    return Array.isArray(rows) && rows.some(isDataInputRowMeaningful);
+    return categoryRowsHaveMonthData(rows);
 }
 
 function cloneDataInputRows(rows) {
@@ -105,8 +111,26 @@ function mergeSiteDataInputCategories(targetSite, localSite) {
     getDataInputCategoryList().forEach((category) => {
         const serverRows = targetSite.data?.[category];
         const localRows = localSite.data?.[category];
-        if (!isDataInputCategoryMeaningful(serverRows) && isDataInputCategoryMeaningful(localRows)) {
+        if (categoryRowsHaveMonthData(localRows) && !categoryRowsHaveMonthData(serverRows)) {
             targetSite.data[category] = cloneDataInputRows(localRows);
+        }
+    });
+    mergeSiteTabQuestions(targetSite, localSite);
+    return targetSite;
+}
+
+function mergeSiteTabQuestions(targetSite, localSite) {
+    if (!targetSite || !localSite) return targetSite;
+    const localQ = localSite.tabQuestions;
+    if (!localQ || typeof localQ !== 'object') return targetSite;
+    if (!targetSite.tabQuestions || typeof targetSite.tabQuestions !== 'object') {
+        targetSite.tabQuestions = {};
+    }
+    Object.keys(localQ).forEach((key) => {
+        const localVal = String(localQ[key] || '').trim();
+        const serverVal = String(targetSite.tabQuestions[key] || '').trim();
+        if (localVal && !serverVal) {
+            targetSite.tabQuestions[key] = localQ[key];
         }
     });
     return targetSite;
@@ -125,7 +149,18 @@ function mergeSitesPreferNonEmptyLocal(serverSites, localSites) {
     return merged;
 }
 
+function normalizeDataRowYearInputs() {
+    document.querySelectorAll('.data-row').forEach((row) => {
+        let yearInput = row.querySelector('.row-display-year');
+        if (!yearInput) {
+            yearInput = row.querySelector('input[type="number"]:not(.month-input)');
+            if (yearInput) yearInput.classList.add('row-display-year');
+        }
+    });
+}
+
 function syncCanonicalBeforeSiteSave() {
+    normalizeDataRowYearInputs();
     if (window.carbonCalc?.syncCanonicalCalendarBeforeSave) {
         window.carbonCalc.syncCanonicalCalendarBeforeSave();
     } else if (window.carbonCalc?.syncCanonicalCalendarFromDom) {
@@ -146,13 +181,16 @@ function extractDataInputRowFromDom(category, row) {
     const unitSelect = row.querySelector('.row-unit-select');
 
     let months = [];
-    if (window.carbonCalc?.getCanonicalCalendarMonths) {
-        const fromCanon = window.carbonCalc.getCanonicalCalendarMonths(category, rowYear);
-        if (fromCanon) months = fromCanon;
-    }
-    if (!months.length && window.carbonCalc?.readRowMonthsForSave) {
+    const fromCanon = window.carbonCalc?.getCanonicalCalendarMonths
+        ? window.carbonCalc.getCanonicalCalendarMonths(category, rowYear)
+        : null;
+    const canonHasValues =
+        Array.isArray(fromCanon) && fromCanon.some((v) => Number(v) > 0);
+    if (canonHasValues) {
+        months = fromCanon;
+    } else if (window.carbonCalc?.readRowMonthsForSave) {
         months = window.carbonCalc.readRowMonthsForSave(row);
-    } else if (!months.length) {
+    } else {
         row.querySelectorAll('.month-input').forEach((input) => {
             months.push(parseFloat(input.value) || 0);
         });
@@ -182,10 +220,30 @@ function collectCategoryRowsForSite(site, category) {
         if (rowData) nextRows.push(rowData);
     });
 
-    if (!isDataInputCategoryMeaningful(nextRows) && isDataInputCategoryMeaningful(previousRows)) {
+    if (categoryRowsHaveMonthData(nextRows)) {
+        return nextRows;
+    }
+    if (categoryRowsHaveMonthData(previousRows)) {
         return previousRows;
     }
     return nextRows;
+}
+
+function persistTabQuestionNotesForCategory(category, text) {
+    const site = appState.sites[appState.currentSite];
+    if (!site || !category) return;
+    if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
+        site.tabQuestions = {};
+    }
+    site.tabQuestions[category] = text == null ? '' : String(text);
+}
+
+/** Persist the shared notes field for whichever data-input tab is currently active. */
+function flushActiveTabQuestionNotes() {
+    const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+    const tabNotesInput = document.getElementById('tabQuestionNotesInput');
+    if (!activeTab || !tabNotesInput) return;
+    persistTabQuestionNotesForCategory(activeTab, tabNotesInput.value || '');
 }
 
 function collectCurrentSiteDataInput(site) {
@@ -794,9 +852,19 @@ const CATEGORY_DEFAULT_UNITS = {
 
 function clearAuthSession() {
     // Persist org site cache before clearing auth (backup if server sync missed).
-    if (appState.loggedIn && appState.sites && Object.keys(appState.sites).length) {
+    const orgIdForCache = localStorage.getItem('organizationId') || 'default';
+    if (appState.sites && Object.keys(appState.sites).length) {
         try {
-            saveSitesToLocalStorage();
+            localStorage.setItem(
+                `carbonCalcSites_${orgIdForCache}`,
+                JSON.stringify(appState.sites)
+            );
+            if (appState.currentSite) {
+                localStorage.setItem(
+                    currentSiteStorageKey(orgIdForCache),
+                    appState.currentSite
+                );
+            }
         } catch (_e) {
             /* ignore */
         }
@@ -841,9 +909,11 @@ function isSessionExpired() {
 async function forceLogoutForExpiredSession(showMessage = true) {
     try {
         if (appState.loggedIn) {
+            flushActiveTabQuestionNotes();
             if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
+            saveSitesToLocalStorage();
             if (typeof window.flushSiteDataSave === 'function') {
-                await window.flushSiteDataSave({ silent: true, keepalive: true });
+                await window.flushSiteDataSave({ silent: true, force: true });
             }
         }
     } catch (err) {
@@ -1425,6 +1495,7 @@ document.getElementById('logoutBtn')?.addEventListener('click', async function()
     }
     try {
         if (appState.loggedIn) {
+            flushActiveTabQuestionNotes();
             if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
             saveSitesToLocalStorage();
             if (typeof flushSiteDataSave === 'function') {
@@ -1568,8 +1639,11 @@ function initializeTabs() {
         btn.addEventListener('click', () => {
             const tabName = btn.getAttribute('data-tab');
             const prevTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
-            if (prevTab && prevTab !== tabName && typeof saveCurrentSiteData === 'function') {
-                saveCurrentSiteData();
+            if (prevTab && prevTab !== tabName) {
+                flushActiveTabQuestionNotes();
+                if (typeof saveCurrentSiteData === 'function') {
+                    saveCurrentSiteData();
+                }
             }
             setActiveTab(tabName);
         });
@@ -1583,10 +1657,13 @@ function initializeTabs() {
             const dataInputSection = document.getElementById('section-data-input');
             const leavingDataInput =
                 dataInputSection?.classList.contains('active') && subName !== 'data-input';
-            if (leavingDataInput && typeof saveCurrentSiteData === 'function') {
-                saveCurrentSiteData();
+            if (leavingDataInput) {
+                flushActiveTabQuestionNotes();
+                if (typeof saveCurrentSiteData === 'function') {
+                    saveCurrentSiteData();
+                }
                 if (typeof flushSiteDataSave === 'function') {
-                    flushSiteDataSave({ silent: true });
+                    flushSiteDataSave({ silent: true, force: true });
                 }
             }
             setActiveSubNav(subName);
@@ -2412,6 +2489,7 @@ function loadSiteData(siteId) {
     if (window.carbonCalc?.refreshDataTableMonthHeaders) {
         window.carbonCalc.refreshDataTableMonthHeaders();
     }
+    normalizeDataRowYearInputs();
     if (window.carbonCalc?.syncFinancialYearViewAfterDataLoad) {
         window.carbonCalc.syncFinancialYearViewAfterDataLoad();
     } else if (window.carbonCalc?.refreshFinancialYearMonthHighlights) {
@@ -2548,16 +2626,7 @@ function saveCurrentSiteData() {
     }
     
     collectCurrentSiteDataInput(site);
-
-    // Save per-tab additional question notes.
-    if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
-        site.tabQuestions = {};
-    }
-    const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
-    const tabNotesInput = document.getElementById('tabQuestionNotesInput');
-    if (activeTab && tabNotesInput) {
-        site.tabQuestions[activeTab] = tabNotesInput.value || '';
-    }
+    flushActiveTabQuestionNotes();
     
     // Save financial data (already saved by updateFinancialWidget, but ensure consistency)
     if (site.financials) {
@@ -3378,14 +3447,7 @@ async function initializeApp() {
         }
     }, 5000);
 
-    if (appState.loggedIn) {
-        saveCurrentSiteData();
-        saveSitesToLocalStorage();
-    }
     appState.dataHydrated = true;
-    if (appState.loggedIn) {
-        saveUserDataToBackend({ silent: true, force: true });
-    }
     console.log('✅ Carbon Calculator Phase 1 initialized successfully!');
 }
 
@@ -3469,6 +3531,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
     const flushOnPageExit = () => {
         if (!appState.loggedIn || !appState.dataHydrated) return;
+        flushActiveTabQuestionNotes();
         if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
         saveSitesToLocalStorage();
         if (typeof window.flushSiteDataSave === 'function') {
@@ -3570,6 +3633,7 @@ window.copyQaSummary = copyQaSummary;
 // Prevent data loss on page unload
 window.addEventListener('beforeunload', function() {
     if (!appState.loggedIn || !appState.dataHydrated) return;
+    flushActiveTabQuestionNotes();
     saveCurrentSiteData();
     saveSitesToLocalStorage();
     flushSiteDataSave({ keepalive: true, silent: true, force: true });
