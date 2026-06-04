@@ -35,6 +35,9 @@ ET.register_namespace('w', _W_NS)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _CARBON_STATEMENT_TEMPLATE = (
+    _REPO_ROOT / 'requirements' / 'Carbon emmission statement report template_v1.1.docx'
+)
+_CARBON_STATEMENT_TEMPLATE_LEGACY = (
     _REPO_ROOT / 'requirements' / 'Carbon emissions statement report template.docx'
 )
 _SELBY_TEMPLATE = _REPO_ROOT / 'requirements' / 'Carbon Emissions Statement Selby Trust v2 ECO AUDIT.docx'
@@ -2057,10 +2060,12 @@ def _wtag(name: str) -> str:
 def _resolve_final_report_template() -> Path:
     if _CARBON_STATEMENT_TEMPLATE.is_file():
         return _CARBON_STATEMENT_TEMPLATE
+    if _CARBON_STATEMENT_TEMPLATE_LEGACY.is_file():
+        return _CARBON_STATEMENT_TEMPLATE_LEGACY
     if _SELBY_TEMPLATE.is_file():
         return _SELBY_TEMPLATE
     raise FileNotFoundError(
-        'No final report template found. Add requirements/Carbon emissions statement report template.docx'
+        'No final report template found. Add requirements/Carbon emmission statement report template_v1.1.docx'
     )
 
 
@@ -2451,7 +2456,7 @@ def build_final_report_docx_bytes(payload: dict) -> tuple[bytes, str]:
         payload.get('company_logo_data_url') or payload.get('logo_data_url')
     )
 
-    if template_path.name.lower().startswith('carbon emissions statement'):
+    if 'carbon em' in template_path.name.lower() and 'statement' in template_path.name.lower():
         out_bytes = _build_carbon_statement_final_report(template_bytes, payload, logo_png)
     else:
         out_bytes = _build_selby_final_report(template_bytes, payload, logo_png)

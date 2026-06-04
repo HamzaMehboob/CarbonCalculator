@@ -1821,6 +1821,38 @@ function updateAccountSummaryChart() {
 }
 
 // Export function
+function _chartSnapshotFromCanvas(canvasId) {
+    const el = document.getElementById(canvasId);
+    if (!el) return null;
+    if (typeof Chart !== 'undefined' && typeof Chart.getChart === 'function') {
+        const inst = Chart.getChart(el);
+        if (inst && typeof inst.toBase64Image === 'function') {
+            return inst.toBase64Image('image/png', 1);
+        }
+    }
+    try {
+        return el.toDataURL('image/png');
+    } catch (_e) {
+        return null;
+    }
+}
+
+function getDashboardChartExportSnapshots() {
+    const sourceTrendByCategory = {};
+    const categories = typeof getEmissionCategories === 'function' ? getEmissionCategories() : [];
+    categories.forEach((category) => {
+        const img = _chartSnapshotFromCanvas(`sourceTrendChart_${category}`);
+        if (img) sourceTrendByCategory[category] = img;
+    });
+    return {
+        pieChart: _chartSnapshotFromCanvas('pieChart'),
+        barChart: _chartSnapshotFromCanvas('barChart'),
+        lineChart: _chartSnapshotFromCanvas('lineChart'),
+        sourceTrendChart: _chartSnapshotFromCanvas('sourceTrendChart'),
+        sourceTrendByCategory,
+    };
+}
+
 window.updateDashboard = updateDashboard;
 window.updateBankReconciliationChart = updateBankReconciliationChart;
 window.updateCashFlowChart = updateCashFlowChart;
@@ -1832,6 +1864,4 @@ window.openChartStyleModal = openChartStyleModal;
 window.applyChartStylePrefs = applyChartStylePrefs;
 window.resetChartStyleDefaults = resetChartStyleDefaults;
 window.getChartConfig = getChartConfig;
-window.ensureSourceTrendChartCards = ensureSourceTrendChartCards;
-
-
+window.getDashboardChartExportSnapshots = getDashboardChartExportSnapshots;
