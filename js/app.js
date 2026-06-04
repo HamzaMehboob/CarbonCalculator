@@ -131,6 +131,24 @@ function mergeSiteDataInputCategories(targetSite, localSite) {
     return targetSite;
 }
 
+function isTabQuestionPromptText(category, text) {
+    const t = String(text || '').trim();
+    if (!t) return false;
+    const prompt = TAB_QUESTION_PROMPTS[category];
+    return Boolean(prompt && t === String(prompt).trim());
+}
+
+/** Prefer real user notes over empty, placeholder prompt text, or shorter stale copies. */
+function pickBetterTabQuestionValue(category, valueA, valueB) {
+    let a = String(valueA || '').trim();
+    let b = String(valueB || '').trim();
+    if (isTabQuestionPromptText(category, a)) a = '';
+    if (isTabQuestionPromptText(category, b)) b = '';
+    if (!a) return b;
+    if (!b) return a;
+    return a.length >= b.length ? a : b;
+}
+
 function mergeSiteTabQuestions(targetSite, localSite) {
     if (!targetSite || !localSite) return targetSite;
     const localQ = localSite.tabQuestions;
@@ -140,11 +158,13 @@ function mergeSiteTabQuestions(targetSite, localSite) {
     }
     Object.keys(localQ).forEach((key) => {
         if (!getDataInputCategoryList().includes(key)) return;
-        const localVal = String(localQ[key] || '').trim();
-        if (!localVal) return;
-        const serverVal = String(targetSite.tabQuestions[key] || '').trim();
-        if (!serverVal || localVal.length >= serverVal.length) {
-            targetSite.tabQuestions[key] = localQ[key];
+        const merged = pickBetterTabQuestionValue(
+            key,
+            targetSite.tabQuestions[key],
+            localQ[key]
+        );
+        if (merged) {
+            targetSite.tabQuestions[key] = merged;
         }
     });
     return targetSite;
@@ -275,12 +295,17 @@ function getActiveDataInputTabKey() {
     return 'water';
 }
 
+function normalizeTabQuestionNotesValue(category, text) {
+    const value = text == null ? '' : String(text);
+    return isTabQuestionPromptText(category, value) ? '' : value;
+}
+
 function persistTabQuestionNotesForCategory(category, text) {
     const siteId = appState.currentSite;
     const site = appState.sites[siteId];
     if (!site || !category) return;
     ensureSiteTabQuestions(site);
-    const value = text == null ? '' : String(text);
+    const value = normalizeTabQuestionNotesValue(category, text);
     site.tabQuestions[category] = value;
     try {
         localStorage.setItem(tabQuestionsLocalStorageKey(siteId, category), value);
@@ -289,18 +314,37 @@ function persistTabQuestionNotesForCategory(category, text) {
     }
 }
 
-/** Restore per-tab notes from org-scoped localStorage when server/memory is empty. */
+/** Merge per-tab notes from org-scoped localStorage into site (all categories). */
 function hydrateTabQuestionsFromLocalCache(site, siteId) {
     if (!site || !siteId) return;
     ensureSiteTabQuestions(site);
     getDataInputCategoryList().forEach((category) => {
-        const cached = localStorage.getItem(tabQuestionsLocalStorageKey(siteId, category));
-        if (!cached || !String(cached).trim()) return;
-        const existing = String(site.tabQuestions[category] || '').trim();
-        if (!existing) {
-            site.tabQuestions[category] = cached;
+        let cached = '';
+        try {
+            cached = localStorage.getItem(tabQuestionsLocalStorageKey(siteId, category)) || '';
+        } catch (_e) {
+            cached = '';
+        }
+        const merged = pickBetterTabQuestionValue(
+            category,
+            site.tabQuestions[category],
+            cached
+        );
+        if (merged) {
+            site.tabQuestions[category] = merged;
+        } else if (site.tabQuestions[category] && isTabQuestionPromptText(category, site.tabQuestions[category])) {
+            site.tabQuestions[category] = '';
         }
     });
+}
+
+/** Persist active textarea + every cached per-tab key into the current site before Mongo/local save. */
+function syncAllTabQuestionsToSite() {
+    const siteId = appState.currentSite;
+    const site = appState.sites?.[siteId];
+    if (!site) return;
+    flushActiveTabQuestionNotes();
+    hydrateTabQuestionsFromLocalCache(site, siteId);
 }
 
 function syncTabQuestionsFromDomToSite() {
@@ -1058,7 +1102,7 @@ function isSessionExpired() {
 async function forceLogoutForExpiredSession(showMessage = true) {
     try {
         if (appState.loggedIn) {
-            flushActiveTabQuestionNotes();
+            syncAllTabQuestionsToSite();
             if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
             saveSitesToLocalStorage();
             if (typeof window.flushSiteDataSave === 'function') {
@@ -1477,12 +1521,9 @@ async function loadUserDataFromBackend() {
                 }
             }
             restoreCurrentSiteId();
-            if (appState.currentSite && appState.sites[appState.currentSite]) {
-                hydrateTabQuestionsFromLocalCache(
-                    appState.sites[appState.currentSite],
-                    appState.currentSite
-                );
-            }
+            Object.keys(appState.sites || {}).forEach((siteId) => {
+                hydrateTabQuestionsFromLocalCache(appState.sites[siteId], siteId);
+            });
             saveSitesToLocalStorage();
             sitesLoaded = true;
 
@@ -1590,7 +1631,7 @@ async function saveUserDataToBackend(options) {
     const token = getActiveAuthToken();
     if (!token) return false;
 
-    syncTabQuestionsFromDomToSite();
+    syncAllTabQuestionsToSite();
     if (typeof saveCurrentSiteData === 'function') {
         saveCurrentSiteData();
     }
@@ -1662,7 +1703,7 @@ document.getElementById('logoutBtn')?.addEventListener('click', async function()
     }
     try {
         if (appState.loggedIn) {
-            flushActiveTabQuestionNotes();
+            syncAllTabQuestionsToSite();
             if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
             saveSitesToLocalStorage();
             if (typeof flushSiteDataSave === 'function') {
@@ -1962,7 +2003,7 @@ function addSiteToList(siteId, siteName) {
 function switchSite(siteId) {
     // Save current site data before switching and sync to MongoDB
     if (appState.currentSite) {
-        flushActiveTabQuestionNotes();
+        syncAllTabQuestionsToSite();
         saveCurrentSiteData();
         flushSiteDataSave();
     }
@@ -2808,7 +2849,7 @@ function saveCurrentSiteData() {
         site.companyName = nameInput.value || '';
     }
     
-    syncTabQuestionsFromDomToSite();
+    syncAllTabQuestionsToSite();
     collectCurrentSiteDataInput(site);
     
     // Save financial data (already saved by updateFinancialWidget, but ensure consistency)
@@ -2846,7 +2887,11 @@ function updateTabQuestionUI(category) {
     }
     if (notesEl) {
         notesEl.dataset.activeCategory = category;
-        notesEl.value = site.tabQuestions[category] || '';
+        const stored = normalizeTabQuestionNotesValue(category, site.tabQuestions[category]);
+        notesEl.value = stored;
+        if (stored !== (site.tabQuestions[category] || '')) {
+            site.tabQuestions[category] = stored;
+        }
     }
 }
 
@@ -3726,7 +3771,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
     const flushOnPageExit = () => {
         if (!appState.loggedIn || !appState.dataHydrated) return;
-        flushActiveTabQuestionNotes();
+        syncAllTabQuestionsToSite();
         if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
         saveSitesToLocalStorage();
         if (typeof window.flushSiteDataSave === 'function') {
@@ -3834,7 +3879,7 @@ window.copyQaSummary = copyQaSummary;
 // Prevent data loss on page unload
 window.addEventListener('beforeunload', function() {
     if (!appState.loggedIn || !appState.dataHydrated) return;
-    flushActiveTabQuestionNotes();
+    syncAllTabQuestionsToSite();
     saveCurrentSiteData();
     saveSitesToLocalStorage();
     flushSiteDataSave({ keepalive: true, silent: true, force: true });
