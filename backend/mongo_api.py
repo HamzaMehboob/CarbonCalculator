@@ -926,13 +926,13 @@ def _sanitize_site_data_payload(payload: dict) -> dict:
         if not isinstance(site, dict):
             continue
         tab_q = site.get('tabQuestions')
-        if tab_q is not None and not isinstance(tab_q, dict):
+        if tab_q is None or not isinstance(tab_q, dict):
             site['tabQuestions'] = {}
-        elif isinstance(tab_q, dict):
+        else:
             site['tabQuestions'] = {
                 str(k)[:64]: str(v)[:_ORG_PREF_VALUE_MAX]
                 for k, v in tab_q.items()
-                if k is not None and v is not None
+                if k is not None and str(k).strip() and v is not None
             }
         data = site.get('data')
         if not isinstance(data, dict):

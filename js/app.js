@@ -39,6 +39,7 @@ function normalizeAllSitesDataShape() {
         if (typeof window.ensureDefaultSiteData === 'function') {
             window.ensureDefaultSiteData(site);
         }
+        ensureSiteTabQuestions(site);
     });
 }
 
@@ -127,9 +128,10 @@ function mergeSiteTabQuestions(targetSite, localSite) {
         targetSite.tabQuestions = {};
     }
     Object.keys(localQ).forEach((key) => {
+        if (!getDataInputCategoryList().includes(key)) return;
         const localVal = String(localQ[key] || '').trim();
         const serverVal = String(targetSite.tabQuestions[key] || '').trim();
-        if (localVal && !serverVal) {
+        if (localVal && (!serverVal || localVal.length > serverVal.length)) {
             targetSite.tabQuestions[key] = localQ[key];
         }
     });
@@ -229,21 +231,47 @@ function collectCategoryRowsForSite(site, category) {
     return nextRows;
 }
 
-function persistTabQuestionNotesForCategory(category, text) {
-    const site = appState.sites[appState.currentSite];
-    if (!site || !category) return;
+function ensureSiteTabQuestions(site) {
+    if (!site) return;
     if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
         site.tabQuestions = {};
     }
+}
+
+/** Last data-input category (water, energy, …) — survives Dashboard/Accounts where no tab-btn stays active. */
+function getActiveDataInputTabKey() {
+    const fromNav = document.querySelector('.tabs-nav .tab-btn.active')?.getAttribute('data-tab');
+    if (fromNav && getDataInputCategoryList().includes(fromNav)) {
+        return fromNav;
+    }
+    if (
+        appState.activeDataTab &&
+        getDataInputCategoryList().includes(appState.activeDataTab)
+    ) {
+        return appState.activeDataTab;
+    }
+    return 'water';
+}
+
+function persistTabQuestionNotesForCategory(category, text) {
+    const site = appState.sites[appState.currentSite];
+    if (!site || !category) return;
+    ensureSiteTabQuestions(site);
     site.tabQuestions[category] = text == null ? '' : String(text);
 }
 
-/** Persist the shared notes field for whichever data-input tab is currently active. */
+/** Persist the shared notes textarea into the site for the active data-input category. */
 function flushActiveTabQuestionNotes() {
-    const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
     const tabNotesInput = document.getElementById('tabQuestionNotesInput');
-    if (!activeTab || !tabNotesInput) return;
-    persistTabQuestionNotesForCategory(activeTab, tabNotesInput.value || '');
+    const category = getActiveDataInputTabKey();
+    if (!tabNotesInput || !category) return;
+    persistTabQuestionNotesForCategory(category, tabNotesInput.value || '');
+}
+
+function flushTabQuestionNotesForCategory(category) {
+    const tabNotesInput = document.getElementById('tabQuestionNotesInput');
+    if (!category || !tabNotesInput) return;
+    persistTabQuestionNotesForCategory(category, tabNotesInput.value || '');
 }
 
 function collectCurrentSiteDataInput(site) {
@@ -265,6 +293,7 @@ const appState = {
     darkMode: false,
     loggedIn: false,
     dataHydrated: false,
+    activeDataTab: 'water',
     currentSite: 'site-1',
     sites: {
         'site-1': {
@@ -1536,6 +1565,12 @@ document.getElementById('switchOrgBtn')?.addEventListener('click', function() {
 // ============================================
 
 function setActiveTab(tabName) {
+    const notesEl = document.getElementById('tabQuestionNotesInput');
+    const prevDataTab = getActiveDataInputTabKey();
+    if (notesEl && prevDataTab) {
+        persistTabQuestionNotesForCategory(prevDataTab, notesEl.value || '');
+    }
+
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
 
@@ -1587,6 +1622,7 @@ function setActiveTab(tabName) {
             window.renderInvoicesTable();
         }
     } else if (getDataInputCategoryList().includes(tabName)) {
+        appState.activeDataTab = tabName;
         updateTabQuestionUI(tabName);
     }
 }
@@ -1621,8 +1657,7 @@ function setActiveSubNav(subName) {
         const tabsContent = document.getElementById('tabsContent');
         if (subName === 'data-input') {
             tabsContent.style.display = 'block';
-            const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab') || 'water';
-            updateTabQuestionUI(activeTab);
+            updateTabQuestionUI(getActiveDataInputTabKey());
         } else {
             tabsContent.style.display = 'none';
         }
@@ -1638,9 +1673,9 @@ function initializeTabs() {
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const tabName = btn.getAttribute('data-tab');
-            const prevTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+            const prevTab = getActiveDataInputTabKey();
             if (prevTab && prevTab !== tabName) {
-                flushActiveTabQuestionNotes();
+                flushTabQuestionNotesForCategory(prevTab);
                 if (typeof saveCurrentSiteData === 'function') {
                     saveCurrentSiteData();
                 }
@@ -1784,6 +1819,7 @@ function addSiteToList(siteId, siteName) {
 function switchSite(siteId) {
     // Save current site data before switching and sync to MongoDB
     if (appState.currentSite) {
+        flushActiveTabQuestionNotes();
         saveCurrentSiteData();
         flushSiteDataSave();
     }
@@ -2476,12 +2512,8 @@ function loadSiteData(siteId) {
         });
     }
 
-    // Ensure per-tab question notes are available and synced to the active category.
-    if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
-        site.tabQuestions = {};
-    }
-    const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab') || 'water';
-    updateTabQuestionUI(activeTab);
+    ensureSiteTabQuestions(site);
+    updateTabQuestionUI(getActiveDataInputTabKey());
 
     if (window.carbonCalc?.loadCanonicalCalendarFromSiteData) {
         window.carbonCalc.loadCanonicalCalendarFromSiteData(site);
@@ -2651,10 +2683,9 @@ window.saveCurrentSiteData = saveCurrentSiteData;
 
 function updateTabQuestionUI(category) {
     const site = appState.sites[appState.currentSite];
-    if (!site) return;
-    if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
-        site.tabQuestions = {};
-    }
+    if (!site || !category) return;
+    ensureSiteTabQuestions(site);
+    appState.activeDataTab = category;
     const promptEl = document.getElementById('tabQuestionPromptText');
     const notesEl = document.getElementById('tabQuestionNotesInput');
     if (promptEl) {
@@ -3312,13 +3343,11 @@ async function initializeApp() {
         tabQuestionNotesInput.dataset.bound = '1';
         tabQuestionNotesInput.addEventListener('input', () => {
             const site = appState.sites[appState.currentSite];
-            const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+            const activeTab = getActiveDataInputTabKey();
             if (!site || !activeTab) return;
-            if (!site.tabQuestions || typeof site.tabQuestions !== 'object') {
-                site.tabQuestions = {};
-            }
-            site.tabQuestions[activeTab] = tabQuestionNotesInput.value || '';
+            persistTabQuestionNotesForCategory(activeTab, tabQuestionNotesInput.value || '');
             saveSitesToLocalStorage();
+            scheduleSiteDataSave();
         });
         tabQuestionNotesInput.addEventListener('blur', () => saveCurrentSiteData());
     }
