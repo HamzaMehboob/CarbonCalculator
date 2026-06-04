@@ -33,12 +33,46 @@ function ensureDataInputDomReady() {
     }
 }
 
+/** Map Mongo/local aliases (Water, tab_questions) to canonical tabQuestions keys. */
+function normalizeSiteTabQuestions(site) {
+    if (!site || typeof site !== 'object') return;
+    const combined = {};
+    const legacy = site.tab_questions;
+    if (legacy && typeof legacy === 'object') {
+        Object.keys(legacy).forEach((k) => {
+            if (k != null && legacy[k] != null) combined[String(k).trim()] = legacy[k];
+        });
+    }
+    const raw = site.tabQuestions;
+    if (raw && typeof raw === 'object') {
+        Object.keys(raw).forEach((k) => {
+            if (k != null && raw[k] != null) combined[String(k).trim()] = raw[k];
+        });
+    } else if (typeof raw === 'string' && raw.trim()) {
+        combined.water = raw;
+    }
+    site.tabQuestions = {};
+    delete site.tab_questions;
+    const lowerToCanonical = {};
+    getDataInputCategoryList().forEach((cat) => {
+        lowerToCanonical[cat.toLowerCase()] = cat;
+    });
+    Object.keys(combined).forEach((k) => {
+        const canon = lowerToCanonical[String(k).toLowerCase()];
+        if (!canon) return;
+        const v = String(combined[k]).trim();
+        const prev = String(site.tabQuestions[canon] ?? '').trim();
+        site.tabQuestions[canon] = pickBetterTabQuestionValue(canon, prev, v) || '';
+    });
+}
+
 function normalizeAllSitesDataShape() {
     if (!appState.sites || typeof appState.sites !== 'object') return;
     Object.values(appState.sites).forEach((site) => {
         if (typeof window.ensureDefaultSiteData === 'function') {
             window.ensureDefaultSiteData(site);
         }
+        normalizeSiteTabQuestions(site);
         ensureSiteTabQuestions(site);
     });
 }
@@ -151,6 +185,8 @@ function pickBetterTabQuestionValue(category, valueA, valueB) {
 
 function mergeSiteTabQuestions(targetSite, localSite) {
     if (!targetSite || !localSite) return targetSite;
+    normalizeSiteTabQuestions(targetSite);
+    normalizeSiteTabQuestions(localSite);
     const localQ = localSite.tabQuestions;
     if (!targetSite.tabQuestions || typeof targetSite.tabQuestions !== 'object') {
         targetSite.tabQuestions = {};
@@ -340,11 +376,24 @@ function tabQuestionNotesForDisplay(category, text) {
     return isTabQuestionPromptText(category, value) ? '' : value;
 }
 
-function persistTabQuestionNotesForCategory(category, text) {
+/** Avoid wiping stored notes when the shared textarea is still empty (e.g. before UI hydrate). */
+function shouldPersistTabQuestionValue(category, text, site, notesEl, options = {}) {
+    const trimmed = String(text ?? '').trim();
+    const existing = String(site.tabQuestions[category] ?? '').trim();
+    if (trimmed) return true;
+    if (!existing) return true;
+    if (options.force) return true;
+    if (options.fromUi && notesEl?.dataset?.tabNotesDirty === '1') return true;
+    return false;
+}
+
+function persistTabQuestionNotesForCategory(category, text, options = {}) {
     const siteId = appState.currentSite;
     const site = appState.sites[siteId];
     if (!site || !category) return;
     ensureSiteTabQuestions(site);
+    const notesEl = document.getElementById('tabQuestionNotesInput');
+    if (!shouldPersistTabQuestionValue(category, text, site, notesEl, options)) return;
     const value = String(text ?? '').trim();
     site.tabQuestions[category] = value;
     try {
@@ -389,7 +438,9 @@ function syncTabQuestionsFromDomToSite() {
     const notesEl = document.getElementById('tabQuestionNotesInput');
     const category = getActiveDataInputTabKey();
     if (!notesEl || !category) return;
-    persistTabQuestionNotesForCategory(category, notesEl.value || '');
+    persistTabQuestionNotesForCategory(category, notesEl.value || '', {
+        fromUi: notesEl.dataset.tabNotesDirty === '1',
+    });
 }
 
 /** Persist the shared notes textarea into the site for the active data-input category. */
@@ -397,13 +448,17 @@ function flushActiveTabQuestionNotes() {
     const tabNotesInput = document.getElementById('tabQuestionNotesInput');
     const category = getActiveDataInputTabKey();
     if (!tabNotesInput || !category) return;
-    persistTabQuestionNotesForCategory(category, tabNotesInput.value || '');
+    persistTabQuestionNotesForCategory(category, tabNotesInput.value || '', {
+        fromUi: tabNotesInput.dataset.tabNotesDirty === '1',
+    });
 }
 
 function flushTabQuestionNotesForCategory(category) {
     const tabNotesInput = document.getElementById('tabQuestionNotesInput');
     if (!category || !tabNotesInput) return;
-    persistTabQuestionNotesForCategory(category, tabNotesInput.value || '');
+    persistTabQuestionNotesForCategory(category, tabNotesInput.value || '', {
+        fromUi: tabNotesInput.dataset.tabNotesDirty === '1',
+    });
 }
 
 function collectCurrentSiteDataInput(site) {
@@ -1774,7 +1829,9 @@ document.getElementById('logoutBtn')?.addEventListener('click', async function()
                 navTab &&
                 getDataInputCategoryList().includes(navTab)
             ) {
-                persistTabQuestionNotesForCategory(navTab, notesEl.value || '');
+                persistTabQuestionNotesForCategory(navTab, notesEl.value || '', {
+                    fromUi: notesEl.dataset.tabNotesDirty === '1',
+                });
             }
             syncAllTabQuestionsToSite();
             if (typeof saveCurrentSiteData === 'function') saveCurrentSiteData();
@@ -1828,7 +1885,9 @@ function setActiveTab(tabName) {
         prevDataTab &&
         getDataInputCategoryList().includes(prevDataTab)
     ) {
-        persistTabQuestionNotesForCategory(prevDataTab, notesEl.value || '');
+        persistTabQuestionNotesForCategory(prevDataTab, notesEl.value || '', {
+            fromUi: notesEl.dataset.tabNotesDirty === '1',
+        });
     }
 
     const tabBtns = document.querySelectorAll('.tab-btn');
@@ -1950,7 +2009,9 @@ function initializeTabs() {
             const notesEl = document.getElementById('tabQuestionNotesInput');
             const prevTab = getActiveDataInputTabKey();
             if (prevTab && prevTab !== tabName && notesEl) {
-                persistTabQuestionNotesForCategory(prevTab, notesEl.value || '');
+                persistTabQuestionNotesForCategory(prevTab, notesEl.value || '', {
+                    fromUi: notesEl.dataset.tabNotesDirty === '1',
+                });
             }
             setActiveTab(tabName);
             if (typeof saveCurrentSiteData === 'function') {
@@ -2684,7 +2745,6 @@ function attachRowListeners(row) {
 function saveSitesToLocalStorage() {
     const orgId = getOrgIdForDataCache();
     if (appState.currentSite && appState.sites?.[appState.currentSite]) {
-        flushActiveTabQuestionNotes();
         persistAllTabQuestionsToLocalCache(
             appState.sites[appState.currentSite],
             appState.currentSite
@@ -2991,7 +3051,9 @@ function updateTabQuestionUI(category) {
         prevCategory !== category &&
         getDataInputCategoryList().includes(prevCategory)
     ) {
-        persistTabQuestionNotesForCategory(prevCategory, notesEl.value || '');
+        persistTabQuestionNotesForCategory(prevCategory, notesEl.value || '', {
+            fromUi: notesEl.dataset.tabNotesDirty === '1',
+        });
     }
 
     ensureSiteTabQuestions(site);
@@ -3005,6 +3067,8 @@ function updateTabQuestionUI(category) {
         notesEl.dataset.activeCategory = category;
         const stored = tabQuestionNotesForDisplay(category, site.tabQuestions[category]);
         notesEl.value = stored;
+        notesEl.dataset.hydratedCategory = category;
+        notesEl.dataset.tabNotesDirty = '';
         notesEl.placeholder = getTabQuestionNotesPlaceholder(category);
     }
 }
@@ -3573,7 +3637,10 @@ async function initializeApp() {
     }
     const orgAuditLogBtn = document.getElementById('orgAuditLogBtn');
     if (orgAuditLogBtn) {
-        const canAudit = isOrgAdmin || isPlatformAdmin || isConsultant;
+        const auditLoggingOn =
+            typeof isMongoAuditLoggingEnabled === 'function' && isMongoAuditLoggingEnabled();
+        const canAudit =
+            auditLoggingOn && (isOrgAdmin || isPlatformAdmin || isConsultant);
         orgAuditLogBtn.style.display = canAudit ? 'inline-flex' : 'none';
     }
     const switchOrgBtn = document.getElementById('switchOrgBtn');
@@ -3687,7 +3754,10 @@ async function initializeApp() {
         const onTabQuestionNotesChange = () => {
             const activeTab = getActiveDataInputTabKey();
             if (!activeTab) return;
-            persistTabQuestionNotesForCategory(activeTab, tabQuestionNotesInput.value || '');
+            tabQuestionNotesInput.dataset.tabNotesDirty = '1';
+            persistTabQuestionNotesForCategory(activeTab, tabQuestionNotesInput.value || '', {
+                fromUi: true,
+            });
             saveSitesToLocalStorage();
             scheduleSiteDataSave();
         };

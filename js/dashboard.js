@@ -41,6 +41,24 @@ function yearlyTitleSuffix() {
 const CATEGORY_COLOR_PALETTE = [
     '#0EA5E9', '#F59E0B', '#16A34A', '#DC2626', '#64748B', '#6610F2', '#FD7E14', '#20C997', '#E83E8C',
 ];
+
+/** Fixed distinct colors per data-input category (user overrides still allowed in chart style). */
+const CATEGORY_CHART_COLORS = {
+    water: '#0EA5E9',
+    energy: '#F59E0B',
+    transmissionDistribution: '#16A34A',
+    waste: '#DC2626',
+    transport: '#64748B',
+    businessTravel: '#6610F2',
+    freight: '#FD7E14',
+    staffCommute: '#0891B2',
+    wfh: '#E83E8C',
+    materials: '#7C3AED',
+    refrigerants: '#CA8A04',
+};
+
+let _pieChartYearValue = null;
+let _pieChartMonthIndex = null;
 const sourceTrendChartInstances = new Map();
 let _chartStyleModalTargetId = null;
 
@@ -214,8 +232,129 @@ function bindChartGranularitySelect(selectId, onChange) {
     sel.addEventListener('change', onChange);
 }
 
+function pieChartHasCategoryData(totals) {
+    return Object.values(totals || {}).some((v) => Number(v) > 0);
+}
+
+function pickDefaultPieChartYear() {
+    const years = window.carbonCalc?.collectDataYears?.() || [];
+    const reporting = window.carbonCalc?.getReportingYear?.() ?? new Date().getFullYear();
+    if (years.includes(reporting)) {
+        const t = window.carbonCalc.getCategoryTotalsForPieYear(reporting);
+        if (pieChartHasCategoryData(t)) return reporting;
+    }
+    for (let i = years.length - 1; i >= 0; i--) {
+        const y = years[i];
+        const t = window.carbonCalc.getCategoryTotalsForPieYear(y);
+        if (pieChartHasCategoryData(t)) return y;
+    }
+    return reporting || years[years.length - 1] || new Date().getFullYear();
+}
+
+function pickDefaultPieChartMonth(year) {
+    const totalsByMonth = window.carbonCalc?.getCategoryTotalsForPieMonth;
+    if (!totalsByMonth) return 0;
+    for (let m = 0; m < 12; m++) {
+        if (pieChartHasCategoryData(totalsByMonth(year, m))) return m;
+    }
+    return 0;
+}
+
+function getPieChartSelectedYear() {
+    const isYearly = isChartYearly('pieChartGranularity');
+    const periodSel = document.getElementById('pieChartPeriodSelect');
+    if (isYearly) {
+        const fromPeriod = parseInt(periodSel?.value, 10);
+        if (Number.isFinite(fromPeriod)) return fromPeriod;
+    }
+    const yearSel = document.getElementById('pieChartYearSelect');
+    const parsed = parseInt(yearSel?.value, 10);
+    if (Number.isFinite(parsed)) return parsed;
+    if (_pieChartYearValue != null) return _pieChartYearValue;
+    return pickDefaultPieChartYear();
+}
+
+function getPieChartSelectedMonthIndex() {
+    const monthSel = document.getElementById('pieChartPeriodSelect');
+    const parsed = parseInt(monthSel?.value, 10);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 11) return parsed;
+    if (_pieChartMonthIndex != null) return _pieChartMonthIndex;
+    return pickDefaultPieChartMonth(getPieChartSelectedYear());
+}
+
+function syncPieChartPeriodControls() {
+    const isYearly = isChartYearly('pieChartGranularity');
+    const yearSel = document.getElementById('pieChartYearSelect');
+    const periodSel = document.getElementById('pieChartPeriodSelect');
+    if (!periodSel) return;
+
+    const years = window.carbonCalc?.collectDataYears?.() || [new Date().getFullYear()];
+    const defaultYear = pickDefaultPieChartYear();
+    if (_pieChartYearValue == null || !years.includes(_pieChartYearValue)) {
+        _pieChartYearValue = defaultYear;
+    }
+
+    if (yearSel) {
+        yearSel.style.display = isYearly ? 'none' : '';
+        yearSel.innerHTML = years
+            .map((y) => `<option value="${y}">${y}</option>`)
+            .join('');
+        yearSel.value = String(_pieChartYearValue);
+    }
+
+    if (isYearly) {
+        periodSel.innerHTML = years
+            .map((y) => `<option value="${y}">${y}</option>`)
+            .join('');
+        const currentYear = parseInt(periodSel.value, 10);
+        periodSel.value = years.includes(currentYear) ? String(currentYear) : String(_pieChartYearValue);
+        _pieChartYearValue = parseInt(periodSel.value, 10) || _pieChartYearValue;
+    } else {
+        const monthLabels = getMonthLabels();
+        periodSel.innerHTML = monthLabels
+            .map((label, idx) => `<option value="${idx}">${label}</option>`)
+            .join('');
+        if (_pieChartMonthIndex == null) {
+            _pieChartMonthIndex = pickDefaultPieChartMonth(getPieChartSelectedYear());
+        }
+        periodSel.value = String(_pieChartMonthIndex);
+    }
+}
+
+function bindPieChartPeriodControls() {
+    syncPieChartPeriodControls();
+    const yearSel = document.getElementById('pieChartYearSelect');
+    const periodSel = document.getElementById('pieChartPeriodSelect');
+    if (yearSel && yearSel.dataset.bound !== '1') {
+        yearSel.dataset.bound = '1';
+        yearSel.addEventListener('change', () => {
+            _pieChartYearValue = parseInt(yearSel.value, 10) || _pieChartYearValue;
+            if (!isChartYearly('pieChartGranularity')) {
+                _pieChartMonthIndex = pickDefaultPieChartMonth(_pieChartYearValue);
+                if (periodSel) periodSel.value = String(_pieChartMonthIndex);
+            }
+            updatePieChart();
+        });
+    }
+    if (periodSel && periodSel.dataset.bound !== '1') {
+        periodSel.dataset.bound = '1';
+        periodSel.addEventListener('change', () => {
+            if (isChartYearly('pieChartGranularity')) {
+                _pieChartYearValue = parseInt(periodSel.value, 10) || _pieChartYearValue;
+            } else {
+                _pieChartMonthIndex = parseInt(periodSel.value, 10) || 0;
+            }
+            updatePieChart();
+        });
+    }
+}
+
 function bindMainChartGranularitySelects() {
-    bindChartGranularitySelect('pieChartGranularity', () => updatePieChart());
+    bindChartGranularitySelect('pieChartGranularity', () => {
+        syncPieChartPeriodControls();
+        updatePieChart();
+    });
+    bindPieChartPeriodControls();
     bindChartGranularitySelect('lineChartGranularity', () => updateLineChart());
     bindChartGranularitySelect('barChartGranularity', () => updateBarChart());
     bindChartGranularitySelect('sourceTrendGranularity', () => updateSourceTrendChart());
@@ -232,7 +371,8 @@ function getCategoryChartColor(category, index) {
     const cats = getEmissionCategories();
     const palette = defaultPaletteColors(cats.length);
     const catIndex = cats.indexOf(category);
-    const fallback = palette[catIndex >= 0 ? catIndex : index];
+    const fallback =
+        CATEGORY_CHART_COLORS[category] || palette[catIndex >= 0 ? catIndex : index];
 
     if (cfg.categoryColors?.[category]) return cfg.categoryColors[category];
     if (cfg.sliceKeys?.length && cfg.colors?.length) {
@@ -272,7 +412,7 @@ function buildChartStyleFormHtml(chartId) {
         const stored = prefs.charts.pieChart?.colors || defaultPaletteColors(keys.length || 5);
         keys.forEach((key, idx) => {
             const label = getCategoryDisplayName(key);
-            const val = stored[idx] || defaultPaletteColors(keys.length)[idx];
+            const val = stored[idx] || getCategoryChartColor(key, idx);
             colorSection += `
                 <div class="chart-style-color-row">
                     <span>${label}</span>
@@ -644,11 +784,26 @@ function updateAccountsCharts() {
 
 function updatePieChart() {
     const ct = _chartTheme();
+    if (window.carbonCalc?.calculateAllTotals) {
+        window.carbonCalc.calculateAllTotals();
+    }
+    syncPieChartPeriodControls();
     const isYearly = isChartYearly('pieChartGranularity');
-    const totals = isYearly
-        ? window.carbonCalc.getCategoryTotalsForAllChartYears?.() ||
-          window.carbonCalc.getCategoryTotalsFromInputs?.()
-        : window.carbonCalc.getCategoryTotalsFromInputs?.() || window.carbonCalc.getCategoryTotals();
+    let periodLabel = '';
+    let totals = {};
+    if (isYearly) {
+        const year = getPieChartSelectedYear();
+        _pieChartYearValue = year;
+        totals = window.carbonCalc.getCategoryTotalsForPieYear(year) || {};
+        periodLabel = String(year);
+    } else {
+        const year = getPieChartSelectedYear();
+        const monthIdx = getPieChartSelectedMonthIndex();
+        _pieChartYearValue = year;
+        _pieChartMonthIndex = monthIdx;
+        totals = window.carbonCalc.getCategoryTotalsForPieMonth(year, monthIdx) || {};
+        periodLabel = `${getMonthLabels()[monthIdx] || ''} ${year}`.trim();
+    }
     const keys = getEmissionCategories().filter((key) => (totals[key] || 0) > 0);
     const labels = keys.map((key) => getCategoryDisplayName(key));
     const data = keys.map((key) => totals[key]);
@@ -657,11 +812,11 @@ function updatePieChart() {
     const pieTitle = document.getElementById('pieChartTitle');
     if (pieTitle) {
         const en = isYearly
-            ? `Emissions by Category${yearlyTitleSuffix()}`
-            : 'Emissions by Category';
+            ? `Emissions by Category (${periodLabel})`
+            : `Emissions by Category (${periodLabel})`;
         const pt = isYearly
-            ? `Emissões por Categoria${yearlyTitleSuffix()}`
-            : 'Emissões por Categoria';
+            ? `Emissões por Categoria (${periodLabel})`
+            : `Emissões por Categoria (${periodLabel})`;
         pieTitle.textContent = appState.currentLanguage === 'pt' ? pt : en;
         pieTitle.setAttribute('data-en', en);
         pieTitle.setAttribute('data-pt', pt);

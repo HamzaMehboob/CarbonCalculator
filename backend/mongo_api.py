@@ -846,6 +846,8 @@ def _audit_actor_fields(user: dict | None) -> dict:
 
 
 def _can_view_organization_audit_log(user: dict | None, org_id: str | None) -> bool:
+    if not _mongodb_audit_logging_enabled():
+        return False
     if not user or not org_id:
         return False
     oid = str(org_id).strip()
@@ -978,6 +980,56 @@ _DEFAULT_ROW_UNIT = {
 
 
 _ORG_PREF_VALUE_MAX = 20_000
+
+# Must match frontend DATA_INPUT_CATEGORIES / getDataInputCategoryList() keys exactly.
+_TAB_QUESTION_CATEGORIES = (
+    'water',
+    'energy',
+    'transmissionDistribution',
+    'waste',
+    'transport',
+    'businessTravel',
+    'freight',
+    'staffCommute',
+    'wfh',
+    'materials',
+    'refrigerants',
+)
+
+
+def _normalize_site_tab_questions(site: dict) -> None:
+    """Canonical camelCase keys (e.g. water, not Water); merge tab_questions alias."""
+    if not isinstance(site, dict):
+        return
+    combined: dict[str, object] = {}
+    legacy = site.get('tab_questions')
+    if isinstance(legacy, dict):
+        for k, v in legacy.items():
+            if k is not None and v is not None:
+                combined[str(k).strip()] = v
+    raw = site.get('tabQuestions')
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            if k is not None and v is not None:
+                combined[str(k).strip()] = v
+    elif isinstance(raw, str) and str(raw).strip():
+        combined['water'] = str(raw).strip()
+    lower_map = {c.lower(): c for c in _TAB_QUESTION_CATEGORIES}
+    out: dict[str, str] = {}
+    for k, v in combined.items():
+        canon = lower_map.get(str(k).strip().lower())
+        if not canon or v is None:
+            continue
+        text = str(v).strip()
+        if not text:
+            continue
+        prev = out.get(canon, '')
+        if len(text) >= len(prev):
+            out[canon] = text[:_ORG_PREF_VALUE_MAX]
+        elif not prev:
+            out[canon] = text[:_ORG_PREF_VALUE_MAX]
+    site['tabQuestions'] = out
+    site.pop('tab_questions', None)
 _ORG_PREF_LOGO_MAX = 800_000
 _ORG_PREF_MAX_KEYS = 600
 
@@ -1092,15 +1144,7 @@ def _sanitize_site_data_payload(payload: dict) -> dict:
         for text_key in ('name', 'companyName', 'notes'):
             if text_key in site and site[text_key] is not None:
                 site[text_key] = str(site[text_key])[:500]
-        tab_q = site.get('tabQuestions')
-        if tab_q is None or not isinstance(tab_q, dict):
-            site['tabQuestions'] = {}
-        else:
-            site['tabQuestions'] = {
-                str(k)[:64]: str(v)[:_ORG_PREF_VALUE_MAX]
-                for k, v in tab_q.items()
-                if k is not None and str(k).strip() and v is not None
-            }
+        _normalize_site_tab_questions(site)
         data = site.get('data')
         if not isinstance(data, dict):
             continue
@@ -1785,6 +1829,11 @@ def get_user_data():
         user_data['organization_id'] = user_data.get('organization_id', org_id)
         if 'org_preferences' not in user_data:
             user_data['org_preferences'] = {}
+        sites = user_data.get('sites')
+        if isinstance(sites, dict):
+            for site in sites.values():
+                if isinstance(site, dict):
+                    _normalize_site_tab_questions(site)
         user_data['user_profile'] = user_profile
         return jsonify(user_data), 200
     return jsonify({
@@ -1853,6 +1902,12 @@ def save_user_data():
 @jwt_required()
 def organization_audit_log():
     """Audit trail for MongoDB org data — org admin, platform admin, or consultant only."""
+    if not _mongodb_audit_logging_enabled():
+        return jsonify({
+            'msg': 'Organization audit logging is disabled on this server.',
+            'audit_logging_enabled': False,
+        }), 404
+
     users_col = get_users_col()
     audit_col = get_audit_log_col()
     if users_col is None or audit_col is None:

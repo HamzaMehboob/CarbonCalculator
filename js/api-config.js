@@ -5,6 +5,13 @@
 (function (global) {
     const RENDER_API = 'https://carboncalculator-2eak.onrender.com/api';
 
+    /** Must match backend/mongo_api.py ENABLE_MONGODB_AUDIT_LOGGING — hides audit UI when false. */
+    const ENABLE_MONGODB_AUDIT_LOGGING = false;
+
+    function isMongoAuditLoggingEnabled() {
+        return ENABLE_MONGODB_AUDIT_LOGGING === true;
+    }
+
     function normalizeApiBase(raw) {
         if (!raw) return '';
         let s = String(raw).trim().replace(/\/+$/, '');
@@ -249,4 +256,6 @@
     global.loginPost = loginPost;
     global.loginConnectionErrorMessage = loginConnectionErrorMessage;
     global.LOGIN_TIMEOUT_MS = LOGIN_TIMEOUT_MS;
+    global.ENABLE_MONGODB_AUDIT_LOGGING = ENABLE_MONGODB_AUDIT_LOGGING;
+    global.isMongoAuditLoggingEnabled = isMongoAuditLoggingEnabled;
 })(typeof window !== 'undefined' ? window : globalThis);

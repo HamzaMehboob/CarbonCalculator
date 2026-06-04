@@ -226,6 +226,11 @@ async function deleteUser(username) {
 document.addEventListener('DOMContentLoaded', () => {
     if (!ensureAdminAccess()) return;
 
+    if (typeof isMongoAuditLoggingEnabled === 'function' && !isMongoAuditLoggingEnabled()) {
+        const auditSection = document.getElementById('openAuditLogBtn')?.closest('.card');
+        if (auditSection) auditSection.style.display = 'none';
+    }
+
     const orgName = localStorage.getItem('organizationName') || 'Organization';
     const heading = document.getElementById('orgNameHeading');
     if (heading) heading.textContent = orgName;

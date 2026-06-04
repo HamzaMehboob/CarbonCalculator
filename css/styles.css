@@ -1032,9 +1032,14 @@ body {
     gap: 8px;
 }
 
-.chart-granularity-select {
+.chart-granularity-select,
+.chart-period-select {
     min-width: 110px;
     font-size: 12px;
+}
+
+.chart-period-select {
+    min-width: 88px;
 }
 
 .data-save-status-banner {

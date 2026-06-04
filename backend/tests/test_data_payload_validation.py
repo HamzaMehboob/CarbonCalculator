@@ -57,6 +57,24 @@ def test_sanitize_org_preferences_keeps_general_info_keys():
     assert out["netZeroCommitment"] == "yes"
 
 
+def test_normalize_tab_questions_canonical_keys():
+    payload = {
+        "sites": {
+            "site-1": {
+                "tabQuestions": {"Water": "Manual note", "energy": "kWh source"},
+                "tab_questions": {"waste": "legacy key"},
+            }
+        }
+    }
+    out = api._sanitize_site_data_payload(payload)
+    tq = out["sites"]["site-1"]["tabQuestions"]
+    assert tq["water"] == "Manual note"
+    assert tq["energy"] == "kWh source"
+    assert tq["waste"] == "legacy key"
+    assert "Water" not in tq
+    assert "tab_questions" not in out["sites"]["site-1"]
+
+
 def test_sanitize_site_payload_includes_org_preferences():
     payload = {
         "sites": {},

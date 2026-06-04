@@ -14,6 +14,9 @@ function getOrgHeaders(extra) {
 }
 
 function canViewOrganizationAuditLog() {
+    if (typeof isMongoAuditLoggingEnabled === 'function' && !isMongoAuditLoggingEnabled()) {
+        return false;
+    }
     const token = localStorage.getItem('authToken');
     if (!token) return false;
     const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
@@ -24,7 +27,17 @@ function canViewOrganizationAuditLog() {
 
 function ensureAuditLogAccess() {
     if (!canViewOrganizationAuditLog()) {
-        window.location.href = 'index.html';
+        const back =
+            localStorage.getItem('isPlatformAdmin') === 'true'
+                ? 'platform-admin.html'
+                : localStorage.getItem('isConsultant') === 'true'
+                  ? 'consultant-workbench.html'
+                  : 'organization-users.html';
+        window.location.href =
+            typeof isMongoAuditLoggingEnabled === 'function' &&
+            !isMongoAuditLoggingEnabled()
+                ? back
+                : 'index.html';
         return false;
     }
     return true;
@@ -45,6 +58,13 @@ async function downloadOrganizationAuditLogTxt() {
         }
         if (response.status === 403) {
             if (statusEl) statusEl.textContent = 'You do not have permission to view this audit log.';
+            return;
+        }
+        if (response.status === 404) {
+            if (statusEl) {
+                statusEl.textContent =
+                    'Organization audit logging is disabled on this server.';
+            }
             return;
         }
         if (!response.ok) {
@@ -82,7 +102,10 @@ async function loadAuditLogPreview() {
         );
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            previewEl.textContent = err.msg || 'Could not load audit log.';
+            previewEl.textContent =
+                response.status === 404
+                    ? err.msg || 'Organization audit logging is disabled on this server.'
+                    : err.msg || 'Could not load audit log.';
             return;
         }
         const data = await response.json();

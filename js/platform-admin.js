@@ -100,7 +100,12 @@ async function loadOrganizations() {
                     <td>${formatDate(o.created_at)}</td>
                     <td>
                         <button type="button" class="btn-link" data-action="open-org" data-org-id="${id}" data-org-name="${name.replace(/"/g, '&quot;')}">Open data</button>
-                        <button type="button" class="btn-link" data-action="audit-log" data-org-id="${id}" data-org-name="${name.replace(/"/g, '&quot;')}">Audit log</button>
+                        ${
+                            typeof isMongoAuditLoggingEnabled === 'function' &&
+                            isMongoAuditLoggingEnabled()
+                                ? `<button type="button" class="btn-link" data-action="audit-log" data-org-id="${id}" data-org-name="${name.replace(/"/g, '&quot;')}">Audit log</button>`
+                                : ''
+                        }
                         <button type="button" class="btn-link" data-action="delete-org" data-org-id="${id}" data-org-name="${name.replace(/"/g, '&quot;')}">Remove</button>
                     </td>
                 </tr>`;

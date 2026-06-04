@@ -2043,6 +2043,52 @@ function getCategoryTotalsForYearRange(minYear, maxYear) {
     return totals;
 }
 
+/** Sum one category for a calendar row year; optional monthIndex 0–11 (null = full year). */
+function sumCategoryTonnesForRowPeriod(category, targetYear, monthIndex) {
+    const table = document.getElementById(`${category}Table`);
+    if (!table || !Number.isFinite(targetYear)) return 0;
+
+    const unitCategory = resolveUnitCategory(category);
+    let total = 0;
+    table.querySelectorAll('.data-row').forEach((row) => {
+        const year = getRowYear(row);
+        if (year == null || year !== targetYear) return;
+
+        const conversionFactor = getRowConversionFactor(row, `${category}Table`);
+        const rowUnit = row.querySelector('.row-unit-select')?.value || '';
+        row.querySelectorAll('.month-input').forEach((input, idx) => {
+            if (monthIndex != null && idx !== monthIndex) return;
+            const baseValue = toBaseUnitValue(
+                unitCategory,
+                rowUnit,
+                parseFloat(input.value) || 0
+            );
+            total += (baseValue * conversionFactor) / 1000;
+        });
+    });
+    return total;
+}
+
+/** Dashboard pie chart — emissions by category for one calendar year. */
+function getCategoryTotalsForPieYear(calendarYear) {
+    const totals = {};
+    getDataInputCategories().forEach((category) => {
+        totals[category] = sumCategoryTonnesForRowPeriod(category, calendarYear, null);
+    });
+    return totals;
+}
+
+/** Dashboard pie chart — emissions by category for one month in a calendar year. */
+function getCategoryTotalsForPieMonth(calendarYear, monthIndex) {
+    const month = Number(monthIndex);
+    const safeMonth = Number.isFinite(month) && month >= 0 && month <= 11 ? month : 0;
+    const totals = {};
+    getDataInputCategories().forEach((category) => {
+        totals[category] = sumCategoryTonnesForRowPeriod(category, calendarYear, safeMonth);
+    });
+    return totals;
+}
+
 const CHART_BASELINE_YEAR_MIN = 2020;
 const CHART_BASELINE_YEAR_MAX = 2025;
 
@@ -2368,6 +2414,9 @@ window.carbonCalc = {
     getCategoryTotalsFromInputs,
     getCategoryTotalsForYearRange,
     getCategoryTotalsForAllChartYears,
+    getCategoryTotalsForPieYear,
+    getCategoryTotalsForPieMonth,
+    sumCategoryTonnesForRowPeriod,
     collectDataYears,
     getRowYear,
     getMonthlyTotals,

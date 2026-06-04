@@ -59,7 +59,8 @@ def test_diff_site_data_months():
     assert any(c.get('area') == 'site_data' for c in changes)
 
 
-def test_can_view_audit_log_roles():
+def test_can_view_audit_log_roles(monkeypatch):
+    monkeypatch.setattr(api, '_mongodb_audit_logging_enabled', lambda: True)
     org_id = 'org-abc'
     org_admin = {'is_org_admin': True, 'organization_id': org_id}
     regular = {'is_org_admin': False, 'organization_id': org_id}
@@ -72,6 +73,13 @@ def test_can_view_audit_log_roles():
     assert not api._can_view_organization_audit_log(regular, org_id)
     assert api._can_view_organization_audit_log(consultant, org_id)
     assert api._can_view_organization_audit_log(platform, org_id)
+
+
+def test_can_view_audit_log_denied_when_logging_disabled(monkeypatch):
+    monkeypatch.setattr(api, '_mongodb_audit_logging_enabled', lambda: False)
+    org_id = 'org-abc'
+    org_admin = {'is_org_admin': True, 'organization_id': org_id}
+    assert not api._can_view_organization_audit_log(org_admin, org_id)
 
 
 def test_format_audit_log_txt_includes_header():
