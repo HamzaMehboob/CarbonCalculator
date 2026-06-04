@@ -308,14 +308,16 @@ function persistAllTabQuestionsToLocalCache(site, siteId) {
 
 /** Which data-input category the shared notes textarea belongs to (water, energy, …). */
 function getActiveDataInputTabKey() {
+    // Visible tab button is authoritative — stale data-active-category caused Water notes
+    // to be saved under energy (or another tab) after visiting Energy then returning to Water.
+    const fromNav = document.querySelector('.tabs-nav .tab-btn.active')?.getAttribute('data-tab');
+    if (fromNav && getDataInputCategoryList().includes(fromNav)) {
+        return fromNav;
+    }
     const notesEl = document.getElementById('tabQuestionNotesInput');
     const fromDataset = notesEl?.dataset?.activeCategory;
     if (fromDataset && getDataInputCategoryList().includes(fromDataset)) {
         return fromDataset;
-    }
-    const fromNav = document.querySelector('.tabs-nav .tab-btn.active')?.getAttribute('data-tab');
-    if (fromNav && getDataInputCategoryList().includes(fromNav)) {
-        return fromNav;
     }
     if (
         appState.activeDataTab &&
@@ -1803,7 +1805,11 @@ document.getElementById('switchOrgBtn')?.addEventListener('click', function() {
 function setActiveTab(tabName) {
     const notesEl = document.getElementById('tabQuestionNotesInput');
     const prevDataTab = getActiveDataInputTabKey();
-    if (notesEl && prevDataTab) {
+    if (
+        notesEl &&
+        prevDataTab &&
+        getDataInputCategoryList().includes(prevDataTab)
+    ) {
         persistTabQuestionNotesForCategory(prevDataTab, notesEl.value || '');
     }
 
@@ -1867,6 +1873,13 @@ function setActiveSubNav(subName) {
     if (subName === 'qa-signoff' && !isQaAllowedUser()) {
         subName = 'data-input';
     }
+    const leavingDataInput =
+        subName !== 'data-input' &&
+        document.getElementById('section-data-input')?.classList.contains('active');
+    if (leavingDataInput) {
+        flushActiveTabQuestionNotes();
+    }
+
     const subNavBtns = document.querySelectorAll('.sub-nav-btn');
     const subContentSections = document.querySelectorAll('.sub-content-section');
 
@@ -1893,7 +1906,12 @@ function setActiveSubNav(subName) {
         const tabsContent = document.getElementById('tabsContent');
         if (subName === 'data-input') {
             tabsContent.style.display = 'block';
-            updateTabQuestionUI(getActiveDataInputTabKey());
+            const navTab = document.querySelector('.tabs-nav .tab-btn.active')?.getAttribute('data-tab');
+            const category =
+                navTab && getDataInputCategoryList().includes(navTab)
+                    ? navTab
+                    : getActiveDataInputTabKey();
+            updateTabQuestionUI(category);
         } else {
             tabsContent.style.display = 'none';
         }
@@ -2937,11 +2955,22 @@ function updateTabQuestionUI(category) {
     const siteId = appState.currentSite;
     const site = appState.sites[siteId];
     if (!site || !category) return;
+
+    const notesEl = document.getElementById('tabQuestionNotesInput');
+    const prevCategory = notesEl?.dataset?.activeCategory;
+    if (
+        notesEl &&
+        prevCategory &&
+        prevCategory !== category &&
+        getDataInputCategoryList().includes(prevCategory)
+    ) {
+        persistTabQuestionNotesForCategory(prevCategory, notesEl.value || '');
+    }
+
     ensureSiteTabQuestions(site);
     hydrateTabQuestionsFromLocalCache(site, siteId);
     appState.activeDataTab = category;
     const promptEl = document.getElementById('tabQuestionPromptText');
-    const notesEl = document.getElementById('tabQuestionNotesInput');
     if (promptEl) {
         promptEl.textContent = TAB_QUESTION_PROMPTS[category] || 'Add supporting notes and answers for this tab.';
     }
@@ -2949,10 +2978,28 @@ function updateTabQuestionUI(category) {
         notesEl.dataset.activeCategory = category;
         const stored = normalizeTabQuestionNotesValue(category, site.tabQuestions[category]);
         notesEl.value = stored;
+        notesEl.placeholder = getTabQuestionNotesPlaceholder(category);
         if (stored !== (site.tabQuestions[category] || '')) {
             site.tabQuestions[category] = stored;
         }
     }
+}
+
+function getTabQuestionNotesPlaceholder(category) {
+    const hints = {
+        water: 'e.g. Main meter, estimated Jan–Mar readings, leak in basement…',
+        energy: 'e.g. Calendar year bills, tariff ABC, kWh from supplier portal…',
+        transmissionDistribution: 'e.g. T&D kWh source, district heat meter ID…',
+        waste: 'e.g. Weighed bins, weekly uplift, conversion assumptions…',
+        transport: 'e.g. Fleet types, mileage from fuel cards…',
+        businessTravel: 'e.g. Flights from expense system, rail receipts…',
+        freight: 'e.g. Tonne-km from carrier reports…',
+        staffCommute: 'e.g. Survey method, average km, working days…',
+        wfh: 'e.g. Remote days per month, occupancy assumptions…',
+        materials: 'e.g. Purchase records, weights, material types…',
+        refrigerants: 'e.g. Top-up records, service sheets, gas type…',
+    };
+    return hints[category] || 'Your notes for this tab (saved to the cloud per site)…';
 }
 
 function updateInputEmissionsPreview() {
