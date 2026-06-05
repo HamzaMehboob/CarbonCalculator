@@ -1838,6 +1838,9 @@ function _chartSnapshotFromCanvas(canvasId) {
 }
 
 function getDashboardChartExportSnapshots() {
+    if (typeof buildDashboardChartSnapshotsForExport === 'function') {
+        return buildDashboardChartSnapshotsForExport();
+    }
     const sourceTrendByCategory = {};
     const categories = typeof getEmissionCategories === 'function' ? getEmissionCategories() : [];
     categories.forEach((category) => {
@@ -1853,6 +1856,168 @@ function getDashboardChartExportSnapshots() {
     };
 }
 
+function _renderOffscreenChart(type, data, options, width = 920, height = 440) {
+    if (typeof Chart === 'undefined') return null;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;height:${height}px;pointer-events:none;opacity:0;overflow:hidden`;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    wrap.appendChild(canvas);
+    document.body.appendChild(wrap);
+    const chart = new Chart(canvas, {
+        type,
+        data,
+        options: {
+            animation: false,
+            responsive: false,
+            maintainAspectRatio: false,
+            ...(options || {}),
+        },
+    });
+    const img = chart.toBase64Image('image/png', 1);
+    chart.destroy();
+    wrap.remove();
+    return img;
+}
+
+function buildDashboardChartSnapshotsForExport() {
+    if (!window.carbonCalc) return {};
+    if (window.carbonCalc.calculateAllTotals) {
+        window.carbonCalc.calculateAllTotals();
+    }
+
+    const ct = _chartTheme();
+    const snaps = {};
+    const monthLabels = getMonthLabels();
+    const yearLabels = getDashboardYearLabels();
+
+    const totals = window.carbonCalc.getCategoryTotals();
+    const pieKeys = getEmissionCategories().filter((key) => (totals[key] || 0) > 0);
+    if (pieKeys.length) {
+        snaps.pieChart = _renderOffscreenChart(
+            'pie',
+            {
+                labels: pieKeys.map((key) => getCategoryDisplayName(key)),
+                datasets: [{
+                    data: pieKeys.map((key) => convertTonnesToDisplayValue(totals[key])),
+                    backgroundColor: resolvePieColors(pieKeys),
+                    borderWidth: 1,
+                    borderColor: '#ffffff',
+                }],
+            },
+            { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+        );
+    }
+
+    const yearComparison = window.carbonCalc.getYearComparison();
+    snaps.barChart = _renderOffscreenChart(
+        'bar',
+        {
+            labels: yearLabels,
+            datasets: [{
+                label: 'Year-over-Year',
+                data: yearLabels.map((year) => convertTonnesToDisplayValue(yearComparison[year] || 0)),
+                backgroundColor: generateYearColors(yearLabels.length),
+                borderRadius: 4,
+            }],
+        },
+        {
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+                x: { ticks: { font: { size: 10 } } },
+            },
+        }
+    );
+
+    const monthlyTotals = window.carbonCalc.getMonthlyTotals();
+    const lineBorder = ct?.lineBorder || '#0EA5E9';
+    snaps.lineChart = _renderOffscreenChart(
+        'line',
+        {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Monthly total',
+                data: monthlyTotals.map(convertTonnesToDisplayValue),
+                borderColor: lineBorder,
+                backgroundColor: hexToRgba(lineBorder, 0.15),
+                fill: true,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: 3,
+            }],
+        },
+        {
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+                x: { ticks: { font: { size: 10 } } },
+            },
+        }
+    );
+
+    const dataByCategory = window.carbonCalc.getMonthlyTotalsByCategory?.() || {};
+    const activeCats = Object.keys(dataByCategory).filter((cat) =>
+        (dataByCategory[cat] || []).some((v) => Number(v) > 0)
+    );
+    const palette = defaultPaletteColors(activeCats.length);
+    snaps.sourceTrendChart = _renderOffscreenChart(
+        'line',
+        {
+            labels: monthLabels,
+            datasets: activeCats.map((cat, idx) => ({
+                label: getCategoryDisplayName(cat),
+                data: (dataByCategory[cat] || []).map(convertTonnesToDisplayValue),
+                borderColor: palette[idx],
+                fill: false,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: 2,
+            })),
+        },
+        {
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
+            scales: {
+                y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+                x: { ticks: { font: { size: 10 } } },
+            },
+        }
+    );
+
+    snaps.sourceTrendByCategory = {};
+    getEmissionCategories().forEach((category) => {
+        const series = dataByCategory[category] || [];
+        if (!series.some((v) => Number(v) > 0)) return;
+        const border = getCategoryChartColor(category);
+        snaps.sourceTrendByCategory[category] = _renderOffscreenChart(
+            'line',
+            {
+                labels: monthLabels,
+                datasets: [{
+                    label: getCategoryDisplayName(category),
+                    data: series.map(convertTonnesToDisplayValue),
+                    borderColor: border,
+                    backgroundColor: hexToRgba(border, 0.12),
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                }],
+            },
+            {
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+                    x: { ticks: { font: { size: 10 } } },
+                },
+            }
+        );
+    });
+
+    return snaps;
+}
+
 window.updateDashboard = updateDashboard;
 window.updateBankReconciliationChart = updateBankReconciliationChart;
 window.updateCashFlowChart = updateCashFlowChart;
@@ -1864,4 +2029,5 @@ window.openChartStyleModal = openChartStyleModal;
 window.applyChartStylePrefs = applyChartStylePrefs;
 window.resetChartStyleDefaults = resetChartStyleDefaults;
 window.getChartConfig = getChartConfig;
+window.buildDashboardChartSnapshotsForExport = buildDashboardChartSnapshotsForExport;
 window.getDashboardChartExportSnapshots = getDashboardChartExportSnapshots;

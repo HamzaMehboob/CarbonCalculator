@@ -130,7 +130,85 @@ function _getPerfRowDisplay(key, perfRows, perfValues) {
     return { usage: String(usage || ''), factor: String(factor || ''), emissionsDisp, scopeDisp };
 }
 
-function _pdfDrawPerformanceTable(doc, payload) {
+const _PDF_TABLE_HEAD_FILL = [19, 181, 234];
+
+function _pdfHasAutoTable(doc) {
+    return typeof doc.autoTable === 'function';
+}
+
+function _pdfStatementTitle(doc, y) {
+    _addLogo(doc);
+    doc.setFontSize(22);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('Carbon Emissions', 105, y, { align: 'center' });
+    doc.text('Statement', 105, y + 10, { align: 'center' });
+    return y + 22;
+}
+
+function _pdfDrawReportDetailPage(doc, payload) {
+    let y = _pdfStatementTitle(doc, 28);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Report Detail', 14, y + 8);
+
+    const body = [
+        ['Project Number', String(payload.project_number || '')],
+        ['Reporting Period', String(payload.reporting_period || '')],
+        ['Registered / head office address', String(payload.org_registered_address || '')],
+    ];
+
+    if (_pdfHasAutoTable(doc)) {
+        doc.autoTable({
+            startY: y + 12,
+            margin: { left: 14, right: 14 },
+            head: [['Field', 'Value']],
+            body,
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 3, lineColor: [180, 180, 180], lineWidth: 0.2 },
+            headStyles: { fillColor: _PDF_TABLE_HEAD_FILL, textColor: 255, fontStyle: 'bold' },
+            columnStyles: {
+                0: { cellWidth: 62, fontStyle: 'bold' },
+                1: { cellWidth: 'auto' },
+            },
+        });
+    } else {
+        let rowY = y + 18;
+        body.forEach(([label, value]) => {
+            rowY = _pdfDrawLabelValue(doc, label, value, 14, rowY, 120);
+        });
+    }
+}
+
+function _pdfDrawDocumentControlPage(doc, payload) {
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Document Control', 14, 24);
+
+    const body = [[
+        payload.version ? `Version ${payload.version}` : '',
+        String(payload.issue_date || ''),
+    ]];
+
+    if (_pdfHasAutoTable(doc)) {
+        doc.autoTable({
+            startY: 30,
+            margin: { left: 14, right: 14 },
+            head: [['Report version', 'Issue Date']],
+            body,
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 4, lineColor: [180, 180, 180], lineWidth: 0.2 },
+            headStyles: { fillColor: _PDF_TABLE_HEAD_FILL, textColor: 255, fontStyle: 'bold' },
+            columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 'auto' } },
+        });
+    } else {
+        doc.setFontSize(10);
+        doc.text(`Version ${payload.version || '1.0'}`, 14, 40);
+        doc.text(String(payload.issue_date || ''), 110, 40);
+    }
+}
+
+function _pdfDrawPerformanceTable(doc, payload, grandTotalKg) {
     const perfValues = _performanceValuesFromPayload(payload);
     const perfRows = payload.performance_rows || {};
     const factorYear = String(payload.reporting_year || '2024');
@@ -142,15 +220,57 @@ function _pdfDrawPerformanceTable(doc, payload) {
         'Carbon Emissions (kg CO2e)',
         'Carbon Emissions by Scope (kg CO2e)',
     ];
-    const rows = _PERF_TABLE_ROWS.map(({ scope, label, key }) => {
+    const body = _PERF_TABLE_ROWS.map(({ scope, label, key }) => {
         const d = _getPerfRowDisplay(key, perfRows, perfValues);
         return [scope, label, d.usage, d.factor, d.emissionsDisp, d.scopeDisp];
     });
-    const grandTotal = _formatKgReport(Number(payload.grand_total_kg) || 0);
-    rows.push(['', 'Total gross CO2 emissions (kg CO2e)', '', '', grandTotal, '']);
+    body.push(['', 'Total gross CO2 emissions (kg CO2e)', '', '', _formatKgReport(grandTotalKg), '']);
+
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Performance', 14, 16);
+
+    if (_pdfHasAutoTable(doc)) {
+        doc.autoTable({
+            startY: 22,
+            margin: { left: 8, right: 8 },
+            head: [headers],
+            body,
+            theme: 'grid',
+            styles: {
+                fontSize: 7.5,
+                cellPadding: 2,
+                overflow: 'linebreak',
+                lineColor: [160, 160, 160],
+                lineWidth: 0.15,
+                valign: 'middle',
+            },
+            headStyles: {
+                fillColor: _PDF_TABLE_HEAD_FILL,
+                textColor: 255,
+                fontStyle: 'bold',
+                halign: 'center',
+            },
+            columnStyles: {
+                0: { cellWidth: 12, halign: 'center' },
+                1: { cellWidth: 58 },
+                2: { cellWidth: 28, halign: 'right' },
+                3: { cellWidth: 34, halign: 'right' },
+                4: { cellWidth: 32, halign: 'right' },
+                5: { cellWidth: 32, halign: 'right' },
+            },
+            didParseCell(data) {
+                if (data.section === 'body' && data.row.index === body.length - 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = [245, 245, 245];
+                }
+            },
+        });
+        return;
+    }
 
     const colWidths = [12, 52, 32, 38, 38, 38];
-    let y = 18;
+    let y = 22;
     doc.setFontSize(8);
     doc.setFont(undefined, 'bold');
     let x = 10;
@@ -161,7 +281,7 @@ function _pdfDrawPerformanceTable(doc, payload) {
     });
     y += 10;
     doc.setFont(undefined, 'normal');
-    rows.forEach((row) => {
+    body.forEach((row) => {
         if (y > 190) return;
         x = 10;
         let rowHeight = 6;
@@ -207,7 +327,7 @@ async function exportDashboardReportPDF() {
     if (typeof window.updateDashboard === 'function') {
         window.updateDashboard();
     }
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const payload = _buildFinalReportPayload();
     const scopeKg = payload.scope_kg || {};
@@ -216,101 +336,87 @@ async function exportDashboardReportPDF() {
     const scope3 = Number(scopeKg.scope3) || 0;
     const totalScope = scope1 + scope2 + scope3;
     const totals = window.carbonCalc.getCategoryTotals();
-    const grandTotalT = Object.values(totals).reduce((a, b) => a + (Number(b) || 0), 0);
+    const grandTotalKg = Object.values(totals).reduce((a, b) => a + (Number(b) || 0), 0) * 1000;
     const companyName = _getCompanyNameForExport();
 
     const chartSnaps =
-        typeof window.getDashboardChartExportSnapshots === 'function'
-            ? window.getDashboardChartExportSnapshots()
-            : {};
+        typeof window.buildDashboardChartSnapshotsForExport === 'function'
+            ? window.buildDashboardChartSnapshotsForExport()
+            : typeof window.getDashboardChartExportSnapshots === 'function'
+              ? window.getDashboardChartExportSnapshots()
+              : {};
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
 
-    // Page 1 — Report Detail
-    doc.setFontSize(18);
-    doc.text('Carbon Emissions Statement', 105, 18, { align: 'center' });
-    doc.setFontSize(14);
-    doc.text('Report Detail', 20, 32);
-    doc.setFontSize(10);
-    let y = 42;
-    y = _pdfDrawLabelValue(doc, 'Project Number', payload.project_number, 20, y, 110);
-    y = _pdfDrawLabelValue(doc, 'Reporting Period', payload.reporting_period, 20, y, 110);
-    _pdfDrawLabelValue(doc, 'Registered / head office address', payload.org_registered_address, 20, y, 110);
+    _pdfDrawReportDetailPage(doc, payload);
 
-    // Page 2 — Document Control
     doc.addPage();
-    doc.setFontSize(14);
-    doc.text('Document Control', 20, 24);
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
-    doc.text('Report version', 20, 38);
-    doc.text('Issue Date', 110, 38);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Version ${payload.version || '1.0'}`, 20, 48);
-    doc.text(String(payload.issue_date || ''), 110, 48);
+    _pdfDrawDocumentControlPage(doc, payload);
 
-    // Page 3 — Performance table (landscape)
     doc.addPage('a4', 'landscape');
-    doc.setFontSize(14);
-    doc.text('Performance', 14, 16);
-    _pdfDrawPerformanceTable(doc, payload);
+    _pdfDrawPerformanceTable(doc, payload, grandTotalKg);
 
-    // Page 4 — Total emissions + category bars
     doc.addPage('a4', 'portrait');
     doc.setFontSize(14);
-    doc.text('1. TOTAL EMISSIONS', 20, 22);
-    doc.setFontSize(20);
-    doc.text(`${_formatKgReport(Number(payload.grand_total_kg) || grandTotalT * 1000)} kg CO2e`, 20, 34);
-    doc.setFontSize(14);
-    doc.text('2. Emissions by Category', 20, 48);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL EMISSIONS', 105, 24, { align: 'center' });
+    doc.setFontSize(18);
+    doc.text(`${_formatKgReport(grandTotalKg)} KgCO2e`, 105, 36, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text('Emissions by Category', 14, 52);
     if (chartSnaps.pieChart) {
-        _pdfAddChartImage(doc, chartSnaps.pieChart, 20, 54, 170, 95);
+        _pdfAddChartImage(doc, chartSnaps.pieChart, 14, 58, 182, 100);
     } else {
-        _pdfDrawCategoryBars(doc, totals, 20, 58, 100);
+        _pdfDrawCategoryBars(doc, totals, 14, 62, 110);
     }
 
-    // Page 5 — Scope breakdown + YoY
     doc.addPage();
-    doc.setFontSize(14);
-    doc.text('1. Scope breakdown', 20, 22);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Emissions by Scope', 14, 20);
+    doc.setFont(undefined, 'normal');
     doc.setFontSize(11);
-    doc.text(`Scope 1: ${_formatScopePctReport(scope1, totalScope)}`, 24, 32);
-    doc.text(`Scope 2: ${_formatScopePctReport(scope2, totalScope)}`, 24, 40);
-    doc.text(`Scope 3: ${_formatScopePctReport(scope3, totalScope)}`, 24, 48);
-    doc.setFontSize(14);
-    doc.text('2. Emissions by scope', 20, 60);
+    doc.text(`Scope 1: ${_formatScopePctReport(scope1, totalScope)}`, 18, 30);
+    doc.text(`Scope 2: ${_formatScopePctReport(scope2, totalScope)}`, 18, 38);
+    doc.text(`Scope 3: ${_formatScopePctReport(scope3, totalScope)}`, 18, 46);
     const scopeImg = chartSnaps.scopeChart || _buildScopeDoughnutImage(scope1, scope2, scope3);
     if (scopeImg) {
-        _pdfAddChartImage(doc, scopeImg, 20, 66, 80, 60);
+        _pdfAddChartImage(doc, scopeImg, 14, 52, 90, 68);
     }
-    doc.text('3. Year-over-Year comparison', 20, 132);
+    doc.setFont(undefined, 'bold');
+    doc.text('Year-over-Year comparison', 14, 128);
+    doc.setFont(undefined, 'normal');
     if (chartSnaps.barChart) {
-        _pdfAddChartImage(doc, chartSnaps.barChart, 20, 138, 170, 85);
+        _pdfAddChartImage(doc, chartSnaps.barChart, 14, 134, 182, 88);
     }
 
-    // Page 6 — Monthly total trend
     doc.addPage();
-    doc.setFontSize(14);
-    doc.text('Monthly Emissions Trend (Total)', 20, 20);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Monthly Emissions Trend (Total)', 14, 20);
+    doc.setFont(undefined, 'normal');
     if (chartSnaps.lineChart) {
-        _pdfAddChartImage(doc, chartSnaps.lineChart, 15, 28, 180, 100);
+        _pdfAddChartImage(doc, chartSnaps.lineChart, 14, 26, 182, 100);
     }
 
-    // Page 7+ — Source trend charts
     doc.addPage();
-    doc.setFontSize(14);
-    doc.text('Monthly Trend by Source (All)', 20, 20);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Monthly Trend by Source (All)', 14, 20);
+    doc.setFont(undefined, 'normal');
     if (chartSnaps.sourceTrendChart) {
-        _pdfAddChartImage(doc, chartSnaps.sourceTrendChart, 15, 28, 180, 95);
+        _pdfAddChartImage(doc, chartSnaps.sourceTrendChart, 14, 26, 182, 100);
     }
 
     const byCat = chartSnaps.sourceTrendByCategory || {};
     Object.keys(byCat).forEach((catKey) => {
         doc.addPage();
-        doc.setFontSize(14);
-        doc.text(`Monthly Emissions Trend — ${_categoryLabel(catKey)}`, 20, 20);
-        _pdfAddChartImage(doc, byCat[catKey], 15, 28, 180, 100);
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Monthly Emissions Trend — ${_categoryLabel(catKey)}`, 14, 20);
+        doc.setFont(undefined, 'normal');
+        _pdfAddChartImage(doc, byCat[catKey], 14, 26, 182, 100);
     });
 
     const fileName = `Carbon_Emission_Statement_${companyName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
