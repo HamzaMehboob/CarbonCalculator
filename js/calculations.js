@@ -2133,7 +2133,10 @@ function getCategoryTotals() {
 // MONTHLY BREAKDOWN
 // ============================================
 
-function getMonthlyTotals() {
+function getMonthlyTotalsForYear(calendarYear) {
+    const targetYear = Number.isFinite(Number(calendarYear))
+        ? Number(calendarYear)
+        : getReportingYear();
     const monthlyData = Array(12).fill(0);
     const tables = getDataInputCategories();
 
@@ -2145,7 +2148,7 @@ function getMonthlyTotals() {
             rows.forEach((row) => {
                 const monthInputs = row.querySelectorAll('.month-input');
                 const conversionFactor = getRowConversionFactor(row, `${category}Table`);
-                if (getRowYear(row) !== getReportingYear()) return;
+                if (getRowYear(row) !== targetYear) return;
 
                 monthInputs.forEach((input, index) => {
                     const value = parseFloat(input.value) || 0;
@@ -2161,7 +2164,16 @@ function getMonthlyTotals() {
     return monthlyData;
 }
 
-function getMonthlyTotalsByCategory() {
+function getMonthlyTotals(calendarYear) {
+    return getMonthlyTotalsForYear(
+        calendarYear != null ? calendarYear : getReportingYear()
+    );
+}
+
+function getMonthlyTotalsByCategoryForYear(calendarYear) {
+    const targetYear = Number.isFinite(Number(calendarYear))
+        ? Number(calendarYear)
+        : getReportingYear();
     const categories = getDataInputCategories();
     const result = {};
     categories.forEach((category) => {
@@ -2170,7 +2182,7 @@ function getMonthlyTotalsByCategory() {
         if (!table) return;
         const unitCategory = resolveUnitCategory(category);
         table.querySelectorAll('.data-row').forEach((row) => {
-            if (getRowYear(row) !== getReportingYear()) return;
+            if (getRowYear(row) !== targetYear) return;
             const conversionFactor = getRowConversionFactor(row, `${category}Table`);
             const rowUnit = row.querySelector('.row-unit-select')?.value || '';
             row.querySelectorAll('.month-input').forEach((input, idx) => {
@@ -2180,6 +2192,12 @@ function getMonthlyTotalsByCategory() {
         });
     });
     return result;
+}
+
+function getMonthlyTotalsByCategory(calendarYear) {
+    return getMonthlyTotalsByCategoryForYear(
+        calendarYear != null ? calendarYear : getReportingYear()
+    );
 }
 
 function getYearlyTotalsByCategory() {
@@ -2420,7 +2438,9 @@ window.carbonCalc = {
     collectDataYears,
     getRowYear,
     getMonthlyTotals,
+    getMonthlyTotalsForYear,
     getMonthlyTotalsByCategory,
+    getMonthlyTotalsByCategoryForYear,
     getYearComparison,
     getScopeBreakdown,
     setOutputUnit,

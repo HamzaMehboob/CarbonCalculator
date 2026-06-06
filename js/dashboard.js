@@ -59,6 +59,7 @@ const CATEGORY_CHART_COLORS = {
 
 let _pieChartYearValue = null;
 let _pieChartMonthIndex = null;
+const _monthlyChartYearState = {};
 const sourceTrendChartInstances = new Map();
 let _chartStyleModalTargetId = null;
 
@@ -344,6 +345,83 @@ function syncPieChartPeriodControls() {
     }
 }
 
+function chartYearHasMonthlyData(year) {
+    const totals = window.carbonCalc?.getMonthlyTotalsForYear?.(year);
+    return Array.isArray(totals) && totals.some((v) => Number(v) > 0);
+}
+
+function pickDefaultMonthlyChartYear() {
+    const years = window.carbonCalc?.collectDataYears?.() || [];
+    const reporting = window.carbonCalc?.getReportingYear?.() ?? new Date().getFullYear();
+    if (chartYearHasMonthlyData(reporting)) return reporting;
+    for (let i = years.length - 1; i >= 0; i--) {
+        if (chartYearHasMonthlyData(years[i])) return years[i];
+    }
+    return reporting || years[years.length - 1] || new Date().getFullYear();
+}
+
+function getMonthlyChartSelectedYear(yearSelectId, granularitySelectId, storageKey) {
+    if (isChartYearly(granularitySelectId)) {
+        return window.carbonCalc?.getReportingYear?.() ?? new Date().getFullYear();
+    }
+    const yearSel = document.getElementById(yearSelectId);
+    const parsed = parseInt(yearSel?.value, 10);
+    if (Number.isFinite(parsed)) return parsed;
+    if (_monthlyChartYearState[storageKey] != null) return _monthlyChartYearState[storageKey];
+    return pickDefaultMonthlyChartYear();
+}
+
+function monthlyChartYearSuffix(yearSelectId, granularitySelectId, storageKey) {
+    if (isChartYearly(granularitySelectId)) return '';
+    return ` (${getMonthlyChartSelectedYear(yearSelectId, granularitySelectId, storageKey)})`;
+}
+
+function syncMonthlyChartYearSelect(yearSelectId, granularitySelectId, storageKey) {
+    const yearSel = document.getElementById(yearSelectId);
+    if (!yearSel) return;
+
+    const isYearly = isChartYearly(granularitySelectId);
+    const years = window.carbonCalc?.collectDataYears?.() || [new Date().getFullYear()];
+    const yearsKey = years.join(',');
+    const defaultYear = pickDefaultMonthlyChartYear();
+    if (_monthlyChartYearState[storageKey] == null || !years.includes(_monthlyChartYearState[storageKey])) {
+        _monthlyChartYearState[storageKey] = defaultYear;
+    }
+
+    yearSel.style.display = isYearly ? 'none' : '';
+    if (yearSel.dataset.yearsKey !== yearsKey) {
+        yearSel.innerHTML = years
+            .map((y) => `<option value="${y}">${y}</option>`)
+            .join('');
+        yearSel.dataset.yearsKey = yearsKey;
+    }
+    yearSel.value = String(_monthlyChartYearState[storageKey]);
+}
+
+function bindMonthlyChartYearSelect(yearSelectId, granularitySelectId, storageKey, onChange) {
+    syncMonthlyChartYearSelect(yearSelectId, granularitySelectId, storageKey);
+    const yearSel = document.getElementById(yearSelectId);
+    if (!yearSel || yearSel.dataset.bound === '1') return;
+    yearSel.dataset.bound = '1';
+    yearSel.addEventListener('change', () => {
+        _monthlyChartYearState[storageKey] = parseInt(yearSel.value, 10) || _monthlyChartYearState[storageKey];
+        onChange();
+    });
+}
+
+function syncAllMonthlyChartYearSelects() {
+    syncMonthlyChartYearSelect('lineChartYearSelect', 'lineChartGranularity', 'line');
+    syncMonthlyChartYearSelect('barChartYearSelect', 'barChartGranularity', 'bar');
+    syncMonthlyChartYearSelect('sourceTrendYearSelect', 'sourceTrendGranularity', 'sourceTrend');
+    getEmissionCategories().forEach((cat) => {
+        syncMonthlyChartYearSelect(
+            `sourceTrendYearSelect_${cat}`,
+            `sourceTrendGranularity_${cat}`,
+            `cat_${cat}`
+        );
+    });
+}
+
 function bindPieChartPeriodControls() {
     syncPieChartPeriodControls();
     const yearSel = document.getElementById('pieChartYearSelect');
@@ -378,15 +456,32 @@ function bindMainChartGranularitySelects() {
         updatePieChart();
     });
     bindPieChartPeriodControls();
-    bindChartGranularitySelect('lineChartGranularity', () => updateLineChart());
-    bindChartGranularitySelect('barChartGranularity', () => updateBarChart());
-    bindChartGranularitySelect('sourceTrendGranularity', () => updateSourceTrendChart());
+    bindChartGranularitySelect('lineChartGranularity', () => {
+        syncMonthlyChartYearSelect('lineChartYearSelect', 'lineChartGranularity', 'line');
+        updateLineChart();
+    });
+    bindMonthlyChartYearSelect('lineChartYearSelect', 'lineChartGranularity', 'line', updateLineChart);
+    bindChartGranularitySelect('barChartGranularity', () => {
+        syncMonthlyChartYearSelect('barChartYearSelect', 'barChartGranularity', 'bar');
+        updateBarChart();
+    });
+    bindMonthlyChartYearSelect('barChartYearSelect', 'barChartGranularity', 'bar', updateBarChart);
+    bindChartGranularitySelect('sourceTrendGranularity', () => {
+        syncMonthlyChartYearSelect('sourceTrendYearSelect', 'sourceTrendGranularity', 'sourceTrend');
+        updateSourceTrendChart();
+    });
+    bindMonthlyChartYearSelect('sourceTrendYearSelect', 'sourceTrendGranularity', 'sourceTrend', updateSourceTrendChart);
 }
 
 function bindCategoryTrendGranularitySelect(category) {
-    bindChartGranularitySelect(`sourceTrendGranularity_${category}`, () => {
+    const granSelId = `sourceTrendGranularity_${category}`;
+    const yearSelId = `sourceTrendYearSelect_${category}`;
+    const storageKey = `cat_${category}`;
+    bindChartGranularitySelect(granSelId, () => {
+        syncMonthlyChartYearSelect(yearSelId, granSelId, storageKey);
         updateSourceTrendCharts(category);
     });
+    bindMonthlyChartYearSelect(yearSelId, granSelId, storageKey, () => updateSourceTrendCharts(category));
 }
 
 /** Stable color from category id (same category always same color). */
@@ -827,6 +922,8 @@ function updateCharts() {
     bindMainChartGranularitySelects();
     ensureSourceTrendChartCards();
     getEmissionCategories().forEach((cat) => bindCategoryTrendGranularitySelect(cat));
+    syncAllMonthlyChartYearSelects();
+    syncPieChartPeriodControls();
     updatePieChart();
     updateBarChart();
     updateLineChart();
@@ -981,15 +1078,17 @@ function updateBarChart() {
     const ct = _chartTheme();
     const barCfg = getChartConfig('barChart');
     const isYearly = isChartYearly('barChartGranularity');
+    syncMonthlyChartYearSelect('barChartYearSelect', 'barChartGranularity', 'bar');
+    const monthlyYearSuffix = monthlyChartYearSuffix('barChartYearSelect', 'barChartGranularity', 'bar');
 
     const barTitle = document.getElementById('barChartTitle');
     if (barTitle) {
         const en = isYearly
             ? `Year-over-Year Comparison${yearlyTitleSuffix()}`
-            : 'Monthly Comparison (Total)';
+            : `Monthly Comparison (Total)${monthlyYearSuffix}`;
         const pt = isYearly
             ? `Comparação Ano a Ano${yearlyTitleSuffix()}`
-            : 'Comparação Mensal (Total)';
+            : `Comparação Mensal (Total)${monthlyYearSuffix}`;
         barTitle.textContent = appState.currentLanguage === 'pt' ? pt : en;
         barTitle.setAttribute('data-en', en);
         barTitle.setAttribute('data-pt', pt);
@@ -1003,7 +1102,8 @@ function updateBarChart() {
         values = chartLabels.map((year) => yearComparison[year] || 0);
     } else {
         chartLabels = getMonthLabels();
-        values = window.carbonCalc.getMonthlyTotals();
+        const chartYear = getMonthlyChartSelectedYear('barChartYearSelect', 'barChartGranularity', 'bar');
+        values = window.carbonCalc.getMonthlyTotalsForYear(chartYear);
     }
 
     let colors = barCfg.colors?.length === chartLabels.length
@@ -1100,22 +1200,25 @@ function updateLineChart() {
     const ct = _chartTheme();
     const lineCfg = getChartConfig('lineChart');
     const isYearly = isChartYearly('lineChartGranularity');
+    syncMonthlyChartYearSelect('lineChartYearSelect', 'lineChartGranularity', 'line');
+    const monthlyYearSuffix = monthlyChartYearSuffix('lineChartYearSelect', 'lineChartGranularity', 'line');
     const monthNames = getMonthLabels();
     const yearLabels = getDashboardYearLabels();
     const yearComparison = window.carbonCalc.getYearComparison();
+    const chartYear = getMonthlyChartSelectedYear('lineChartYearSelect', 'lineChartGranularity', 'line');
     const chartLabels = isYearly ? yearLabels : monthNames;
     const chartValues = isYearly
         ? yearLabels.map((y) => yearComparison[y] || 0)
-        : window.carbonCalc.getMonthlyTotals();
+        : window.carbonCalc.getMonthlyTotalsForYear(chartYear);
 
     const lineTitle = document.getElementById('lineChartTitle');
     if (lineTitle) {
         const en = isYearly
             ? `Yearly Emissions Trend${yearlyTitleSuffix()}`
-            : 'Monthly Emissions Trend (Total)';
+            : `Monthly Emissions Trend (Total)${monthlyYearSuffix}`;
         const pt = isYearly
             ? `Tendência Anual de Emissões${yearlyTitleSuffix()}`
-            : 'Tendência Mensal de Emissões (Total)';
+            : `Tendência Mensal de Emissões (Total)${monthlyYearSuffix}`;
         lineTitle.textContent = appState.currentLanguage === 'pt' ? pt : en;
         lineTitle.setAttribute('data-en', en);
         lineTitle.setAttribute('data-pt', pt);
@@ -1175,13 +1278,16 @@ function updateSourceTrendChart() {
 
     const titleEl = document.getElementById('sourceTrendChartTitle');
     const isYearly = isChartYearly('sourceTrendGranularity');
+    syncMonthlyChartYearSelect('sourceTrendYearSelect', 'sourceTrendGranularity', 'sourceTrend');
+    const monthlyYearSuffix = monthlyChartYearSuffix('sourceTrendYearSelect', 'sourceTrendGranularity', 'sourceTrend');
+    const chartYear = getMonthlyChartSelectedYear('sourceTrendYearSelect', 'sourceTrendGranularity', 'sourceTrend');
     if (titleEl) {
         const en = isYearly
             ? `Yearly Trend by Source${yearlyTitleSuffix()}`
-            : 'Monthly Trend by Source (All)';
+            : `Monthly Trend by Source (All)${monthlyYearSuffix}`;
         const pt = isYearly
             ? `Tendência anual por fonte${yearlyTitleSuffix()}`
-            : 'Tendência mensal por fonte (todas)';
+            : `Tendência mensal por fonte (todas)${monthlyYearSuffix}`;
         titleEl.textContent = appState.currentLanguage === 'pt' ? pt : en;
         titleEl.setAttribute('data-en', en);
         titleEl.setAttribute('data-pt', pt);
@@ -1193,7 +1299,7 @@ function updateSourceTrendChart() {
         dataByCategory = window.carbonCalc.getYearlyTotalsByCategory();
         labels = getDashboardYearLabels();
     } else {
-        dataByCategory = window.carbonCalc.getMonthlyTotalsByCategory();
+        dataByCategory = window.carbonCalc.getMonthlyTotalsByCategoryForYear(chartYear);
         labels = getMonthLabels();
     }
 
@@ -1267,9 +1373,12 @@ function ensureSourceTrendChartCards() {
         const titleEnYearly = `Yearly Emissions Trend — ${getCategoryDisplayName(category)}${suffix}`;
         const titlePtYearly = `Tendência Anual de Emissões — ${getCategoryDisplayName(category)}${suffix}`;
         const granSelId = `sourceTrendGranularity_${category}`;
+        const yearSelId = `sourceTrendYearSelect_${category}`;
+        const storageKey = `cat_${category}`;
         const isYearly = isChartYearly(granSelId);
-        const titleEn = isYearly ? titleEnYearly : titleEnMonthly;
-        const titlePt = isYearly ? titlePtYearly : titlePtMonthly;
+        const monthlyYearSuffix = monthlyChartYearSuffix(yearSelId, granSelId, storageKey);
+        const titleEn = isYearly ? titleEnYearly : `${titleEnMonthly}${monthlyYearSuffix}`;
+        const titlePt = isYearly ? titlePtYearly : `${titlePtMonthly}${monthlyYearSuffix}`;
 
         if (!card) {
             card = document.createElement('div');
@@ -1283,6 +1392,7 @@ function ensureSourceTrendChartCards() {
                             <option value="monthly" data-en="Monthly" data-pt="Mensal">Monthly</option>
                             <option value="yearly" data-en="Yearly" data-pt="Anual">Yearly</option>
                         </select>
+                        <select id="${yearSelId}" class="toolbar-control toolbar-select chart-period-select" title="Year (monthly view)" style="display: none;" aria-label="Chart year"></select>
                         <button type="button" class="chart-style-btn" title="Customize chart colors and font">
                             <i class="fas fa-palette"></i>
                         </button>
@@ -1296,6 +1406,20 @@ function ensureSourceTrendChartCards() {
             grid.appendChild(card);
             bindCategoryTrendGranularitySelect(category);
         } else {
+            let yearSel = card.querySelector(`#${yearSelId}`);
+            if (!yearSel) {
+                const actions = card.querySelector('.chart-header-actions');
+                const granSel = card.querySelector(`#${granSelId}`);
+                if (actions && granSel) {
+                    yearSel = document.createElement('select');
+                    yearSel.id = yearSelId;
+                    yearSel.className = 'toolbar-control toolbar-select chart-period-select';
+                    yearSel.title = 'Year (monthly view)';
+                    yearSel.style.display = 'none';
+                    yearSel.setAttribute('aria-label', 'Chart year');
+                    granSel.insertAdjacentElement('afterend', yearSel);
+                }
+            }
             const h3 = card.querySelector('h3');
             if (h3) {
                 h3.textContent = appState.currentLanguage === 'pt' ? titlePt : titleEn;
@@ -1322,10 +1446,15 @@ function updateSourceTrendCharts(categoryFilter) {
         if (categoryFilter && category !== categoryFilter) return;
 
         const granSelId = `sourceTrendGranularity_${category}`;
+        const yearSelId = `sourceTrendYearSelect_${category}`;
+        const storageKey = `cat_${category}`;
         const isYearly = isChartYearly(granSelId);
+        syncMonthlyChartYearSelect(yearSelId, granSelId, storageKey);
+        const chartYear = getMonthlyChartSelectedYear(yearSelId, granSelId, storageKey);
+        const monthlyYearSuffix = monthlyChartYearSuffix(yearSelId, granSelId, storageKey);
         const dataByCategory = isYearly
             ? window.carbonCalc.getYearlyTotalsByCategory()
-            : window.carbonCalc.getMonthlyTotalsByCategory();
+            : window.carbonCalc.getMonthlyTotalsByCategoryForYear(chartYear);
         const labels = isYearly ? getDashboardYearLabels() : getMonthLabels();
 
         const suffix = yearlyTitleSuffix();
@@ -1334,10 +1463,10 @@ function updateSourceTrendCharts(categoryFilter) {
         if (h3) {
             const titleEn = isYearly
                 ? `Yearly Emissions Trend — ${getCategoryDisplayName(category)}${suffix}`
-                : `Monthly Emissions Trend — ${getCategoryDisplayName(category)}`;
+                : `Monthly Emissions Trend — ${getCategoryDisplayName(category)}${monthlyYearSuffix}`;
             const titlePt = isYearly
                 ? `Tendência Anual de Emissões — ${getCategoryDisplayName(category)}${suffix}`
-                : `Tendência Mensal de Emissões — ${getCategoryDisplayName(category)}`;
+                : `Tendência Mensal de Emissões — ${getCategoryDisplayName(category)}${monthlyYearSuffix}`;
             h3.textContent = appState.currentLanguage === 'pt' ? titlePt : titleEn;
             h3.setAttribute('data-en', titleEn);
             h3.setAttribute('data-pt', titlePt);
