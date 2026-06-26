@@ -247,9 +247,6 @@ function extractDataInputRowFromDom(category, row) {
         window.carbonCalc?.getRowYear?.(row) ??
         parseInt(row.querySelector('.row-display-year')?.value, 10);
     if (!Number.isFinite(rowYear)) return null;
-    if (window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, rowYear)) {
-        return null;
-    }
 
     const emissionSelect = row.querySelector('.emission-select');
     const unitSelect = row.querySelector('.row-unit-select');
@@ -280,14 +277,7 @@ function extractDataInputRowFromDom(category, row) {
             : getPreferredUnitForCategory(category, emissionSelect ? emissionSelect.value : null),
     };
 
-    if (
-        window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, rowYear) &&
-        !hasMeaningfulDataInputRowData(rowData)
-    ) {
-        return null;
-    }
-
-    return rowData;
+    return hasMeaningfulDataInputRowData(rowData) ? rowData : null;
 }
 
 function collectCategoryRowsForSite(site, category) {
