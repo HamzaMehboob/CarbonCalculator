@@ -234,6 +234,14 @@ function syncCanonicalBeforeSiteSave() {
     }
 }
 
+function hasMeaningfulDataInputRowData(rowData) {
+    if (!rowData || typeof rowData !== 'object') return false;
+    const description = String(rowData.description || '').trim();
+    if (description) return true;
+    const months = Array.isArray(rowData.months) ? rowData.months : [];
+    return months.some((value) => Number(value) > 0);
+}
+
 function extractDataInputRowFromDom(category, row) {
     const rowYear =
         window.carbonCalc?.getRowYear?.(row) ??
@@ -262,7 +270,7 @@ function extractDataInputRowFromDom(category, row) {
         });
     }
 
-    return {
+    const rowData = {
         description: row.querySelector('input[type="text"]')?.value || '',
         year: rowYear,
         months,
@@ -271,6 +279,15 @@ function extractDataInputRowFromDom(category, row) {
             ? unitSelect.value
             : getPreferredUnitForCategory(category, emissionSelect ? emissionSelect.value : null),
     };
+
+    if (
+        window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, rowYear) &&
+        !hasMeaningfulDataInputRowData(rowData)
+    ) {
+        return null;
+    }
+
+    return rowData;
 }
 
 function collectCategoryRowsForSite(site, category) {
