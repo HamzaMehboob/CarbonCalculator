@@ -1314,6 +1314,20 @@ function refreshCalendarSnapshotFromFinancialDom() {
             if (!isFinancialYearAutoAddedRow(category, y)) {
                 catMap.set(y, cal);
             }
+
+            const nextCal = emptyMonthArray();
+            for (let m = 0; m < 3; m++) nextCal[m] = byCal[m];
+            const nextRow = rowsByYear.get(y + 1);
+            if (nextRow) {
+                const nextByCal = cloneMonthArray(readRowMonthsFromDom(nextRow));
+                for (let m = 3; m < 12; m++) nextCal[m] = nextByCal[m];
+            } else if (priorCat?.has(y + 1)) {
+                const oldNext = priorCat.get(y + 1);
+                for (let m = 3; m < 12; m++) nextCal[m] = oldNext[m];
+            }
+            if (!isFinancialYearAutoAddedRow(category, y + 1) && nextCal.some((v) => Number(v) > 0)) {
+                catMap.set(y + 1, nextCal);
+            }
         });
         priorCat?.forEach((months, y) => {
             if (!catMap.has(y) && !isFinancialYearAutoAddedRow(category, y)) {
