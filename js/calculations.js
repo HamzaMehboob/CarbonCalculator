@@ -1238,8 +1238,10 @@ function ensurePriorFinancialYearRows(snap) {
         const rowsByYear = getRowsByYearForTable(table);
         if (rowsByYear.has(priorY)) return;
 
-        const cur = catMap.get(minY) || emptyMonthArray();
-        if (!cur[0] && !cur[1] && !cur[2]) return;
+        // Only add an auto-added FY row if the snapshot actually contains data for Jan–Mar of the next calendar year
+        const nextCalData = catMap.get(priorY + 1) || emptyMonthArray();
+        const hasJanMarData = nextCalData[0] || nextCalData[1] || nextCalData[2];
+        if (!hasJanMarData) return; // nothing to preserve, skip adding empty placeholder
 
         const templateRow = table.querySelector('.data-row');
         window.addDataRow(category);
