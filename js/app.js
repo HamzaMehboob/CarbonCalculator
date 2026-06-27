@@ -303,11 +303,19 @@ function collectCategoryRowsForSite(site, category) {
         const catSnap = snap?.get(category);
         if (catSnap) {
             const domYears = new Set(nextRows.map((r) => r.year));
+            const maxDomYear = domYears.size > 0 ? Math.max(...Array.from(domYears)) : -Infinity;
             catSnap.forEach((months, y) => {
                 if (domYears.has(y)) return; // already present from DOM
                 if (window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, y)) return;
                 const cloned = Array.isArray(months) ? [...months] : [];
-                if (!cloned.some((v) => Number(v) > 0)) return; // skip all-zero years
+                
+                const hasAnyData = cloned.some((v) => Number(v) > 0);
+                if (!hasAnyData) return; // skip all-zero years
+                
+                // Skip 'ghost' rows that only carry shifted Jan-Mar data for prior years
+                const hasDataAfterMarch = cloned.slice(3).some((v) => Number(v) > 0);
+                if (!hasDataAfterMarch && y <= maxDomYear) return;
+
                 // Inherit emissionType/unit from an existing DOM row for this category
                 const refRow = nextRows[0];
                 nextRows.push({
@@ -2892,15 +2900,25 @@ function loadSiteData(siteId) {
             if (savedRows.length === 0) {
                 addDataRow(category);
             } else {
-                savedRows.forEach(rowData => {
-                    // Skip rows that carry no meaningful data (all months zero, no description).
-                    // These can appear when a year had data in one reporting-period mode but not
-                    // the other (e.g. a calendar-year row with only Jan-Mar that maps to zero
-                    // in financial-year view). Rendering them would show confusing empty rows.
-                    const hasData =
-                        (Array.isArray(rowData.months) && rowData.months.some((v) => Number(v) > 0)) ||
-                        String(rowData.description || '').trim().length > 0;
-                    if (!hasData) return;
+                let maxFullYear = -Infinity;
+                savedRows.forEach((rowData) => {
+                    const hasDataAfterMarch = Array.isArray(rowData.months) && rowData.months.slice(3).some((v) => Number(v) > 0);
+                    if (hasDataAfterMarch && rowData.year > maxFullYear) {
+                        maxFullYear = rowData.year;
+                    }
+                });
+
+                savedRows.forEach((rowData) => {
+                    const hasAnyData = Array.isArray(rowData.months) && rowData.months.some((v) => Number(v) > 0);
+                    const hasDescription = String(rowData.description || '').trim().length > 0;
+                    if (!hasAnyData && !hasDescription) return; // Completely empty
+
+                    // Skip "ghost" rows: older years with no description and only Jan-Mar data
+                    const hasDataAfterMarch = Array.isArray(rowData.months) && rowData.months.slice(3).some((v) => Number(v) > 0);
+                    if (!hasDataAfterMarch && !hasDescription && rowData.year <= maxFullYear) {
+                        return;
+                    }
+
                     addDataRow(category);
                     const row = tbody.lastElementChild;
                     loadRowData(row, rowData);
