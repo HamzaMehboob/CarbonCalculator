@@ -248,6 +248,20 @@ function extractDataInputRowFromDom(category, row) {
         parseInt(row.querySelector('.row-display-year')?.value, 10);
     if (!Number.isFinite(rowYear)) return null;
 
+    // UK FY auto-added rows only hold prior-year Jan–Mar display until user enters Apr–Dec data.
+    if (window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, rowYear)) {
+        const canon = window.carbonCalc.getCanonicalCalendarMonths?.(category, rowYear);
+        const months =
+            Array.isArray(canon) && canon.some((v) => Number(v) > 0)
+                ? canon
+                : window.carbonCalc?.readRowMonthsForSave
+                  ? window.carbonCalc.readRowMonthsForSave(row)
+                  : [];
+        const hasAprDec = months.slice(3).some((v) => Number(v) > 0);
+        const hasDesc = String(row.querySelector('input[type="text"]')?.value || '').trim();
+        if (!hasAprDec && !hasDesc) return null;
+    }
+
     const emissionSelect = row.querySelector('.emission-select');
     const unitSelect = row.querySelector('.row-unit-select');
 
@@ -311,14 +325,11 @@ function collectCategoryRowsForSite(site, category) {
                 const hasAnyData = cloned.some((v) => Number(v) > 0);
                 if (!hasAnyData) return; // skip all-zero years
 
-                // Never save a snapshot year that only has Jan-Mar data as a standalone row.
-                // In FY view, Jan-Mar slots on row Y represent calendar year Y+1 and are
-                // captured in the snapshot under Y+1. But if Y+1 has no Apr-Dec data it
-                // means this is purely an FY display artefact — not real user-entered data.
-                // If the user genuinely entered only Jan-Mar for a year, that row would
-                // already be in the DOM and caught by the domYears loop above.
+                // Never save a snapshot year that only has Jan-Mar data as a standalone row,
+                // unless those months were entered on the prior FY row's Jan-Mar slots
+                // (calendar year y anchored to DOM row y - 1).
                 const hasDataAfterMarch = cloned.slice(3).some((v) => Number(v) > 0);
-                if (!hasDataAfterMarch) return;
+                if (!hasDataAfterMarch && !domYears.has(y - 1)) return;
 
                 // Inherit emissionType/unit from an existing DOM row for this category
                 const refRow = nextRows[0];

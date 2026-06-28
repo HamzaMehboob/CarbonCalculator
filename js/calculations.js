@@ -1095,6 +1095,26 @@ function syncCanonicalCalendarBeforeSave() {
     }
 }
 
+/** Jan–Mar on calendar year Y duplicated under Y+1 are FY display artefacts, not real Y data. */
+function stripDuplicateFinancialYearJanMar(catMap) {
+    if (!catMap) return;
+    catMap.forEach((months, y) => {
+        const next = catMap.get(y + 1);
+        if (!next) return;
+        const hasJanMar = months[0] || months[1] || months[2];
+        if (!hasJanMar) return;
+        const janMarMatch =
+            months[0] === next[0] && months[1] === next[1] && months[2] === next[2];
+        if (!janMarMatch) return;
+        months[0] = 0;
+        months[1] = 0;
+        months[2] = 0;
+        if (!months.slice(3).some((v) => Number(v) > 0)) {
+            catMap.delete(y);
+        }
+    });
+}
+
 function loadCanonicalCalendarFromSiteData(site) {
     const snap = new Map();
     getDataInputCategories().forEach((category) => {
@@ -1111,6 +1131,8 @@ function loadCanonicalCalendarFromSiteData(site) {
                 catMap.set(y, months);
             });
         }
+
+        stripDuplicateFinancialYearJanMar(catMap);
 
         // Scrub ghost rows: years that only have Jan-Mar data (Apr-Dec all zero) AND have no
         // description AND there exists a later year that has full data (Apr-Dec). These ghost
@@ -1265,10 +1287,16 @@ function ensurePriorFinancialYearRows(snap) {
         const rowsByYear = getRowsByYearForTable(table);
         if (rowsByYear.has(priorY)) return;
 
-        // Only add an auto-added FY row if the snapshot actually contains data for Jan–Mar of the next calendar year
+        // Only add an auto-added FY row if calendar minY has genuine Jan–Mar (not FY overflow duplicated on Y+1).
         const nextCalData = catMap.get(priorY + 1) || emptyMonthArray();
+        const yearAfterMin = catMap.get(minY + 1) || emptyMonthArray();
         const hasJanMarData = nextCalData[0] || nextCalData[1] || nextCalData[2];
-        if (!hasJanMarData) return; // nothing to preserve, skip adding empty placeholder
+        if (!hasJanMarData) return;
+        const janMarDuplicatedOnNextYear =
+            nextCalData[0] === yearAfterMin[0] &&
+            nextCalData[1] === yearAfterMin[1] &&
+            nextCalData[2] === yearAfterMin[2];
+        if (janMarDuplicatedOnNextYear) return;
 
         const templateRow = table.querySelector('.data-row');
         window.addDataRow(category);
@@ -1345,7 +1373,8 @@ function refreshCalendarSnapshotFromFinancialDom() {
                 cal[1] = old[1];
                 cal[2] = old[2];
             }
-            if (!isFinancialYearAutoAddedRow(category, y)) {
+            const hasAprDecData = byCal.slice(3).some((v) => Number(v) > 0);
+            if (!isFinancialYearAutoAddedRow(category, y) || hasAprDecData) {
                 catMap.set(y, cal);
             }
 
@@ -1366,6 +1395,7 @@ function refreshCalendarSnapshotFromFinancialDom() {
                 catMap.set(y, cloneMonthArray(months));
             }
         });
+        stripDuplicateFinancialYearJanMar(catMap);
         snap.set(category, catMap);
     });
 
