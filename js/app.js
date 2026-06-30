@@ -204,13 +204,11 @@ function mergeSiteTabQuestions(targetSite, localSite) {
 
 function mergeSitesPreferNonEmptyLocal(serverSites, localSites) {
     if (!localSites || typeof localSites !== 'object') return serverSites;
-    const merged = { ...(serverSites || {}) };
-    Object.keys(localSites).forEach((siteId) => {
+    const merged = { ...(localSites || {}) };
+    Object.keys(serverSites || {}).forEach((siteId) => {
         if (!merged[siteId]) {
-            merged[siteId] = localSites[siteId];
-            return;
+            merged[siteId] = serverSites[siteId];
         }
-        merged[siteId] = mergeSiteDataInputCategories(merged[siteId], localSites[siteId]);
     });
     return merged;
 }
@@ -1689,6 +1687,9 @@ async function loadUserDataFromBackend() {
                     ? mergeSitesPreferNonEmptyLocal(serverSites, localSites)
                     : serverSites;
                 normalizeAllSitesDataShape();
+                if (localSites && Object.keys(localSites).length > 0) {
+                    scheduleSiteDataSave();
+                }
             } else {
                 let migratedFromLocal = false;
                 if (localSites && Object.keys(localSites).length > 0) {
