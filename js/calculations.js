@@ -1339,17 +1339,12 @@ function getCalendarMonthsFromSnapshot(category, year) {
 /** Rebuild calendar months from FY-shifted DOM (Jan–Mar on row Y = calendar Y+1). */
 function refreshCalendarSnapshotFromFinancialDom() {
     if (getReportingPeriodType() !== 'financial_uk') return;
-    const prior = calendarMonthSnapshot;
     const snap = new Map();
 
     getDataInputCategories().forEach((category) => {
         const table = document.getElementById(`${category}Table`);
         const catMap = new Map();
-        const priorCat = prior?.get(category);
         if (!table) {
-            if (priorCat) {
-                priorCat.forEach((months, y) => catMap.set(y, cloneMonthArray(months)));
-            }
             snap.set(category, catMap);
             return;
         }
@@ -1367,32 +1362,38 @@ function refreshCalendarSnapshotFromFinancialDom() {
                 cal[0] = prevByCal[0];
                 cal[1] = prevByCal[1];
                 cal[2] = prevByCal[2];
-            } else if (priorCat?.has(y)) {
-                const old = priorCat.get(y);
-                cal[0] = old[0];
-                cal[1] = old[1];
-                cal[2] = old[2];
             }
             const hasAprDecData = byCal.slice(3).some((v) => Number(v) > 0);
-            if (!isFinancialYearAutoAddedRow(category, y) || hasAprDecData) {
+            const hasJanMarData = cal[0] || cal[1] || cal[2];
+            if (
+                (!isFinancialYearAutoAddedRow(category, y) || hasAprDecData) &&
+                (hasAprDecData || hasJanMarData)
+            ) {
                 catMap.set(y, cal);
             }
 
             // Capture Jan-Mar of calendar year y+1 from this FY row's last three display slots.
-            // These months belong to calendar year y+1. If a DOM row for y+1 already exists it
-            // will overwrite this entry when the loop reaches that year, so there is no conflict.
             if (!isFinancialYearAutoAddedRow(category, y + 1)) {
-                const nextCalData = catMap.get(y + 1) || emptyMonthArray();
-                // byCal[0..2] = Jan-Mar of y+1 (readRowMonthsFromDom already maps via data-month)
-                nextCalData[0] = byCal[0];
-                nextCalData[1] = byCal[1];
-                nextCalData[2] = byCal[2];
-                catMap.set(y + 1, nextCalData);
-            }
-        });
-        priorCat?.forEach((months, y) => {
-            if (!catMap.has(y) && !isFinancialYearAutoAddedRow(category, y)) {
-                catMap.set(y, cloneMonthArray(months));
+                const hasTailJanMar = byCal[0] || byCal[1] || byCal[2];
+                if (hasTailJanMar) {
+                    const nextCalData = catMap.get(y + 1) || emptyMonthArray();
+                    nextCalData[0] = byCal[0];
+                    nextCalData[1] = byCal[1];
+                    nextCalData[2] = byCal[2];
+                    catMap.set(y + 1, nextCalData);
+                } else if (!rowsByYear.has(y + 1)) {
+                    const existing = catMap.get(y + 1);
+                    if (existing && !existing.slice(3).some((v) => Number(v) > 0)) {
+                        catMap.delete(y + 1);
+                    } else if (existing) {
+                        existing[0] = 0;
+                        existing[1] = 0;
+                        existing[2] = 0;
+                        if (!existing.some((v) => Number(v) > 0)) {
+                            catMap.delete(y + 1);
+                        }
+                    }
+                }
             }
         });
         stripDuplicateFinancialYearJanMar(catMap);

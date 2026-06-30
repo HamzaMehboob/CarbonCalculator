@@ -344,10 +344,8 @@ function collectCategoryRowsForSite(site, category) {
         }
     }
 
-    if (categoryRowsHaveMonthData(nextRows)) {
-        return nextRows;
-    }
-    if (categoryRowsHaveMonthData(previousRows)) {
+    const domRowCount = table.querySelectorAll('.data-row').length;
+    if (domRowCount === 0 && categoryRowsHaveMonthData(previousRows)) {
         return previousRows;
     }
     return nextRows;
@@ -2727,6 +2725,7 @@ async function deleteRow(button) {
         ? 'Delete this row?' 
         : 'Excluir esta linha?')) {
         button.closest('tr').remove();
+        syncCanonicalBeforeSiteSave();
         calculateAllTotals();
         saveCurrentSiteData();
     }
@@ -2797,7 +2796,18 @@ function attachRowListeners(row) {
     bindRowUnitSelect(row, unitSelect);
     
     if (yearInput) {
+        let lastKnownYear = parseInt(yearInput.value, 10);
         const onYearChange = () => {
+            const newYear = parseInt(yearInput.value, 10);
+            if (
+                Number.isFinite(newYear) &&
+                Number.isFinite(lastKnownYear) &&
+                newYear !== lastKnownYear &&
+                window.carbonCalc?.syncCanonicalCalendarBeforeSave
+            ) {
+                window.carbonCalc.syncCanonicalCalendarBeforeSave();
+            }
+            lastKnownYear = newYear;
             saveData();
             window.carbonCalc?.refreshFinancialYearMonthHighlights?.();
             if (window.updateDashboard) {
