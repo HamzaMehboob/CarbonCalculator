@@ -1002,6 +1002,12 @@ function getFinancialYearTotalTonnesForTable(table, category, fyStart, rowsByYea
     const byYear = rowsByYear || getRowsByYearForTable(table);
     const startRow = byYear.get(fyStart);
     if (!startRow) return 0;
+
+    if (getReportingPeriodType() === 'financial_uk') {
+        // FY table row: slots 0–11 are Apr fyStart … Mar fyStart+1 on one row.
+        return sumRowMonthsTonnes(startRow, category, 0, 11);
+    }
+
     let total = sumRowMonthsTonnes(startRow, category, 3, 11);
     total += sumRowMonthsTonnes(byYear.get(fyStart + 1), category, 0, 2);
     return total;
@@ -1064,20 +1070,18 @@ function getRowMonthsByCalendarMonth(row) {
     return readRowMonthsFromDom(row);
 }
 
-/** Months for persistence (Jan–Dec per row year). Calendar year: live DOM; UK FY: canonical store after sync. */
+/** Months for persistence (Jan–Dec per row year). Uses canonical store after table-shift sync. */
 function readRowMonthsForSave(row) {
     const category = resolveCategoryFromTableId(row.closest('table')?.id);
     const year = getRowYear(row);
-    if (
-        getReportingPeriodType() === 'financial_uk' &&
-        category &&
-        year != null &&
-        calendarMonthSnapshot
-    ) {
+    if (category && year != null && calendarMonthSnapshot) {
         const fromCanon = getCanonicalCalendarMonths(category, year);
         if (fromCanon) return fromCanon;
     }
-    return cloneMonthArray(readRowMonthsFromDom(row));
+    if (getReportingPeriodType() !== 'financial_uk') {
+        return cloneMonthArray(readRowMonthsFromDom(row));
+    }
+    return emptyMonthArray();
 }
 
 function isFinancialYearAutoAddedRow(category, year) {
@@ -1086,13 +1090,65 @@ function isFinancialYearAutoAddedRow(category, year) {
     return fyAutoAddedYears.get(category)?.has(y) === true;
 }
 
-/** Update canonical store from DOM before save (calendar or financial view). */
-function syncCanonicalCalendarBeforeSave() {
-    if (getReportingPeriodType() === 'financial_uk') {
-        refreshCalendarSnapshotFromFinancialDom();
-    } else {
-        syncCanonicalCalendarFromDom();
+/**
+ * Extract calendar-year months from the live DOM (Jan=0 … Dec=11 per calendar year).
+ * Calendar mode: one DOM row = one calendar year (direct read).
+ * UK FY mode: table shift — row Y contributes Apr–Dec to year Y and Jan–Mar to year Y+1.
+ */
+function collectCalendarMonthsFromDom(category) {
+    const catMap = new Map();
+    const table = document.getElementById(`${category}Table`);
+    if (!table) return catMap;
+
+    const rowsByYear = getRowsByYearForTable(table);
+    if (getReportingPeriodType() !== 'financial_uk') {
+        rowsByYear.forEach((row, y) => {
+            if (isFinancialYearAutoAddedRow(category, y)) return;
+            catMap.set(y, cloneMonthArray(readRowMonthsFromDom(row)));
+        });
+        return catMap;
     }
+
+    rowsByYear.forEach((row, fyRowYear) => {
+        const byCal = readRowMonthsFromDom(row);
+
+        if (!isFinancialYearAutoAddedRow(category, fyRowYear)) {
+            const calY = catMap.get(fyRowYear) || emptyMonthArray();
+            for (let m = 3; m < 12; m++) calY[m] = byCal[m];
+            catMap.set(fyRowYear, calY);
+        }
+
+        const nextY = fyRowYear + 1;
+        if (!isFinancialYearAutoAddedRow(category, nextY)) {
+            const calNext = catMap.get(nextY) || emptyMonthArray();
+            calNext[0] = byCal[0];
+            calNext[1] = byCal[1];
+            calNext[2] = byCal[2];
+            catMap.set(nextY, calNext);
+        }
+    });
+
+    return catMap;
+}
+
+/** Update canonical store from DOM before save (same table-shift path for CY and FY). */
+function syncCanonicalCalendarBeforeSave() {
+    const prior = calendarMonthSnapshot;
+    const snap = new Map();
+    getDataInputCategories().forEach((category) => {
+        const table = document.getElementById(`${category}Table`);
+        const catMap = collectCalendarMonthsFromDom(category);
+        if (!table) {
+            const priorCat = prior?.get(category);
+            if (priorCat) {
+                priorCat.forEach((months, y) => {
+                    if (!catMap.has(y)) catMap.set(y, cloneMonthArray(months));
+                });
+            }
+        }
+        snap.set(category, catMap);
+    });
+    calendarMonthSnapshot = snap;
 }
 
 /** Jan–Mar on calendar year Y duplicated under Y+1 are FY display artefacts, not real Y data. */
@@ -1239,25 +1295,9 @@ function getCalendarMonthSnapshot() {
 }
 
 function syncCanonicalCalendarFromDom() {
-    const prior = calendarMonthSnapshot;
     const snap = new Map();
     getDataInputCategories().forEach((category) => {
-        const table = document.getElementById(`${category}Table`);
-        const catMap = new Map();
-        if (!table) {
-            const priorCat = prior?.get(category);
-            if (priorCat) {
-                priorCat.forEach((months, y) => catMap.set(y, cloneMonthArray(months)));
-            }
-            snap.set(category, catMap);
-            return;
-        }
-        table.querySelectorAll('.data-row').forEach((row) => {
-            const y = getRowYear(row);
-            if (y == null || isFinancialYearAutoAddedRow(category, y)) return;
-            catMap.set(y, cloneMonthArray(readRowMonthsFromDom(row)));
-        });
-        snap.set(category, catMap);
+        snap.set(category, collectCalendarMonthsFromDom(category));
     });
     calendarMonthSnapshot = snap;
     return snap;
@@ -1336,70 +1376,10 @@ function getCalendarMonthsFromSnapshot(category, year) {
     return months ? cloneMonthArray(months) : null;
 }
 
-/** Rebuild calendar months from FY-shifted DOM (Jan–Mar on row Y = calendar Y+1). */
+/** @deprecated alias — use syncCanonicalCalendarBeforeSave / collectCalendarMonthsFromDom */
 function refreshCalendarSnapshotFromFinancialDom() {
     if (getReportingPeriodType() !== 'financial_uk') return;
-    const prior = calendarMonthSnapshot;
-    const snap = new Map();
-
-    getDataInputCategories().forEach((category) => {
-        const table = document.getElementById(`${category}Table`);
-        const catMap = new Map();
-        const priorCat = prior?.get(category);
-        if (!table) {
-            if (priorCat) {
-                priorCat.forEach((months, y) => catMap.set(y, cloneMonthArray(months)));
-            }
-            snap.set(category, catMap);
-            return;
-        }
-
-        const rowsByYear = getRowsByYearForTable(table);
-        const years = Array.from(rowsByYear.keys()).sort((a, b) => a - b);
-        years.forEach((y) => {
-            const row = rowsByYear.get(y);
-            const byCal = cloneMonthArray(readRowMonthsFromDom(row));
-            const cal = emptyMonthArray();
-            for (let m = 3; m < 12; m++) cal[m] = byCal[m];
-            const prevRow = rowsByYear.get(y - 1);
-            if (prevRow) {
-                const prevByCal = cloneMonthArray(readRowMonthsFromDom(prevRow));
-                cal[0] = prevByCal[0];
-                cal[1] = prevByCal[1];
-                cal[2] = prevByCal[2];
-            } else if (priorCat?.has(y)) {
-                const old = priorCat.get(y);
-                cal[0] = old[0];
-                cal[1] = old[1];
-                cal[2] = old[2];
-            }
-            const hasAprDecData = byCal.slice(3).some((v) => Number(v) > 0);
-            if (!isFinancialYearAutoAddedRow(category, y) || hasAprDecData) {
-                catMap.set(y, cal);
-            }
-
-            // Capture Jan-Mar of calendar year y+1 from this FY row's last three display slots.
-            // These months belong to calendar year y+1. If a DOM row for y+1 already exists it
-            // will overwrite this entry when the loop reaches that year, so there is no conflict.
-            if (!isFinancialYearAutoAddedRow(category, y + 1)) {
-                const nextCalData = catMap.get(y + 1) || emptyMonthArray();
-                // byCal[0..2] = Jan-Mar of y+1 (readRowMonthsFromDom already maps via data-month)
-                nextCalData[0] = byCal[0];
-                nextCalData[1] = byCal[1];
-                nextCalData[2] = byCal[2];
-                catMap.set(y + 1, nextCalData);
-            }
-        });
-        priorCat?.forEach((months, y) => {
-            if (!catMap.has(y) && !isFinancialYearAutoAddedRow(category, y)) {
-                catMap.set(y, cloneMonthArray(months));
-            }
-        });
-        stripDuplicateFinancialYearJanMar(catMap);
-        snap.set(category, catMap);
-    });
-
-    calendarMonthSnapshot = snap;
+    syncCanonicalCalendarBeforeSave();
 }
 
 /** UK FY view on row Y: columns Apr–Mar; Jan–Mar from calendar year Y+1 when available. */
@@ -1467,7 +1447,7 @@ function ensureCalendarYearRowsFromSnapshot(snap) {
 }
 
 function restoreCalendarMonthViewFromSnapshot() {
-    refreshCalendarSnapshotFromFinancialDom();
+    syncCanonicalCalendarBeforeSave();
     removeFinancialYearAutoAddedRows();
 
     const snap = calendarMonthSnapshot;
@@ -1768,6 +1748,9 @@ function setReportingPeriodType(type) {
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
     if (typeof updateInputEmissionsPreview === 'function') updateInputEmissionsPreview();
+    if (typeof window.scheduleSiteDataSave === 'function') {
+        window.scheduleSiteDataSave();
+    }
 }
 
 function getReportingPeriodLabel() {
@@ -2045,14 +2028,16 @@ function calculateRowCO2(row, total) {
 function calculateCategoryTotal(table) {
     const categoryName = table.id.replace('Table', '');
     let categoryTotal = 0;
+    const reportingYear = getReportingYear();
 
     if (getReportingPeriodType() === 'financial_uk') {
-        refreshCalendarSnapshotFromFinancialDom();
+        categoryTotal = getFinancialYearTotalTonnesForTable(table, categoryName, reportingYear);
+    } else {
+        table.querySelectorAll('.data-row').forEach((row) => {
+            if (getRowYear(row) !== reportingYear) return;
+            categoryTotal += Number(row.dataset.co2Tonnes || 0);
+        });
     }
-    table.querySelectorAll('.data-row').forEach((row) => {
-        if (getRowYear(row) == null) return;
-        categoryTotal += Number(row.dataset.co2Tonnes || 0);
-    });
 
     const summaryElement = document.getElementById(`${categoryName}Total`);
 
@@ -2089,10 +2074,6 @@ function updateCategorySummaryPeriodHint(categoryName) {
 }
 
 function calculateAllTotals() {
-    if (getReportingPeriodType() === 'financial_uk' && calendarMonthSnapshot) {
-        refreshCalendarSnapshotFromFinancialDom();
-    }
-
     const tables = getDataInputCategories();
     let grandTotal = 0;
 
@@ -2137,10 +2118,9 @@ function sumCategoryTonnesFromInputs(category, minYear, maxYear) {
     table.querySelectorAll('.data-row').forEach((row) => {
         const year = getRowYear(row);
         if (year == null) return;
-        if (
-            getReportingPeriodType() !== 'financial_uk' &&
-            year !== getReportingYear()
-        ) {
+        if (getReportingPeriodType() === 'financial_uk') {
+            if (year !== getReportingYear()) return;
+        } else if (year !== getReportingYear()) {
             return;
         }
         if (minYear != null && year < minYear) return;
@@ -2337,7 +2317,6 @@ function getYearlyTotalsByCategory() {
     const result = {};
 
     if (getReportingPeriodType() === 'financial_uk') {
-        refreshCalendarSnapshotFromFinancialDom();
         categories.forEach((category) => {
             result[category] = {};
             const table = document.getElementById(`${category}Table`);
@@ -2410,7 +2389,6 @@ function getYearComparison() {
     calculateAllTotals();
 
     if (getReportingPeriodType() === 'financial_uk') {
-        refreshCalendarSnapshotFromFinancialDom();
         getDataInputCategories().forEach((category) => {
             const table = document.getElementById(`${category}Table`);
             if (!table) return;
@@ -2603,6 +2581,7 @@ window.carbonCalc = {
     getCalendarMonthSnapshot,
     isFinancialYearAutoAddedRow,
     refreshCalendarSnapshotFromFinancialDom,
+    collectCalendarMonthsFromDom,
     refreshFinancialYearMonthHighlights,
     hydrateReportingPeriodFromPrefs,
     rowIncludedInReportingPeriod,

@@ -248,43 +248,26 @@ function extractDataInputRowFromDom(category, row) {
         parseInt(row.querySelector('.row-display-year')?.value, 10);
     if (!Number.isFinite(rowYear)) return null;
 
-    // UK FY auto-added rows only hold prior-year Jan–Mar display until user enters Apr–Dec data.
     if (window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, rowYear)) {
-        const canon = window.carbonCalc.getCanonicalCalendarMonths?.(category, rowYear);
-        const months =
-            Array.isArray(canon) && canon.some((v) => Number(v) > 0)
-                ? canon
-                : window.carbonCalc?.readRowMonthsForSave
-                  ? window.carbonCalc.readRowMonthsForSave(row)
-                  : [];
-        const hasAprDec = months.slice(3).some((v) => Number(v) > 0);
-        const hasDesc = String(row.querySelector('input[type="text"]')?.value || '').trim();
-        if (!hasAprDec && !hasDesc) return null;
+        return null;
     }
 
     const emissionSelect = row.querySelector('.emission-select');
     const unitSelect = row.querySelector('.row-unit-select');
 
-    let months = [];
-    const fromCanon = window.carbonCalc?.getCanonicalCalendarMonths
+    const months = window.carbonCalc?.getCanonicalCalendarMonths
         ? window.carbonCalc.getCanonicalCalendarMonths(category, rowYear)
         : null;
-    const canonHasValues =
-        Array.isArray(fromCanon) && fromCanon.some((v) => Number(v) > 0);
-    if (canonHasValues) {
-        months = fromCanon;
-    } else if (window.carbonCalc?.readRowMonthsForSave) {
-        months = window.carbonCalc.readRowMonthsForSave(row);
-    } else {
-        row.querySelectorAll('.month-input').forEach((input) => {
-            months.push(parseFloat(input.value) || 0);
-        });
-    }
+    const resolvedMonths = Array.isArray(months)
+        ? months
+        : window.carbonCalc?.readRowMonthsForSave
+          ? window.carbonCalc.readRowMonthsForSave(row)
+          : [];
 
     const rowData = {
         description: row.querySelector('input[type="text"]')?.value || '',
         year: rowYear,
-        months,
+        months: Array.isArray(resolvedMonths) ? resolvedMonths : [],
         emissionType: emissionSelect ? emissionSelect.value : null,
         unit: unitSelect
             ? unitSelect.value
@@ -301,48 +284,56 @@ function collectCategoryRowsForSite(site, category) {
         return previousRows;
     }
 
-    const nextRows = [];
+    const snap = window.carbonCalc?.getCalendarMonthSnapshot?.();
+    const catSnap = snap?.get(category);
+
+    const domRowsByYear = new Map();
     table.querySelectorAll('.data-row').forEach((row) => {
-        const rowData = extractDataInputRowFromDom(category, row);
-        if (rowData) nextRows.push(rowData);
+        const y =
+            window.carbonCalc?.getRowYear?.(row) ??
+            parseInt(row.querySelector('.row-display-year')?.value, 10);
+        if (!Number.isFinite(y)) return;
+        if (window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, y)) return;
+        domRowsByYear.set(y, row);
     });
 
-    // In financial-year mode the Jan–Mar slots of DOM row Y contain data for calendar year Y+1.
-    // refreshCalendarSnapshotFromFinancialDom writes those months into the snapshot under Y+1,
-    // but collectCategoryRowsForSite only iterates DOM rows — so Y+1 data would be lost if
-    // there is no dedicated DOM row for Y+1. Scan the snapshot and emit a saved row for any
-    // calendar year that has meaningful data but is absent from the DOM rows we already collected.
-    if (window.carbonCalc?.getCalendarMonthSnapshot) {
-        const snap = window.carbonCalc.getCalendarMonthSnapshot();
-        const catSnap = snap?.get(category);
-        if (catSnap) {
-            const domYears = new Set(nextRows.map((r) => r.year));
-            catSnap.forEach((months, y) => {
-                if (domYears.has(y)) return; // already present from DOM
-                if (window.carbonCalc?.isFinancialYearAutoAddedRow?.(category, y)) return;
-                const cloned = Array.isArray(months) ? [...months] : [];
-
-                const hasAnyData = cloned.some((v) => Number(v) > 0);
-                if (!hasAnyData) return; // skip all-zero years
-
-                // Never save a snapshot year that only has Jan-Mar data as a standalone row,
-                // unless those months were entered on the prior FY row's Jan-Mar slots
-                // (calendar year y anchored to DOM row y - 1).
-                const hasDataAfterMarch = cloned.slice(3).some((v) => Number(v) > 0);
-                if (!hasDataAfterMarch && !domYears.has(y - 1)) return;
-
-                // Inherit emissionType/unit from an existing DOM row for this category
-                const refRow = nextRows[0];
-                nextRows.push({
-                    description: '',
-                    year: y,
-                    months: cloned,
-                    emissionType: refRow?.emissionType ?? null,
-                    unit: refRow?.unit || getPreferredUnitForCategory(category, null),
-                });
-            });
-        }
+    const allYears = new Set(domRowsByYear.keys());
+    if (catSnap) {
+        catSnap.forEach((_, y) => allYears.add(y));
     }
+
+    const nextRows = [];
+    Array.from(allYears)
+        .sort((a, b) => a - b)
+        .forEach((y) => {
+            const row = domRowsByYear.get(y);
+            const fromSnap = catSnap?.get(y);
+            const months = Array.isArray(fromSnap)
+                ? [...fromSnap]
+                : row && window.carbonCalc?.readRowMonthsForSave
+                  ? window.carbonCalc.readRowMonthsForSave(row)
+                  : [];
+
+            const emissionSelect = row?.querySelector('.emission-select');
+            const unitSelect = row?.querySelector('.row-unit-select');
+            const refRow = nextRows[0] || (domRowsByYear.size ? domRowsByYear.values().next().value : null);
+            const refEmission = refRow?.querySelector('.emission-select');
+            const refUnit = refRow?.querySelector('.row-unit-select');
+
+            const rowData = {
+                description: row?.querySelector('input[type="text"]')?.value || '',
+                year: y,
+                months,
+                emissionType: emissionSelect ? emissionSelect.value : refEmission?.value ?? null,
+                unit: unitSelect
+                    ? unitSelect.value
+                    : refUnit?.value || getPreferredUnitForCategory(category, null),
+            };
+
+            if (hasMeaningfulDataInputRowData(rowData)) {
+                nextRows.push(rowData);
+            }
+        });
 
     if (categoryRowsHaveMonthData(nextRows)) {
         return nextRows;
