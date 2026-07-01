@@ -157,7 +157,7 @@ function mergeSiteDataInputCategories(targetSite, localSite) {
     getDataInputCategoryList().forEach((category) => {
         const serverRows = targetSite.data?.[category];
         const localRows = localSite.data?.[category];
-        if (categoryRowsHaveMonthData(localRows) && !categoryRowsHaveMonthData(serverRows)) {
+        if (!Array.isArray(serverRows) && Array.isArray(localRows)) {
             targetSite.data[category] = cloneDataInputRows(localRows);
         }
     });
@@ -270,10 +270,9 @@ function extractDataInputRowFromDom(category, row) {
 }
 
 function collectCategoryRowsForSite(site, category) {
-    const previousRows = cloneDataInputRows(site.data?.[category]);
     const table = document.getElementById(`${category}Table`);
     if (!table) {
-        return previousRows;
+        return cloneDataInputRows(site.data?.[category]);
     }
 
     const nextRows = [];
@@ -281,13 +280,6 @@ function collectCategoryRowsForSite(site, category) {
         const rowData = extractDataInputRowFromDom(category, row);
         if (rowData) nextRows.push(rowData);
     });
-
-    if (categoryRowsHaveMonthData(nextRows)) {
-        return nextRows;
-    }
-    if (categoryRowsHaveMonthData(previousRows)) {
-        return previousRows;
-    }
     return nextRows;
 }
 
@@ -1697,6 +1689,9 @@ async function loadUserDataFromBackend() {
                 if (window.carbonCalc.migrateAllSitesToReportingPeriod(appState.sites, periodType)) {
                     saveSitesToLocalStorage();
                     scheduleSiteDataSave();
+                    if (appState.currentSite && typeof loadSiteData === 'function') {
+                        loadSiteData(appState.currentSite);
+                    }
                 }
             }
         }
@@ -2675,6 +2670,9 @@ async function deleteRow(button) {
         button.closest('tr').remove();
         calculateAllTotals();
         saveCurrentSiteData();
+        if (typeof window.flushSiteDataSave === 'function') {
+            window.flushSiteDataSave({ silent: true });
+        }
     }
 }
 

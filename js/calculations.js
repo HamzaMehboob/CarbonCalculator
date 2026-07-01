@@ -1117,9 +1117,21 @@ function rowDataIsMeaningful(row) {
     return rowMonthsHaveData(row.months);
 }
 
+function mergeRowMeta(target, source) {
+    if (!String(target.description || '').trim() && String(source.description || '').trim()) {
+        target.description = source.description;
+    }
+    if (!target.emissionType && source.emissionType) {
+        target.emissionType = source.emissionType;
+    }
+    if (!target.unit && source.unit) {
+        target.unit = source.unit;
+    }
+}
+
 /**
- * Calendar rows (Jan–Dec per calendar year) → split financial rows stored with calendar indices.
- * CY 2022 → FY row 2021 (Jan–Mar, indices 0–2) + FY row 2022 (Apr–Dec, indices 3–11).
+ * Calendar rows (Jan–Dec per calendar year) → financial rows (split by FY start year).
+ * CY 2022 → FY 2021 (Jan–Mar) + FY 2022 (Apr–Dec). Rows with same identity+year are merged.
  */
 function convertCategoryRowsCalendarToFinancial(calendarRows) {
     const fyByKey = new Map();
@@ -1137,11 +1149,13 @@ function convertCategoryRowsCalendarToFinancial(calendarRows) {
 
         if (months[0] || months[1] || months[2]) {
             const fyYear = calYear - 1;
-            const key = `${identity}|${fyYear}|tail`;
+            const key = `${identity}|${fyYear}`;
             let fyRow = fyByKey.get(key);
             if (!fyRow) {
                 fyRow = { ...meta, year: fyYear, months: emptyMonthArray() };
                 fyByKey.set(key, fyRow);
+            } else {
+                mergeRowMeta(fyRow, meta);
             }
             fyRow.months[0] = months[0];
             fyRow.months[1] = months[1];
@@ -1149,11 +1163,14 @@ function convertCategoryRowsCalendarToFinancial(calendarRows) {
         }
 
         if (months.slice(3).some((v) => Number(v) > 0)) {
-            const key = `${identity}|${calYear}|head`;
+            const fyYear = calYear;
+            const key = `${identity}|${fyYear}`;
             let fyRow = fyByKey.get(key);
             if (!fyRow) {
-                fyRow = { ...meta, year: calYear, months: emptyMonthArray() };
+                fyRow = { ...meta, year: fyYear, months: emptyMonthArray() };
                 fyByKey.set(key, fyRow);
+            } else {
+                mergeRowMeta(fyRow, meta);
             }
             for (let m = 3; m < 12; m++) fyRow.months[m] = months[m];
         }
@@ -1165,8 +1182,7 @@ function convertCategoryRowsCalendarToFinancial(calendarRows) {
 }
 
 /**
- * Split financial rows (calendar indices) → calendar rows (Jan–Dec per calendar year).
- * FY row 2021 (Jan–Mar) + FY row 2022 (Apr–Dec) → CY 2022.
+ * Financial rows → calendar rows (Jan–Dec per calendar year). Same identity+year merged.
  */
 function convertCategoryRowsFinancialToCalendar(fyRows) {
     const calByKey = new Map();
@@ -1189,6 +1205,8 @@ function convertCategoryRowsFinancialToCalendar(fyRows) {
             if (!calRow) {
                 calRow = { ...meta, year: calYear, months: emptyMonthArray() };
                 calByKey.set(key, calRow);
+            } else {
+                mergeRowMeta(calRow, meta);
             }
             calRow.months[0] = months[0];
             calRow.months[1] = months[1];
@@ -1196,11 +1214,14 @@ function convertCategoryRowsFinancialToCalendar(fyRows) {
         }
 
         if (months.slice(3).some((v) => Number(v) > 0)) {
-            const key = `${identity}|${fyYear}`;
+            const calYear = fyYear;
+            const key = `${identity}|${calYear}`;
             let calRow = calByKey.get(key);
             if (!calRow) {
-                calRow = { ...meta, year: fyYear, months: emptyMonthArray() };
+                calRow = { ...meta, year: calYear, months: emptyMonthArray() };
                 calByKey.set(key, calRow);
+            } else {
+                mergeRowMeta(calRow, meta);
             }
             for (let m = 3; m < 12; m++) calRow.months[m] = months[m];
         }
@@ -1216,7 +1237,10 @@ function convertSiteDataPeriodFormat(siteData, fromFormat, toFormat) {
     const next = { ...siteData };
     getDataInputCategories().forEach((category) => {
         const rows = siteData[category];
-        if (!Array.isArray(rows)) return;
+        if (!Array.isArray(rows)) {
+            next[category] = [];
+            return;
+        }
         if (fromFormat === 'financial_uk' && toFormat === 'calendar') {
             next[category] = convertCategoryRowsFinancialToCalendar(rows);
         } else if (fromFormat === 'calendar' && toFormat === 'financial_uk') {
@@ -1251,14 +1275,42 @@ function setStoredDataRowFormat(format) {
     }
 }
 
+/** Rows with both Jan–Mar and Apr–Dec filled are still in calendar shape. */
+function siteDataLooksLikeCalendarFormat(siteData) {
+    if (!siteData || typeof siteData !== 'object') return false;
+    return getDataInputCategories().some((category) => {
+        const rows = siteData[category];
+        if (!Array.isArray(rows)) return false;
+        return rows.some((row) => {
+            const m = Array.isArray(row?.months) ? row.months : [];
+            const hasJanMar = Boolean(m[0] || m[1] || m[2]);
+            const hasAprDec = m.slice(3).some((v) => Number(v) > 0);
+            return hasJanMar && hasAprDec;
+        });
+    });
+}
+
 /** Align in-memory site rows with active reporting period (one-time migration after login). */
 function migrateAllSitesToReportingPeriod(sites, reportingPeriodType) {
     const target = reportingPeriodType === 'financial_uk' ? 'financial_uk' : 'calendar';
-    const stored = getStoredDataRowFormat();
-    if (stored === target) return false;
-    convertAllSitesPeriodFormat(sites, stored, target);
-    setStoredDataRowFormat(target);
-    return true;
+    let stored = getStoredDataRowFormat();
+    let migrated = false;
+
+    if (stored !== target) {
+        convertAllSitesPeriodFormat(sites, stored, target);
+        migrated = true;
+    } else if (target === 'financial_uk') {
+        Object.values(sites || {}).forEach((site) => {
+            if (!site?.data || !siteDataLooksLikeCalendarFormat(site.data)) return;
+            site.data = convertSiteDataPeriodFormat(site.data, 'calendar', 'financial_uk');
+            migrated = true;
+        });
+    }
+
+    if (migrated) {
+        setStoredDataRowFormat(target);
+    }
+    return migrated;
 }
 
 function setRowMonthsOnDom(row, months) {
@@ -1561,9 +1613,8 @@ function setReportingPeriodType(type) {
         if (typeof window.saveCurrentSiteData === 'function') {
             window.saveCurrentSiteData();
         }
-        const fromFormat = getStoredDataRowFormat() === nextType ? prevType : getStoredDataRowFormat();
         if (window.appState?.sites) {
-            convertAllSitesPeriodFormat(window.appState.sites, fromFormat, nextType);
+            convertAllSitesPeriodFormat(window.appState.sites, prevType, nextType);
         }
         setStoredDataRowFormat(nextType);
         if (typeof window.saveSitesToLocalStorage === 'function') {
@@ -1573,8 +1624,10 @@ function setReportingPeriodType(type) {
 
     currentReportingPeriodType = nextType;
     writeOrgPref('reportingPeriodType', currentReportingPeriodType);
+    writeOrgPref('dataRowFormat', nextType);
     if (typeof window.setOrgLocalItem === 'function') {
         window.setOrgLocalItem('reportingPeriodType', currentReportingPeriodType);
+        window.setOrgLocalItem('dataRowFormat', nextType);
     }
 
     if (prevType !== nextType && window.appState?.currentSite && typeof window.loadSiteData === 'function') {
@@ -1587,7 +1640,9 @@ function setReportingPeriodType(type) {
     calculateAllTotals();
     if (typeof updateDashboard === 'function') updateDashboard();
     if (typeof updateInputEmissionsPreview === 'function') updateInputEmissionsPreview();
-    if (typeof window.scheduleSiteDataSave === 'function') {
+    if (typeof window.flushSiteDataSave === 'function') {
+        window.flushSiteDataSave({ silent: true });
+    } else if (typeof window.scheduleSiteDataSave === 'function') {
         window.scheduleSiteDataSave();
     }
 }
