@@ -588,8 +588,8 @@ function getFactorDisplayLabel(key) {
 }
 
 /** Emission dropdown options from loaded conversion_factor_catalog for country/year */
-function getCatalogEmissionOptions(category, year) {
-    const bucket = resolveUiFactorBucket(year || getReportingYear());
+function getCatalogEmissionOptions(category, _yearIgnored) {
+    const bucket = resolveUiFactorBucket(getReportingYear());
     const options = [];
     Object.keys(bucket).forEach((key) => {
         const n = Number(bucket[key]);
@@ -924,6 +924,7 @@ function mergeApiCatalogFactors(apiDocs) {
         }
     });
     CONVERSION_FACTORS = merged;
+    resetReportingFactorContext();
     rebuildConversionFactorCheckboxes();
 }
 
@@ -1364,16 +1365,6 @@ function getAvailableFactorYears() {
             yearSet.add(y);
         }
     });
-    getDataInputCategories().forEach((category) => {
-        const table = document.getElementById(`${category}Table`);
-        if (!table) return;
-        table.querySelectorAll('.row-display-year, input[type="number"]:not(.month-input)').forEach((input) => {
-            const y = parseInt(input.value, 10);
-            if (Number.isFinite(y) && y >= CHART_YEAR_ABS_MIN && y <= CHART_YEAR_ABS_MAX) {
-                yearSet.add(y);
-            }
-        });
-    });
     return Array.from(yearSet).sort((a, b) => a - b);
 }
 
@@ -1428,6 +1419,7 @@ function refreshReportingYearSelectOptions() {
 
 function setReportingYear(year) {
     currentReportingYear = normalizeReportingYear(year);
+    resetReportingFactorContext();
     writeOrgPref('carbonCalcReportingYear', String(currentReportingYear));
     if (typeof window.setOrgLocalItem === 'function') {
         window.setOrgLocalItem('carbonCalcReportingYear', String(currentReportingYear));
@@ -1725,19 +1717,35 @@ function getFactorsBucketForYear(year, country) {
     return bucket;
 }
 
-function getRowConversionFactor(row, tableId) {
-    const factorYear = getFactorLookupYear();
-    const bucket = resolveUiFactorBucket(factorYear);
+/** Cached bucket + defaults for the toolbar reporting year (never row year). */
+let reportingFactorContext = null;
+
+function resetReportingFactorContext() {
+    reportingFactorContext = null;
+}
+
+function getReportingFactorContext() {
+    const reportingYear = getReportingYear();
+    const bucketYearKey = String(normalizeRowYear(reportingYear));
+    const cacheKey = `${currentCountry}:${bucketYearKey}`;
+    if (reportingFactorContext && reportingFactorContext.cacheKey === cacheKey) {
+        return reportingFactorContext;
+    }
+    const bucket = resolveUiFactorBucket(reportingYear);
     const defaults =
-        (DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'])[String(factorYear)] ||
+        (DEFAULT_CONVERSION_FACTORS[currentCountry] || DEFAULT_CONVERSION_FACTORS['UK'])[bucketYearKey] ||
         (DEFAULT_CONVERSION_FACTORS['UK'] || {})[String(BASE_YEAR)] ||
         {};
+    reportingFactorContext = { cacheKey, bucket, defaults, reportingYear };
+    return reportingFactorContext;
+}
 
-    const emissionSelect = row.querySelector('.emission-select');
+function lookupReportingYearFactor(emissionKey, tableId) {
+    const { bucket, defaults } = getReportingFactorContext();
 
-    if (emissionSelect && emissionSelect.value) {
-        if (!sourceToggleEnabled(emissionSelect.value)) return 0;
-        const v = factorWithDefaults(bucket, emissionSelect.value, defaults);
+    if (emissionKey) {
+        if (!sourceToggleEnabled(emissionKey)) return 0;
+        const v = factorWithDefaults(bucket, emissionKey, defaults);
         if (v > 0) {
             return v;
         }
@@ -1759,6 +1767,11 @@ function getRowConversionFactor(row, tableId) {
         default:
             return 0;
     }
+}
+
+function getRowConversionFactor(row, tableId) {
+    const emissionKey = row?.querySelector('.emission-select')?.value || null;
+    return lookupReportingYearFactor(emissionKey, tableId);
 }
 
 function getRowUnitDisplayLabel(unit) {
@@ -2249,6 +2262,7 @@ function getYearComparison() {
 
 function setCountry(country) {
     currentCountry = country.toUpperCase();
+    resetReportingFactorContext();
     writeOrgPref('carbonCalcCountry', currentCountry);
     if (typeof window.setOrgLocalItem === 'function') {
         window.setOrgLocalItem('carbonCalcCountry', currentCountry);
@@ -2412,6 +2426,7 @@ window.carbonCalc = {
             });
         });
         CONVERSION_FACTORS = sanitized;
+        resetReportingFactorContext();
         rebuildConversionFactorCheckboxes();
     },
     mergeApiCatalogFactors,

@@ -2496,7 +2496,7 @@ function getEmissionSelectHtml(category, selectedKey, year) {
     if (window.carbonCalc && typeof window.carbonCalc.getCatalogEmissionOptions === 'function') {
         const catalogOpts = window.carbonCalc.getCatalogEmissionOptions(
             category,
-            year || (window.carbonCalc.getReportingYear && window.carbonCalc.getReportingYear())
+            window.carbonCalc.getReportingYear?.()
         );
         const filtered = dedupeEmissionSelectOptions(
             filterEmissionOptionsForCategory(catalogOpts, category)
@@ -2739,7 +2739,13 @@ function attachRowListeners(row) {
     
     if (yearInput) {
         const onYearChange = () => {
+            // Row year labels the data period only — factors stay on reporting year.
             saveData();
+            if (window.carbonCalc?.calculateAllTotals) {
+                window.carbonCalc.calculateAllTotals();
+            } else if (typeof calculateAllTotals === 'function') {
+                calculateAllTotals();
+            }
             window.carbonCalc?.refreshFinancialYearMonthHighlights?.();
             if (window.updateDashboard) {
                 setTimeout(window.updateDashboard, 200);
@@ -2975,7 +2981,11 @@ function loadRowData(row, data) {
         data.emissionType = emissionType;
         const rowYear =
             data.year || window.carbonCalc?.getReportingYear?.() || new Date().getFullYear();
-        row.cells[0].innerHTML = getEmissionSelectHtml(category, emissionType, rowYear);
+        row.cells[0].innerHTML = getEmissionSelectHtml(
+            category,
+            emissionType,
+            window.carbonCalc?.getReportingYear?.()
+        );
         data.unit = 'kwh';
     }
 
