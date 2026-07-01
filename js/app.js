@@ -270,10 +270,9 @@ function extractDataInputRowFromDom(category, row) {
 }
 
 function collectCategoryRowsForSite(site, category) {
-    const previousRows = cloneDataInputRows(site.data?.[category]);
     const table = document.getElementById(`${category}Table`);
     if (!table) {
-        return previousRows;
+        return cloneDataInputRows(site.data?.[category]);
     }
 
     const nextRows = [];
@@ -282,12 +281,7 @@ function collectCategoryRowsForSite(site, category) {
         if (rowData) nextRows.push(rowData);
     });
 
-    if (categoryRowsHaveMonthData(nextRows)) {
-        return nextRows;
-    }
-    if (categoryRowsHaveMonthData(previousRows)) {
-        return previousRows;
-    }
+    // Trust the DOM whenever the table is present — including empty after a delete.
     return nextRows;
 }
 
@@ -2672,9 +2666,21 @@ async function deleteRow(button) {
     if (await showAppConfirm(appState.currentLanguage === 'en' 
         ? 'Delete this row?' 
         : 'Excluir esta linha?')) {
-        button.closest('tr').remove();
+        const row = button.closest('tr');
+        const table = row?.closest('table');
+        row?.remove();
+
+        const tbody = table?.querySelector('tbody');
+        if (tbody && tbody.children.length === 0) {
+            const category = table.id?.replace(/Table$/, '');
+            if (category) addDataRow(category);
+        }
+
         calculateAllTotals();
         saveCurrentSiteData();
+        if (typeof flushSiteDataSave === 'function') {
+            await flushSiteDataSave({ silent: true, force: true });
+        }
     }
 }
 
