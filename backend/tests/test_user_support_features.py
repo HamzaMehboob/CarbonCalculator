@@ -143,3 +143,80 @@ def test_chatbot_core_handlers():
     assert 'Anomaly guidance' in api.chatbot_assist('detect anomaly')
     assert 'Tool usage' in api.chatbot_assist('how to use this tool')
     assert 'Concepts' in api.chatbot_assist('what is scope 3 emissions')
+
+
+def test_signup_creates_distinct_org_ids_for_same_company_name(monkeypatch):
+    created_orgs = []
+    created_users = []
+    existing_orgs = []
+    inserted_ids = iter(['org-1', 'org-2'])
+
+    class FakeInsertResult:
+        def __init__(self, inserted_id):
+            self.inserted_id = inserted_id
+
+    class FakeOrgsCollection:
+        def find_one(self, query):
+            name = query.get('name')
+            return next((org for org in existing_orgs if org.get('name') == name), None)
+
+        def insert_one(self, doc):
+            created_orgs.append(doc)
+            existing_orgs.append(doc)
+            return FakeInsertResult(next(inserted_ids))
+
+    class FakeUsersCollection:
+        def find_one(self, query):
+            email = query.get('email')
+            if email:
+                return None
+            username = query.get('username')
+            if username:
+                return None
+            return None
+
+        def insert_one(self, doc):
+            created_users.append(doc)
+            return FakeInsertResult('user-1')
+
+    monkeypatch.setattr(api, 'get_users_col', lambda: FakeUsersCollection())
+    monkeypatch.setattr(api, 'get_orgs_col', lambda: FakeOrgsCollection())
+    monkeypatch.setattr(api, '_find_user_by_email', lambda col, email: None)
+    monkeypatch.setattr(api, '_find_user_by_username', lambda col, username: None)
+    monkeypatch.setattr(api, '_normalize_phone', lambda value: None)
+    monkeypatch.setattr(api.bcrypt, 'generate_password_hash', lambda password: b'hashed-password')
+    monkeypatch.setattr(
+        api,
+        'notify_sustain_quality_new_registration',
+        lambda *args, **kwargs: True,
+    )
+
+    client = api.app.test_client()
+
+    first = client.post(
+        '/api/signup',
+        json={
+            'email': 'alpha@example.com',
+            'username': 'alpha',
+            'password': 'Abcdef1!',
+            'confirm_password': 'Abcdef1!',
+            'company_name': 'Shared Co',
+            'full_name': 'Alpha User',
+        },
+    )
+    second = client.post(
+        '/api/signup',
+        json={
+            'email': 'beta@example.com',
+            'username': 'beta',
+            'password': 'Abcdef2!',
+            'confirm_password': 'Abcdef2!',
+            'company_name': 'Shared Co',
+            'full_name': 'Beta User',
+        },
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert len(created_orgs) == 2
+    assert len({user['organization_id'] for user in created_users}) == 2

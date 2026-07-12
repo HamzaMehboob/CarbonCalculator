@@ -1449,16 +1449,14 @@ def signup():
     if not company_name or not str(company_name).strip():
         return jsonify({"msg": "Missing organization/company name"}), 400
 
-    # Create (or reuse) organization record
-    existing_org = orgs_col.find_one({"name": company_name})
-    if existing_org and existing_org.get('_id') is not None:
-        org_id = str(existing_org['_id'])
-    else:
-        insert_res = orgs_col.insert_one({
-            "name": company_name,
-            "created_at": utc_now(),
-        })
-        org_id = str(insert_res.inserted_id)
+    # Each organization signup must create a fresh organization record.
+    # Reusing the organization by company name causes multiple distinct admins to
+    # share a single organization_id and therefore the same saved data bucket.
+    insert_res = orgs_col.insert_one({
+        "name": company_name,
+        "created_at": utc_now(),
+    })
+    org_id = str(insert_res.inserted_id)
 
     phone = _normalize_phone(data.get('phone'))
 
