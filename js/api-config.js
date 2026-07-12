@@ -104,6 +104,24 @@
         }
     }
 
+    function clearStorageKeysByPrefix(prefixes, containsMarkers = []) {
+        try {
+            const toRemove = [];
+            for (let i = 0; i < global.localStorage.length; i += 1) {
+                const key = global.localStorage.key(i);
+                if (!key) continue;
+                const matchesPrefix = prefixes.some((prefix) => key.startsWith(prefix));
+                const matchesMarker = containsMarkers.some((marker) => key.includes(marker));
+                if (matchesPrefix || matchesMarker) {
+                    toRemove.push(key);
+                }
+            }
+            toRemove.forEach((key) => global.localStorage.removeItem(key));
+        } catch (_e) {
+            /* ignore */
+        }
+    }
+
     function applyOrgMainUnlockFromUrl() {
         try {
             const qs = new URLSearchParams(global.location.search || '');
@@ -145,7 +163,16 @@
             global.localStorage.removeItem('isConsultant');
             global.localStorage.removeItem('orgOpenMainApp');
             global.localStorage.removeItem('companyName');
+            global.localStorage.removeItem('companyNotes');
+            global.localStorage.removeItem('companyLogo');
+            global.localStorage.removeItem('lastOrganizationIdForDataCache');
+            global.localStorage.removeItem('lastLoadedOrganizationId');
             global.localStorage.removeItem('carbonApiBase');
+            global.localStorage.removeItem('carbonCalcSites');
+            clearStorageKeysByPrefix(
+                ['carbonCalcSites_', 'carbonCalcCurrentSite_', 'tabQuestions_'],
+                ['__org_']
+            );
         } catch (_e) {
             /* ignore */
         }

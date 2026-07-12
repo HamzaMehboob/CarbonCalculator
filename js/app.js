@@ -1340,6 +1340,9 @@ function showVerifyPanel(prefillEmail, verificationCode) {
 // LOGIN FORM SUBMIT
 document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
+    if (typeof clearAuthSessionStorage === 'function') {
+        clearAuthSessionStorage();
+    }
     
     const identifier = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
@@ -1402,6 +1405,9 @@ document.getElementById('loginForm')?.addEventListener('submit', async function(
 // SIGNUP FORM SUBMIT
 document.getElementById('signupForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
+    if (typeof clearAuthSessionStorage === 'function') {
+        clearAuthSessionStorage();
+    }
     
     const full_name = document.getElementById('signupName').value;
     const email = document.getElementById('signupEmail').value;
