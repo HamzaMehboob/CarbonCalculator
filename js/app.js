@@ -108,8 +108,9 @@ function applyCurrentSiteFromOrgPrefs(prefs) {
 }
 
 function readLocalSitesCache(orgId) {
-    const key = `carbonCalcSites_${orgId || getOrgIdForDataCache()}`;
-    const raw = localStorage.getItem(key) || localStorage.getItem(LEGACY_SITES_CACHE_KEY);
+    const resolvedOrgId = orgId || getOrgIdForDataCache();
+    const key = `carbonCalcSites_${resolvedOrgId}`;
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     try {
         const parsed = JSON.parse(raw);
@@ -531,10 +532,35 @@ function applyUserSessionFromLogin(user) {
     if (user.email) localStorage.setItem('userEmail', user.email);
 }
 
+function clearOrgScopedLocalStorageForOrg(orgId) {
+    if (!orgId) return;
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        if (
+            key.startsWith(`carbonCalcSites_${orgId}`) ||
+            key.startsWith(`carbonCalcCurrentSite_${orgId}`) ||
+            key.startsWith(`tabQuestions_${orgId}_`) ||
+            key.includes(`__org_${orgId}`)
+        ) {
+            keysToRemove.push(key);
+        }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+}
+
 function selectOrganizationMembership(membership) {
     if (!membership) return;
     const orgId = membership.organization_id || '';
     const orgName = membership.organization_name || membership.company_name || 'My Company';
+    const previousOrgId = localStorage.getItem('organizationId');
+    if (previousOrgId && previousOrgId !== orgId) {
+        clearOrgScopedLocalStorageForOrg(previousOrgId);
+    }
+    appState.sites = createDefaultSitesState(orgName);
+    appState.currentSite = 'site-1';
+    appState.dataHydrated = false;
     localStorage.setItem('organizationId', orgId);
     localStorage.setItem('organizationName', orgName);
     localStorage.setItem('companyName', orgName);
@@ -2813,10 +2839,8 @@ function rebuildSitesUIFromState() {
 function loadSitesFromLocalStorage(options) {
     const rebuildUI = !options || options.rebuildUI !== false;
     const orgId = getOrgIdForDataCache();
-    let saved = localStorage.getItem(`carbonCalcSites_${orgId}`);
-    if (!saved) {
-        saved = localStorage.getItem(LEGACY_SITES_CACHE_KEY);
-    }
+    const scopedKey = `carbonCalcSites_${orgId}`;
+    const saved = localStorage.getItem(scopedKey);
     if (saved) {
         try {
             appState.sites = JSON.parse(saved);
